@@ -5,7 +5,7 @@ This volume is the "living" companion to Volumes 1–3. Those set the plan once;
 
 **How to use this volume:**
 - Section 1 (Live Development Memory) — update at the **end of every session**. It's the single source of truth for "where am I right now."
-- Section 2 (AI Session Prompt) — paste at the **start of every session**, with Section 1 filled in underneath it.
+- Section 2 (AI Session Prompt) — paste at the **start of every session**, with Section 1 filled in underneath it....
 - Sections 3–5 (Journal, ADR, Bug Tracker) — copy the template into a new dated entry whenever the situation applies (daily / on a design decision / on a bug).
 - Section 6 (AI Conversation Rules) — permanent, rarely edited, referenced by every AI assistant automatically.
 
