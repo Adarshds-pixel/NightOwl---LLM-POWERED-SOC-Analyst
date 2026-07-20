@@ -9,7 +9,7 @@ Rules for using this roadmap:
 
 Legend: **G**=Goal, **C**=Concept to learn, **T**=Coding task, **F**=Files/folders touched, **Commit**=Git commit message, **D**=Deliverable
 
----
+--
 
 ## PHASE 0 — RESEARCH (Week 1, Days 1–7)
 Milestone at end of week: you can explain Sysmon event types, Sigma rule structure, and MITRE ATT&CK's Tactic/Technique model without notes.
