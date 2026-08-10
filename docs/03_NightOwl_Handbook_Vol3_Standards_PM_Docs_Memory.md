@@ -17,6 +17,8 @@ When generating code, the AI must:
 - Never generate a file over ~200–300 lines without proposing a split.
 - Prefer several small, reusable, testable functions over one large function.
 - After generating any non-trivial code, explain: what it does, why this approach, and one alternative that was considered and rejected.
+- Any RAG/explanation code must preserve the two standout features (Volume 1 §1.5a, §3.7): the **self-critique step** (draft explanation → self-check against retrieved chunks before returning) and **source attribution** (retrieved chunks + similarity scores returned alongside the explanation, not just used internally). Don't quietly simplify these away to "just get it working" — flag it first if a tradeoff seems necessary.
+- LLM provider calls must go through a free-tier provider only (Volume 1 §3.9) — never wire in a paid API by default.
 
 ---
 
@@ -70,13 +72,14 @@ Python: `black` + `ruff` (or `flake8`), enforced via a pre-commit hook. TypeScri
 ### 8.1 Sprint Plan (blocks aligned to the 30-day roadmap, Volume 2)
 | Sprint | Days | Focus |
 |---|---|---|
-| Sprint 0 | 1–4 | Research + Planning + Design (whole team) |
-| Sprint 1 | 5–10 | Core Build A: Backend/ingestion (Pair 1) + AI/RAG foundation (Pair 2), in parallel |
-| Sprint 2 | 11–16 | Core Build B: Detection + MITRE mapping (Pair 1) + RAG generation/chat (Pair 2), in parallel |
-| Sprint 3 | 17–20 | Frontend A: each pair builds UI for its own APIs |
-| Sprint 4 | 21–24 | Frontend B: pairs swap, polish, cross-review |
-| Sprint 5 | 25–27 | Integration & Testing (whole team, mixed sub-groups) |
-| Sprint 6 | 28–30 | Deployment + final report + presentation (whole team) |
+| Sprint 0 | 1–2 | Research + Planning + Design (whole team) — compressed; research itself is already captured in this handbook |
+| Sprint 1 | 3–8 | Core Build A: Backend/ingestion (Pair 1) + AI/RAG foundation (Pair 2), in parallel |
+| Sprint 2 | 9–14 | Core Build B: Detection + MITRE mapping (Pair 1) + RAG generation/chat with self-critique (Pair 2), in parallel |
+| Sprint 3 | 15–18 | Frontend A: each pair builds UI for its own APIs, incl. source-attribution UI |
+| Sprint 4 | 19–22 | Frontend B: pairs swap, polish, cross-review |
+| Sprint 5 | 23–25 | Integration & Testing (whole team, mixed sub-groups) |
+| Sprint 6 | 26–27 | Deployment (whole team) |
+| Sprint 7 | 28–30 | Demo prep (dataset, script, two rehearsals) + final report + presentation (whole team) — expanded from 1 day, freed up by Sprint 0's compression |
 
 ### 8.2 Daily / Block Goals
 Set at the start of each day from the Volume 2 table for that day and pair; roll up into a block goal at each Sprint boundary above (e.g. "Sprint 1 = backend can ingest+normalize+persist events; AI/RAG can retrieve relevant KB chunks").
@@ -87,19 +90,19 @@ Set at the start of each day from the Volume 2 table for that day and pair; roll
 ### 8.4 Risk Register
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| LLM API costs exceed budget during testing | Medium | Medium | Use a cheap/free-tier model for dev; cache responses during repeated testing |
-| EVTX parsing library has edge-case bugs | Medium | High | Test early (Days 7–8) with 2–3 different real sample files, not one |
+| LLM API costs exceed budget during testing | Low | Low | **Free-tier provider only (Gemini free tier / Groq) for the entire project — no paid API.** Cache responses during repeated testing to stay within free-tier rate limits |
+| EVTX parsing library has edge-case bugs | Medium | High | Test early (Days 5–6) with 2–3 different real sample files, not one |
 | Sigma rule false positive/negative rate too high | High | Medium | Build a small labeled test dataset early; measure precision/recall, don't eyeball it |
-| RAG hallucination undermines credibility in demo | Medium | High | Dedicated hallucination spot-check day (Day 13); always show retrieved source alongside explanation in UI |
+| RAG hallucination undermines credibility in demo | Medium | High | Dedicated hallucination spot-check day (Day 11); the self-critique step in the generation chain flags low-confidence claims before returning them; always show retrieved source + similarity score alongside the explanation in the UI (source attribution) |
 | Scope creep (adding v2 features) | High | Medium | Volume 1 §1.8 out-of-scope list; any new idea goes to a "future work" backlog, not this sprint |
-| Running out of time before deadline | Medium | High | Prioritize Phase 1/2 core over Phase 3 frontend polish, and Phase 4 testing over Phase 6 final polish, if a block overruns (see Volume 2 "Notes on Flexibility") |
-| Pair coordination gaps: merge conflicts, or one pair blocked waiting on the other's hand-off (Days 13, 17, 21) | Medium | Medium | Short daily async standup near sync points (Volume 2); small, frequent PRs instead of large ones; sync points called out explicitly in the roadmap so blockers surface same-day |
+| Running out of time before deadline | Medium | High | Prioritize Phase 1/2 core over Phase 3 frontend polish, and Phase 4 testing over Phase 6 demo/report, if a block overruns (see Volume 2 "Notes on Flexibility") — Phase 6's 3 days are load-bearing for demo quality and shouldn't be the first thing cut |
+| Pair coordination gaps: merge conflicts, or one pair blocked waiting on the other's hand-off (Days 11, 15, 19) | Medium | Medium | Short daily async standup near sync points (Volume 2); small, frequent PRs instead of large ones; sync points called out explicitly in the roadmap so blockers surface same-day |
 
 ### 8.5 Progress Tracker
 Maintain `docs/progress.md`, updated weekly: `Phase | Days Complete | % Complete | Blockers | Notes`. This doubles as raw material for your final report's "development process" section.
 
 ### 8.6 Decision Log
-Maintain `docs/decisions.md`. One entry per significant decision: `Date | Decision | Alternatives considered | Why this one | Reversible?`. Example: "Day 12 — Chose Claude API over OpenAI for v1 — considered both; chose Claude for [reasons] — reversible, LLM client is abstracted behind `rag/llm_client.py`."
+Maintain `docs/decisions.md`. One entry per significant decision: `Date | Decision | Alternatives considered | Why this one | Reversible?`. Example: "Day 2 — Chose Gemini free tier over Groq/paid APIs for v1 — considered both plus paid options; chose Gemini for [reasons], stays within the free-tier-only policy — reversible, LLM client is abstracted behind `rag/llm_client.py`."
 
 ---
 

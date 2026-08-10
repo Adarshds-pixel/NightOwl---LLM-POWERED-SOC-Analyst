@@ -34,6 +34,9 @@ A working, Dockerized, demoable Proof of Concept where:
 4. A RAG pipeline (ChromaDB + LangChain + LLM) retrieves relevant context (technique descriptions, past incidents, response playbooks) and generates a plain-English explanation and recommended response.
 5. A React dashboard displays incidents, timelines, MITRE heatmap, and an "ask the incident" chat interface.
 
+### 1.5a Why This Stands Out
+Two deliberate differentiators, both cheap to build because they reuse data/logic the pipeline already produces (see §3.7): a **self-critique reasoning chain** (retrieve → draft explanation → self-check against sources, flagging unsupported claims) that makes the project's "LLM reasoning" framing a concrete mechanism rather than a single prompt call; and a **source-attribution UI** that surfaces the retrieved knowledge-base chunks + similarity scores next to every explanation, so the RAG grounding is visibly provable, not just internally trusted. Both run on a free-tier LLM (§3.9) — the entire project costs $0 to build and demo.
+
 ### 1.6 Success Criteria
 - [ ] Can ingest a real/sample EVTX or Sysmon log file end-to-end without manual intervention.
 - [ ] At least 15–20 Sigma-style detection rules implemented and demonstrably firing on test data.
@@ -204,11 +207,13 @@ Standard React + Vite SPA. `pages/` = route-level screens (Dashboard, Incident D
 - `rules` — Sigma rule metadata (id, name, mitre_technique_id, yaml_path, enabled)
 - `chat_messages` — incident chat history (incident_id FK, role, content, created_at)
 
-### 3.7 AI Pipeline (RAG)
+### 3.7 AI Pipeline (RAG) — with self-critique + source attribution
 1. **Knowledge base build (offline/setup step):** Chunk MITRE ATT&CK technique descriptions + your written response playbooks → embed with Sentence Transformers → store in ChromaDB.
-2. **Retrieval:** Given an incident (its matched technique ID + raw event context), retrieve top-k relevant chunks from ChromaDB.
-3. **Generation:** LangChain assembles a prompt (incident data + retrieved chunks) → sends to the chosen LLM provider → returns explanation + recommended response.
-4. **Chat:** Follow-up questions reuse the same retrieval step, scoped to that incident's context, so the LLM stays grounded rather than hallucinating.
+2. **Retrieval:** Given an incident (its matched technique ID + raw event context), retrieve top-k relevant chunks from ChromaDB, each with a similarity score.
+3. **Generation:** LangChain assembles a prompt (incident data + retrieved chunks) → sends to the chosen LLM provider → returns a draft explanation + recommended response.
+4. **Self-critique (standout feature #1):** Before returning, the LLM re-checks its own draft explanation against the retrieved chunks and flags any claim not supported by them as low-confidence. This is what "LLM reasoning" means concretely in this project, not just a single prompt/response call — it's a small reasoning chain (retrieve → draft → self-check), still fully explainable and cheap to run on a free-tier model.
+5. **Source attribution (standout feature #2):** The retrieved chunks + their similarity scores are returned alongside the explanation, not just used internally — the dashboard renders them next to every explanation so an analyst (or an examiner in a viva) can see exactly what the LLM's answer was grounded in.
+6. **Chat:** Follow-up questions reuse the same retrieval step, scoped to that incident's context, so the LLM stays grounded rather than hallucinating.
 
 ### 3.8 Cybersecurity Pipeline
 Sysmon EVTX → python-evtx/Evtx parsing → field normalization → Sigma rule matching (using a Sigma rule interpreter, e.g. `pySigma`) → MITRE ATT&CK technique tagging (via the official MITRE ATT&CK STIX/JSON dataset) → severity scoring heuristic (rule severity + technique tactic weight + frequency).
@@ -216,50 +221,52 @@ Sysmon EVTX → python-evtx/Evtx parsing → field normalization → Sigma rule 
 ### 3.9 Deployment Architecture
 `docker-compose.yml` with services: `backend` (FastAPI), `frontend` (Vite build served via nginx or Vite preview), `db` (PostgreSQL), and ChromaDB either embedded (local persistence directory) or as its own service depending on chosen ChromaDB mode. Single `.env` for secrets (LLM API key, DB credentials) — never committed to Git.
 
+**LLM provider policy:** free-tier only (e.g. Google Gemini's free tier or Groq) — no paid API usage anywhere in this project. Every other component (FastAPI, PostgreSQL, ChromaDB, Sentence Transformers embeddings, React, Docker) is already free/self-hosted, so this keeps the entire project at $0 to build, run, and demo. Cache LLM responses during repeated dev/testing to stay within free-tier rate limits (see Volume 3 risk register).
+
 ---
 
 ## SECTION 4 — COMPLETE SDLC PLAN
 
 This is a 30-day, 4-person team plan. Two pairs (**Pair 1**, **Pair 2**) work in parallel through most phases rather than one person moving through phases sequentially — see Volume 2 for the exact day-by-day, per-pair task breakdown and the rotation schedule (each pair touches backend, AI/RAG, and frontend at some point).
 
-### Phase 0 — Research, Planning & Design (Days 1–4, whole team, split by pair)
-**Objectives:** Understand Sysmon/EVTX format, MITRE ATT&CK structure, Sigma rule syntax, and RAG fundamentals; finalize architecture, folder structure, DB schema v1, API contract v1, LLM provider choice, rule template, KB source list, and dashboard wireframes.
-**Deliverables:** Research notes, finalized architecture diagram, ERD, API spec draft, rule YAML template + 3 example rules, 4 wireframe screens, KB source list + 2 draft playbooks, working test LLM API call.
+### Phase 0 — Research, Planning & Design (Days 1–2, whole team, split by pair)
+**Objectives:** Finalize architecture, folder structure, DB schema v1, API contract v1, free-tier LLM provider choice, rule template, KB source list, and dashboard wireframes. The underlying research (Sysmon/EVTX format, MITRE ATT&CK structure, Sigma rule syntax, RAG fundamentals) is already captured in this handbook — these 2 days are for the team to internalize it and lock concrete artifacts, not research from scratch.
+**Deliverables:** Finalized architecture diagram, ERD, API spec draft, rule YAML template + 3 example rules, 4 wireframe screens, KB source list + 2 draft playbooks, working free-tier LLM API test call.
 **Completion criteria:** Everyone on the team can explain what an EVTX Event ID 1 vs 3 vs 11 means and what a Sigma rule looks like; the plan could be handed to a developer outside the team and they'd understand what to build.
-**Common mistakes:** Jumping straight to coding without understanding the log format; over-planning every schema field before real data shapes are known — keep schema "v1, expected to change."
+**Common mistakes:** Jumping straight to coding without confirming everyone actually read the architecture; over-planning every schema field before real data shapes are known — keep schema "v1, expected to change."
 
-### Phase 1 — Backend Core & Detection (Days 5–16, Pair 1)
+### Phase 1 — Backend Core & Detection (Days 3–14, Pair 1)
 **Objectives:** Build ingestion, normalization, persistence, the Sigma detection engine, MITRE ATT&CK mapping, incident grouping, and the core REST API.
 **Deliverables:** Working API that ingests a log file and returns detected+MITRE-mapped incidents via curl/Postman, no frontend needed yet.
 **Completion criteria:** 12–15 Sigma rules working against sample data; core endpoints (`/ingest`, `/incidents`, `/incidents/{id}`, `/mitre/techniques`) documented and testable.
 **Common mistakes:** Building the RAG/AI layer before the detection pipeline is solid — Pair 2 needs real incidents to feed RAG, not fabricated ones, so keep Pair 2 informed of progress via daily sync.
 
-### Phase 2 — AI / RAG Development (Days 5–16, Pair 2, parallel to Phase 1)
-**Objectives:** Load the MITRE dataset, build the knowledge base, wire embeddings + ChromaDB, build the retrieval and generation chain, and build incident chat.
-**Deliverables:** Given an incident ID, the API returns a grounded LLM explanation + recommended response; chat endpoint works.
-**Completion criteria:** Explanations reference specific retrieved content (traceable to a knowledge base chunk), not generic LLM knowledge.
-**Common mistakes:** Not testing for hallucination — spot-check that explanations match the actual technique, not a plausible-sounding wrong one. Since Phase 2 runs in parallel with Phase 1, the generation/chat work (which needs real incidents) should trail a few days behind the KB/retrieval work (which doesn't) — sync with Pair 1 around Day 11–13 once real incidents exist.
+### Phase 2 — AI / RAG Development (Days 3–14, Pair 2, parallel to Phase 1)
+**Objectives:** Load the MITRE dataset, build the knowledge base, wire embeddings + ChromaDB, build the retrieval and generation chain with a self-critique step, and build incident chat.
+**Deliverables:** Given an incident ID, the API returns a grounded, self-checked LLM explanation + recommended response + the source chunks it was grounded in; chat endpoint works.
+**Completion criteria:** Explanations reference specific retrieved content (traceable to a knowledge base chunk, surfaced via source attribution), not generic LLM knowledge.
+**Common mistakes:** Not testing for hallucination — spot-check that explanations match the actual technique, not a plausible-sounding wrong one; the self-critique step reduces but doesn't eliminate this risk. Since Phase 2 runs in parallel with Phase 1, the generation/chat work (which needs real incidents) should trail a few days behind the KB/retrieval work (which doesn't) — sync with Pair 1 around Day 11 once real incidents exist.
 
-### Phase 3 — Frontend Development (Days 17–24, both pairs)
-**Objectives:** Build dashboard, incident list/detail, MITRE heatmap, chat UI, log upload, rule management view. Days 17–20: each pair builds the frontend for its own backend/AI work. Days 21–24: pairs swap to polish/finish each other's UI and cross-review.
+### Phase 3 — Frontend Development (Days 15–22, both pairs)
+**Objectives:** Build dashboard, incident list/detail, MITRE heatmap, chat UI (with source attribution), log upload, rule management view. Days 15–18: each pair builds the frontend for its own backend/AI work. Days 19–22: pairs swap to polish/finish each other's UI and cross-review.
 **Deliverables:** Fully working UI wired to the real API (no mock data).
-**Completion criteria:** A non-technical viewer can navigate from "list of incidents" to "understand what happened and what to do" without narration; every team member has touched at least one screen they didn't originally build (via the Day 21–24 swap).
-**Common mistakes:** Building UI against hardcoded mock JSON for too long — integrate with the real API from Day 17.
+**Completion criteria:** A non-technical viewer can navigate from "list of incidents" to "understand what happened and what to do" without narration; every team member has touched at least one screen they didn't originally build (via the Day 19–22 swap).
+**Common mistakes:** Building UI against hardcoded mock JSON for too long — integrate with the real API from Day 15.
 
-### Phase 4 — Testing (Days 25–27, whole team)
+### Phase 4 — Testing (Days 23–25, whole team)
 **Objectives:** Integration/E2E testing, malformed-input and LLM-failure-mode testing, RAG accuracy spot-checks, bug fixing.
 **Deliverables:** Test notes, known-issues list, fixed critical bugs.
 **Completion criteria:** Core user journey (upload log → see incidents → view explanation → chat) works reliably on sample data.
 **Common mistakes:** Only testing the "happy path" — also test malformed logs, empty results, LLM API timeouts/errors.
 
-### Phase 5 — Deployment (Days 28–29, both pairs)
+### Phase 5 — Deployment (Days 26–27, both pairs)
 **Objectives:** Dockerize backend, frontend, DB, and ChromaDB; write docker-compose; deployment guide; environment variable documentation; clean-machine test.
 **Deliverables:** `docker compose up` works from a clean clone on a machine that isn't any team member's dev machine (test this literally).
 **Completion criteria:** A teammate who didn't write the Dockerfiles can run the whole thing following only the README.
 **Common mistakes:** "Works on my machine" — always test the actual clean-clone-and-run flow before calling it done.
 
-### Phase 6 — Final Polish, Report & Presentation (Day 30, whole team)
-**Objectives:** Demo rehearsal, final report, presentation slides, submission checklist.
-**Deliverables:** Final report, presentation slides, demo script, polished README.
-**Completion criteria:** The team can do a clean 10–15 minute demo without technical hiccups.
-**Common mistakes:** Leaving all documentation/report writing to Day 30 — start the report skeleton during Phase 4 (Days 25–27) instead.
+### Phase 6 — Demo, Final Report & Presentation (Days 28–30, whole team)
+**Objectives:** Curate a demo dataset, write a demo script, run two separated rehearsals with fix-time between them, record a fallback recording, write the final report, build presentation slides, complete the submission checklist. Expanded from 1 day to 3 (freed up by Phase 0's compression) specifically so demo quality gets real runway instead of being crammed alongside bugfixing and report-writing.
+**Deliverables:** Final report, presentation slides, demo script, curated demo dataset, backup demo recording, polished README.
+**Completion criteria:** The team can do a clean 10–15 minute demo without technical hiccups, with a rehearsed fallback if something breaks live.
+**Common mistakes:** Leaving all documentation/report writing to the last day — the report draft starts on Day 29, not Day 30; letting Phase 6's days get cut if earlier phases overrun — borrow from Phase 3 polish (Days 19–22) instead.

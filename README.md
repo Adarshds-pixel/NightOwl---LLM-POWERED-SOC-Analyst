@@ -9,7 +9,10 @@ This is a final-year major project built by a team of 4, AI-assisted, over a 30-
 - Rule-based detection engine (Sigma-style YAML rules)
 - Automatic MITRE ATT&CK technique mapping + severity scoring
 - RAG pipeline (ChromaDB + LangChain + LLM) generating grounded, plain-English incident explanations and recommended responses
+- **Self-critique reasoning chain** — the LLM checks its own draft explanation against the retrieved sources before returning it, instead of a single-shot prompt
+- **Source-attribution UI** — every explanation shows the exact knowledge-base chunks + similarity scores it was grounded in
 - Dashboard: incident feed, incident detail, MITRE ATT&CK heatmap, and an "ask the incident" chat interface
+- Runs entirely on **free-tier tools** (Gemini free tier / Groq for the LLM; everything else is open-source/self-hosted) — **$0 to build and run**
 
 ## Architecture
 See [`docs/01_NightOwl_Handbook_Vol1_Overview_Architecture.md`](docs/01_NightOwl_Handbook_Vol1_Overview_Architecture.md) for the full architecture, data flow, and folder structure.
@@ -17,7 +20,7 @@ See [`docs/01_NightOwl_Handbook_Vol1_Overview_Architecture.md`](docs/01_NightOwl
 ## Quick Start
 ```bash
 git clone <repo>
-cp .env.example .env   # fill in your LLM API key
+cp .env.example .env   # fill in your free-tier LLM API key (Gemini free tier or Groq)
 docker compose up
 ```
 Then open http://localhost:5173

@@ -69,7 +69,7 @@ Day [n] of 30 (see Volume 2 roadmap)
 [The literal next thing to do when this session starts, and which pair owns it —
  specific enough that you could hand it to someone else.
  E.g. "Pair 1: implement incident grouping logic in services/incident_service.py
- per Volume 2 Day 12 — group alerts by same host + 10-minute window."]
+ per Volume 2 Day 10 — group alerts by same host + 10-minute window."]
 
 ## Recently Completed Work (last 3–5 sessions)
 - Day [n] (Pair [1/2]): [what was done]
