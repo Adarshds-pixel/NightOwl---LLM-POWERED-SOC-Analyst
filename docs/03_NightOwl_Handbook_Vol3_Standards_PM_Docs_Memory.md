@@ -47,11 +47,11 @@ Examples: `feat: incident detail endpoint`, `fix: llm call robustness`, `docs: p
 Keep the description under ~60 characters; add a longer body below a blank line if needed.
 
 ### Branch Strategy
-Solo-developer simplified Git flow:
+Team-of-4 Git flow:
 - `main` — always working/demoable.
-- `dev` — integration branch for the current phase.
-- `feature/<short-name>` — one branch per roadmap task or small cluster of tasks, merged into `dev` via self-reviewed PR (good practice even solo — forces a diff review before merge).
-Merge `dev` → `main` at the end of each Phase milestone (see Volume 2 milestones table).
+- `dev` — integration branch for the current block.
+- `feature/<pair>-<short-name>` — one branch per roadmap task or small cluster of tasks (e.g. `feature/pair1-ingest-endpoint`), merged into `dev` via a **PR reviewed by a teammate from the other pair**, not self-reviewed — with 4 people, real code review is possible and required before merge.
+Merge `dev` → `main` at the end of each Phase/Block milestone (see Volume 2 milestones table).
 
 ### Error Handling
 - Backend: raise typed exceptions (e.g. `class RuleParseError(Exception)`), catch at the API boundary, translate to proper HTTP status codes (400 for bad input, 404 not found, 422 validation, 500 only for truly unexpected errors, always logged).
@@ -67,38 +67,33 @@ Python: `black` + `ruff` (or `flake8`), enforced via a pre-commit hook. TypeScri
 
 ## SECTION 8 — PROJECT MANAGEMENT ARTIFACTS
 
-### 8.1 Sprint Plan (2-week sprints aligned to roadmap weeks)
-| Sprint | Weeks | Focus |
+### 8.1 Sprint Plan (blocks aligned to the 30-day roadmap, Volume 2)
+| Sprint | Days | Focus |
 |---|---|---|
-| Sprint 0 | 1–2 | Research + Planning |
-| Sprint 1 | 3 | Design |
-| Sprint 2 | 4–5 | Backend: ingestion + detection start |
-| Sprint 3 | 6–7 | Backend: incidents + MITRE mapping |
-| Sprint 4 | 8–9 | Backend: hardening + buffer |
-| Sprint 5 | 10–11 | AI: knowledge base + generation |
-| Sprint 6 | 12–13 | AI: chat + stabilization |
-| Sprint 7 | 14–15 | Frontend: core pages |
-| Sprint 8 | 16–17 | Frontend: chat/rules + polish |
-| Sprint 9 | 18 | Frontend stabilization |
-| Sprint 10 | — (Days 101–110) | Testing |
-| Sprint 11 | — (Days 111–118) | Deployment |
-| Sprint 12 | — (Days 119–126) | Final report + presentation |
+| Sprint 0 | 1–4 | Research + Planning + Design (whole team) |
+| Sprint 1 | 5–10 | Core Build A: Backend/ingestion (Pair 1) + AI/RAG foundation (Pair 2), in parallel |
+| Sprint 2 | 11–16 | Core Build B: Detection + MITRE mapping (Pair 1) + RAG generation/chat (Pair 2), in parallel |
+| Sprint 3 | 17–20 | Frontend A: each pair builds UI for its own APIs |
+| Sprint 4 | 21–24 | Frontend B: pairs swap, polish, cross-review |
+| Sprint 5 | 25–27 | Integration & Testing (whole team, mixed sub-groups) |
+| Sprint 6 | 28–30 | Deployment + final report + presentation (whole team) |
 
-### 8.2 Weekly / Monthly Goals
-Set at the start of each week from the Volume 2 table for that week; roll up into a monthly goal (e.g. "Month 2 = complete backend detection + MITRE mapping, start AI layer").
+### 8.2 Daily / Block Goals
+Set at the start of each day from the Volume 2 table for that day and pair; roll up into a block goal at each Sprint boundary above (e.g. "Sprint 1 = backend can ingest+normalize+persist events; AI/RAG can retrieve relevant KB chunks").
 
 ### 8.3 Kanban Board (columns)
-`Backlog` → `This Week` → `In Progress` (WIP limit: 1, you're solo) → `Blocked` → `Done`. Recommended: a GitHub Projects board wired to your repo's issues, one issue per roadmap day or task cluster.
+`Backlog` → `Today` → `In Progress` (WIP limit: 1 item per pair, 2 total) → `Blocked` → `In Review` (assigned to a teammate from the other pair) → `Done`. Recommended: a GitHub Projects board wired to your repo's issues, one issue per roadmap day/task, labeled by pair.
 
 ### 8.4 Risk Register
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | LLM API costs exceed budget during testing | Medium | Medium | Use a cheap/free-tier model for dev; cache responses during repeated testing |
-| EVTX parsing library has edge-case bugs | Medium | High | Test early (Week 4) with 2–3 different real sample files, not one |
+| EVTX parsing library has edge-case bugs | Medium | High | Test early (Days 7–8) with 2–3 different real sample files, not one |
 | Sigma rule false positive/negative rate too high | High | Medium | Build a small labeled test dataset early; measure precision/recall, don't eyeball it |
-| RAG hallucination undermines credibility in demo | Medium | High | Dedicated hallucination spot-check days (Week 11); always show retrieved source alongside explanation in UI |
+| RAG hallucination undermines credibility in demo | Medium | High | Dedicated hallucination spot-check day (Day 13); always show retrieved source alongside explanation in UI |
 | Scope creep (adding v2 features) | High | Medium | Volume 1 §1.8 out-of-scope list; any new idea goes to a "future work" backlog, not this sprint |
-| Running out of time before deadline | Medium | High | Weeks 9/18 buffers; Phase 8 is compressible if earlier phases overrun |
+| Running out of time before deadline | Medium | High | Prioritize Phase 1/2 core over Phase 3 frontend polish, and Phase 4 testing over Phase 6 final polish, if a block overruns (see Volume 2 "Notes on Flexibility") |
+| Pair coordination gaps: merge conflicts, or one pair blocked waiting on the other's hand-off (Days 13, 17, 21) | Medium | Medium | Short daily async standup near sync points (Volume 2); small, frequent PRs instead of large ones; sync points called out explicitly in the roadmap so blockers surface same-day |
 
 ### 8.5 Progress Tracker
 Maintain `docs/progress.md`, updated weekly: `Phase | Days Complete | % Complete | Blockers | Notes`. This doubles as raw material for your final report's "development process" section.
@@ -175,11 +170,12 @@ Sections: Requirements → Environment variables (full table) → Build steps �
 
 ```
 PROJECT: NightOwl — AI-Powered SOC
-CURRENT PHASE: [Phase 0 / 1 / 2 / 3 / 4 / 5 / 6 / 7 / 8]
-CURRENT DAY (of 126): [n]
+CURRENT PHASE: [Phase 0 / 1 / 2 / 3 / 4 / 5 / 6]
+CURRENT DAY (of 30): [n]
+PAIR(S) ACTIVE TODAY: [Pair 1 / Pair 2 / both]
 
 WHAT'S ALREADY BUILT:
-- [list, e.g. "EVTX ingestion for event IDs 1,3,11", "12 Sigma rules", "incident grouping v1"]
+- [list, e.g. "EVTX ingestion for event IDs 1,3,11", "12 Sigma rules", "incident grouping v1"] — note which pair built each item
 
 COMPLETED TASKS (recent):
 - [last 3-5 roadmap days completed]

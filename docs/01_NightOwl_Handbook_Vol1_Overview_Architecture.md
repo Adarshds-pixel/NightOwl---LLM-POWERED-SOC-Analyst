@@ -1,9 +1,10 @@
 # NightOwl — AI-Powered Security Operations Center
 ## Engineering Handbook — Volume 1: Overview, AI Collaboration Rules, Architecture, SDLC
 
-**Project type:** Final Year Major Project (Solo, AI-assisted)
-**Duration:** 120–130 days
+**Project type:** Final Year Major Project (Team of 4, AI-assisted)
+**Duration:** 30 days
 **Status:** Pre-development / Planning baseline (Day 0)
+**Team structure:** Two rotating pairs (Pair 1 + Pair 2, 2 members each) — see Volume 2 for the day-by-day pair assignments and rotation schedule.
 
 This document is the permanent context file. Paste it (or its relevant section) into any AI assistant — Claude, ChatGPT, Gemini, Cursor, Codex, Windsurf — before asking it to write code, so it understands the project the same way every time.
 
@@ -69,12 +70,12 @@ A working, Dockerized, demoable Proof of Concept where:
 ## SECTION 2 — HOW THE AI ASSISTANT SHOULD HELP
 
 ### 2.1 Your role (AI assistant reading this)
-You are acting as a **pairing senior engineer and mentor**, not an autocomplete tool. The developer is a student who is learning while building. Your job is to make sure they understand *why*, not just *what*.
+You are acting as a **pairing senior engineer and mentor**, not an autocomplete tool. The team is a group of 4 students who are learning while building. Your job is to make sure they understand *why*, not just *what* — and to be clear about which pair/member a given task or explanation is for when it matters.
 
 ### 2.2 Hard rules — the AI must NOT:
 - Skip explanations of *why* a design or code choice was made.
 - Generate large, unreviewed blocks of code the developer didn't ask for.
-- Over-engineer (no premature microservices, no unnecessary abstraction layers, no adding Kubernetes/Kafka/etc. to a solo 120-day student project).
+- Over-engineer (no premature microservices, no unnecessary abstraction layers, no adding Kubernetes/Kafka/etc. to a 4-person, 30-day student project).
 - Add features not on the roadmap without flagging it as an explicit, opt-in scope change.
 - Change an established architectural decision silently — always explain the tradeoff and get confirmation first.
 
@@ -219,56 +220,46 @@ Sysmon EVTX → python-evtx/Evtx parsing → field normalization → Sigma rule 
 
 ## SECTION 4 — COMPLETE SDLC PLAN
 
-### Phase 0 — Research (Days 1–7)
-**Objectives:** Understand Sysmon/EVTX format, MITRE ATT&CK structure, Sigma rule syntax, RAG fundamentals, and survey 2–3 similar open-source SOC/detection projects.
-**Deliverables:** Research notes doc; list of 15–20 candidate detection rules; chosen LLM provider decision with justification.
-**Completion criteria:** Can explain, from memory, what an EVTX Event ID 1 vs 3 vs 11 means, and what a Sigma rule looks like.
-**Common mistakes:** Jumping straight to coding without understanding the log format — leads to a fragile parser rewritten twice.
+This is a 30-day, 4-person team plan. Two pairs (**Pair 1**, **Pair 2**) work in parallel through most phases rather than one person moving through phases sequentially — see Volume 2 for the exact day-by-day, per-pair task breakdown and the rotation schedule (each pair touches backend, AI/RAG, and frontend at some point).
 
-### Phase 1 — Planning (Days 8–12)
-**Objectives:** Finalize architecture, folder structure, DB schema v1, API contract v1 (endpoint list), and the full roadmap (Volume 2).
-**Deliverables:** Finalized architecture diagram, ERD, API spec draft (even informal, e.g. a markdown table of endpoints).
-**Completion criteria:** You could hand this plan to another developer and they'd understand what to build.
-**Common mistakes:** Over-planning every table/field before knowing real data shapes from Phase 0 — keep schema "v1, expected to change."
+### Phase 0 — Research, Planning & Design (Days 1–4, whole team, split by pair)
+**Objectives:** Understand Sysmon/EVTX format, MITRE ATT&CK structure, Sigma rule syntax, and RAG fundamentals; finalize architecture, folder structure, DB schema v1, API contract v1, LLM provider choice, rule template, KB source list, and dashboard wireframes.
+**Deliverables:** Research notes, finalized architecture diagram, ERD, API spec draft, rule YAML template + 3 example rules, 4 wireframe screens, KB source list + 2 draft playbooks, working test LLM API call.
+**Completion criteria:** Everyone on the team can explain what an EVTX Event ID 1 vs 3 vs 11 means and what a Sigma rule looks like; the plan could be handed to a developer outside the team and they'd understand what to build.
+**Common mistakes:** Jumping straight to coding without understanding the log format; over-planning every schema field before real data shapes are known — keep schema "v1, expected to change."
 
-### Phase 2 — Design (Days 13–18)
-**Objectives:** Detailed DB schema, detection rule format decision, RAG knowledge base content plan, low-fidelity dashboard wireframes.
-**Deliverables:** Finalized ERD, 3–5 wireframe screens, rule YAML template, knowledge base source list.
-**Completion criteria:** Confident enough in the design that backend coding won't require major schema rewrites.
-**Common mistakes:** Skipping wireframes "because it's just a student project" — leads to messy, undirected frontend work later.
+### Phase 1 — Backend Core & Detection (Days 5–16, Pair 1)
+**Objectives:** Build ingestion, normalization, persistence, the Sigma detection engine, MITRE ATT&CK mapping, incident grouping, and the core REST API.
+**Deliverables:** Working API that ingests a log file and returns detected+MITRE-mapped incidents via curl/Postman, no frontend needed yet.
+**Completion criteria:** 12–15 Sigma rules working against sample data; core endpoints (`/ingest`, `/incidents`, `/incidents/{id}`, `/mitre/techniques`) documented and testable.
+**Common mistakes:** Building the RAG/AI layer before the detection pipeline is solid — Pair 2 needs real incidents to feed RAG, not fabricated ones, so keep Pair 2 informed of progress via daily sync.
 
-### Phase 3 — Backend Development (Days 19–55)
-**Objectives:** Build ingestion, normalization, detection engine, MITRE mapping, REST API, DB layer.
-**Deliverables:** Working API that can ingest a log file and return detected+mapped incidents via Postman/curl, no frontend needed yet.
-**Completion criteria:** 15+ Sigma rules working against sample data; API endpoints documented and testable.
-**Common mistakes:** Building the RAG/AI layer before the detection pipeline is solid — you need real incidents to feed RAG, not fabricated ones.
+### Phase 2 — AI / RAG Development (Days 5–16, Pair 2, parallel to Phase 1)
+**Objectives:** Load the MITRE dataset, build the knowledge base, wire embeddings + ChromaDB, build the retrieval and generation chain, and build incident chat.
+**Deliverables:** Given an incident ID, the API returns a grounded LLM explanation + recommended response; chat endpoint works.
+**Completion criteria:** Explanations reference specific retrieved content (traceable to a knowledge base chunk), not generic LLM knowledge.
+**Common mistakes:** Not testing for hallucination — spot-check that explanations match the actual technique, not a plausible-sounding wrong one. Since Phase 2 runs in parallel with Phase 1, the generation/chat work (which needs real incidents) should trail a few days behind the KB/retrieval work (which doesn't) — sync with Pair 1 around Day 11–13 once real incidents exist.
 
-### Phase 4 — AI Development (Days 56–75)
-**Objectives:** Build the knowledge base, embedding pipeline, ChromaDB integration, LangChain retrieval+generation chain, incident chat.
-**Deliverables:** Given an incident ID, API returns a grounded LLM explanation + recommended response; chat endpoint works.
-**Completion criteria:** Explanations reference specific retrieved content (can be traced back to a knowledge base chunk), not generic LLM knowledge.
-**Common mistakes:** Not testing for hallucination — always spot-check that the explanation matches the actual technique, not a plausible-sounding wrong one.
+### Phase 3 — Frontend Development (Days 17–24, both pairs)
+**Objectives:** Build dashboard, incident list/detail, MITRE heatmap, chat UI, log upload, rule management view. Days 17–20: each pair builds the frontend for its own backend/AI work. Days 21–24: pairs swap to polish/finish each other's UI and cross-review.
+**Deliverables:** Fully working UI wired to the real API (no mock data).
+**Completion criteria:** A non-technical viewer can navigate from "list of incidents" to "understand what happened and what to do" without narration; every team member has touched at least one screen they didn't originally build (via the Day 21–24 swap).
+**Common mistakes:** Building UI against hardcoded mock JSON for too long — integrate with the real API from Day 17.
 
-### Phase 5 — Frontend Development (Days 76–100)
-**Objectives:** Build dashboard, incident list/detail, MITRE heatmap, chat UI, rule management view.
-**Deliverables:** Fully working UI wired to the real API (no more mock data).
-**Completion criteria:** A non-technical viewer can navigate from "list of incidents" to "understand what happened and what to do" without your narration.
-**Common mistakes:** Building UI against hardcoded mock JSON for too long — integrate with the real API early and often (start around day 80, not day 95).
-
-### Phase 6 — Testing (Days 101–110)
-**Objectives:** Unit tests (detection rules, parsers), integration tests (API endpoints), manual E2E testing, RAG accuracy spot-checks.
-**Deliverables:** Test report, known-issues list, fixed critical bugs.
-**Completion criteria:** Core user journey (upload log → see incidents → view explanation → chat) works reliably 10/10 times on sample data.
+### Phase 4 — Testing (Days 25–27, whole team)
+**Objectives:** Integration/E2E testing, malformed-input and LLM-failure-mode testing, RAG accuracy spot-checks, bug fixing.
+**Deliverables:** Test notes, known-issues list, fixed critical bugs.
+**Completion criteria:** Core user journey (upload log → see incidents → view explanation → chat) works reliably on sample data.
 **Common mistakes:** Only testing the "happy path" — also test malformed logs, empty results, LLM API timeouts/errors.
 
-### Phase 7 — Deployment (Days 111–118)
-**Objectives:** Dockerize everything, write docker-compose, deployment guide, environment variable documentation.
-**Deliverables:** `docker compose up` works from a clean clone on a fresh machine (test this literally).
-**Completion criteria:** A friend with Docker installed and an LLM API key can run the whole thing following only the README.
+### Phase 5 — Deployment (Days 28–29, both pairs)
+**Objectives:** Dockerize backend, frontend, DB, and ChromaDB; write docker-compose; deployment guide; environment variable documentation; clean-machine test.
+**Deliverables:** `docker compose up` works from a clean clone on a machine that isn't any team member's dev machine (test this literally).
+**Completion criteria:** A teammate who didn't write the Dockerfiles can run the whole thing following only the README.
 **Common mistakes:** "Works on my machine" — always test the actual clean-clone-and-run flow before calling it done.
 
-### Phase 8 — Maintenance / Final Polish (Days 119–125+)
-**Objectives:** Bug fixes from demo rehearsals, final report writing, presentation prep, documentation polish.
+### Phase 6 — Final Polish, Report & Presentation (Day 30, whole team)
+**Objectives:** Demo rehearsal, final report, presentation slides, submission checklist.
 **Deliverables:** Final report, presentation slides, demo script, polished README.
-**Completion criteria:** You can do a clean 10–15 minute demo without technical hiccups.
-**Common mistakes:** Leaving documentation/report writing entirely to the last week — start the final report skeleton by Phase 6.
+**Completion criteria:** The team can do a clean 10–15 minute demo without technical hiccups.
+**Common mistakes:** Leaving all documentation/report writing to Day 30 — start the report skeleton during Phase 4 (Days 25–27) instead.

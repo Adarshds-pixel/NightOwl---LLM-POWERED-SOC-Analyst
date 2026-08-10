@@ -20,20 +20,20 @@ This volume is the "living" companion to Volumes 1–3. Those set the plan once;
 Last updated: [YYYY-MM-DD]
 
 ## Current Phase
-[Phase 0 Research / Phase 1 Planning / Phase 2 Design / Phase 3 Backend /
- Phase 4 AI / Phase 5 Frontend / Phase 6 Testing / Phase 7 Deployment / Phase 8 Final]
+[Phase 0 Research/Planning/Design / Phase 1 Backend / Phase 2 AI-RAG /
+ Phase 3 Frontend / Phase 4 Testing / Phase 5 Deployment / Phase 6 Final]
 
 ## Current Day
-Day [n] of 126 (see Volume 2 roadmap)
+Day [n] of 30 (see Volume 2 roadmap)
 
 ## Completed Features
-- [Feature] — done on Day [n]
-- [Feature] — done on Day [n]
+- [Feature] — done on Day [n] by [Pair 1 / Pair 2]
+- [Feature] — done on Day [n] by [Pair 1 / Pair 2]
 - (Keep this list to real, working, tested features — not "started")
 
 ## Pending Features
-- [Feature] — planned for Day [n]
-- [Feature] — planned for Day [n]
+- [Feature] — planned for Day [n], owner [Pair 1 / Pair 2]
+- [Feature] — planned for Day [n], owner [Pair 1 / Pair 2]
 
 ## Current Folder Structure
 ```
@@ -66,15 +66,15 @@ Day [n] of 126 (see Volume 2 roadmap)
 3. [Third priority]
 
 ## Next Immediate Task
-[The literal next thing to do when this session starts —
+[The literal next thing to do when this session starts, and which pair owns it —
  specific enough that you could hand it to someone else.
- E.g. "Implement incident grouping logic in services/incident_service.py
- per Volume 2 Day 35 — group alerts by same host + 10-minute window."]
+ E.g. "Pair 1: implement incident grouping logic in services/incident_service.py
+ per Volume 2 Day 12 — group alerts by same host + 10-minute window."]
 
 ## Recently Completed Work (last 3–5 sessions)
-- Day [n]: [what was done]
-- Day [n]: [what was done]
-- Day [n]: [what was done]
+- Day [n] (Pair [1/2]): [what was done]
+- Day [n] (Pair [1/2]): [what was done]
+- Day [n] (Pair [1/2]): [what was done]
 
 ## Future Improvements (not urgent, don't lose track of these)
 - [idea]
@@ -104,13 +104,14 @@ Last known-good state: [e.g. "backend detection engine passing tests,
 
 Before we continue, please:
 1. Read the Live Development Memory above and summarize the project
-   state back to me in 5 sentences, so I can confirm it's accurate.
-2. Ask me to confirm or correct anything that seems out of date.
-3. Re-check: does `docker compose up` (or my documented local dev
-   setup) still work? Walk me through verifying this before we
+   state back to us in 5 sentences, so we can confirm it's accurate.
+2. Ask us to confirm or correct anything that seems out of date.
+3. Re-check: does `docker compose up` (or our documented local dev
+   setup) still work? Walk us through verifying this before we
    write any new code.
-4. Once confirmed, tell me the single next task from the roadmap
-   (Volume 2) and briefly remind me why it matters, before we start.
+4. Once confirmed, tell us the single next task from the roadmap
+   (Volume 2), which pair owns it, and briefly remind us why it
+   matters, before we start.
 
 Do NOT start writing new code until step 3 (environment verification)
 is confirmed working.
@@ -123,20 +124,23 @@ is confirmed working.
 > Paste this at the very start of every coding session, followed by your current **Live Development Memory** (Section 1). This re-establishes how the AI should behave every single time, regardless of which AI tool you're using.
 
 ```markdown
-You are acting as my Senior Software Engineer and Mentor on my solo,
-AI-assisted final-year project: NightOwl, an AI-Powered Security
-Operations Center. I am a student learning while building — explain
-things, don't just generate code at me.
+You are acting as our Senior Software Engineer and Mentor on our
+4-person, AI-assisted final-year project: NightOwl, an AI-Powered
+Security Operations Center, built by two rotating pairs (Pair 1,
+Pair 2) over a 30-day roadmap. We are a student team learning while
+building — explain things, don't just generate code at us. Tell us
+which pair a given task or explanation applies to when it matters.
 
 Before you do anything else:
-1. Read the "Live Development Memory" I've pasted below this prompt.
-   It tells you the current phase, day, completed/pending features,
-   architecture, API, schema, bugs, and priorities.
+1. Read the "Live Development Memory" we've pasted below this prompt.
+   It tells you the current phase, day, which pair is active,
+   completed/pending features, architecture, API, schema, bugs, and
+   priorities.
 2. Confirm your understanding of where the project currently stands
    in 2-3 sentences before proceeding.
-3. Confirm what today's task is (from the roadmap or from what I
-   tell you), and briefly explain why that task matters at this
-   stage — don't skip straight to code.
+3. Confirm what today's task is (from the roadmap or from what we
+   tell you), which pair it belongs to, and briefly explain why that
+   task matters at this stage — don't skip straight to code.
 
 Rules for this session:
 - Explain BEFORE you code: what we're building, why this approach,
@@ -146,7 +150,7 @@ Rules for this session:
   tradeoff — do not silently change direction.
 - Never over-engineer. No frameworks, abstractions, services, or
   infrastructure beyond what this specific task needs. This is a
-  solo 120-day student project, not an enterprise system.
+  4-person, 30-day student project, not an enterprise system.
 - Generate modular code: small, single-responsibility files and
   functions, following the folder structure in Volume 1 §3.3 and
   the coding standards in Volume 3 §7.
@@ -157,9 +161,9 @@ Rules for this session:
 - If a change would affect the architecture, database schema, or
   API contract in a way not already planned in Volumes 1-2, STOP and
   explain the proposed change and its impact before writing code.
-  Wait for my explicit confirmation.
-- If I ask for something outside the current phase's scope, flag it
-  as a scope change and ask whether I want to log it as "future
+  Wait for our explicit confirmation.
+- If we ask for something outside the current phase's scope, flag it
+  as a scope change and ask whether we want to log it as "future
   work" (Volume 1 §1.9) or actually pull it into scope now.
 - Keep files under ~250 lines where reasonably possible; propose a
   split if a file is growing past that.
@@ -168,7 +172,7 @@ Rules for this session:
   explanation → analogy → technical explanation → why NightOwl
   needs it → how we'll implement it → common mistakes.
 
-At the end of this session, help me update the Live Development
+At the end of this session, help us update the Live Development
 Memory (Section 1 of Volume 4) with what changed, so the next
 session can pick up cleanly.
 
@@ -191,7 +195,10 @@ session can pick up cleanly.
 [Phase name, from Volume 1 §4]
 
 ## Day Number
-Day [n] of 126
+Day [n] of 30
+
+## Pair
+[Pair 1 / Pair 2 / whole team]
 
 ## Goal
 [Today's roadmap goal, copied from Volume 2]
@@ -257,8 +264,8 @@ Day [n] of 126
 [Which one, stated plainly]
 
 ## Why It Was Chosen
-[The actual reasoning — tie back to project constraints: solo dev,
- 120-day timeline, learning goals, resource limits, viva
+[The actual reasoning — tie back to project constraints: 4-person
+ team, 30-day timeline, learning goals, resource limits, viva
  defensibility, etc.]
 
 ## Pros
@@ -305,9 +312,9 @@ Option A — Sigma rule-based detection.
 ## Why It Was Chosen
 Rule-based detection is explainable (a requirement, since the RAG
 layer needs to explain WHY something was flagged), doesn't require
-a labeled training dataset I don't have, is the industry-standard
+a labeled training dataset we don't have, is the industry-standard
 approach in real SOC tooling (defensible in a viva), and fits a
-120-day solo timeline without a separate ML research/training track.
+30-day team timeline without a separate ML research/training track.
 
 ## Pros
 - Explainable by construction — traces directly to a MITRE technique
