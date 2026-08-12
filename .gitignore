@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+backend/venv/
+
+# Secrets
+.env
+
+# Generated/cached data (regenerable from source, not curated content)
+data/chroma/
+data/mitre/*.json

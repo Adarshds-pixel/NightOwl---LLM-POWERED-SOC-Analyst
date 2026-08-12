@@ -1,0 +1,5 @@
+# AI/RAG deps (Pair 2). Pair 1 will append backend/API deps (fastapi, sqlalchemy, etc.) below.
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+requests>=2.31.0
+pytest>=7.4.0
