@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nightowl}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nightowl}
+      POSTGRES_DB: ${POSTGRES_DB:-nightowl}
+    ports:
+      # Host port 5433 (not 5432) — this machine already has another,
+      # unrelated Postgres process bound to 5432; avoid colliding with it.
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
