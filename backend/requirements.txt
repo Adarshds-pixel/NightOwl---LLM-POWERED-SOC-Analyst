@@ -12,3 +12,5 @@ alembic>=1.13.0
 psycopg2-binary>=2.9.9
 pydantic-settings>=2.3.0
 httpx>=0.27.0
+python-evtx>=0.7.4
+xmltodict>=0.13.0
