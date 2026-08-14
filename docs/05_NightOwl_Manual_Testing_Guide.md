@@ -148,7 +148,9 @@ Covers:
 **Expected:** `21 passed`.
 **Last verified:** 2026-08-14 — 21 passed in 0.97s.
 
-### 7.1. Real Sysmon sample (`data/sample_logs/sysmon_sample.evtx`)
+### 7.1. Real Sysmon sample (superseded — kept for process history only)
+
+> **Superseded by §7.2's `sysmon_demo.evtx`.** `sysmon_sample.evtx` (this section) was never committed — it's a strict subset of `sysmon_demo.evtx` (same 3 ID 1 records, minus the ID 11 record §7.2 added), so it was left out of the repo as redundant rather than checked in alongside its superset. The steps below are kept so the capture process/reasoning stays documented, but the file itself is not present in `data/sample_logs/`.
 
 The Day 5 unit tests above use hand-crafted fixture dicts because the repo's only `sample.evtx` is Windows System-log data, not Sysmon. To get a genuine end-to-end fixture for Day 6's ingest endpoint, a real (but minimal, deliberately-triggered) Sysmon sample was captured from a dev laptop with Sysmon already installed and running.
 
