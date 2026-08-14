@@ -1,8 +1,8 @@
 # NightOwl Handbook — Volume 5: Manual Testing Guide
 
-**Scope:** verifying everything built through **Pair 1 Day 3** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic) and **Pair 2 Day 3–4** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build), as of **2026-08-12**.
+**Scope:** verifying everything built through **Pair 1 Day 5** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence) and **Pair 2 Day 3–4** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build), as of **2026-08-14**.
 
-This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on 2026-08-12 and passed — see the "Last verified" line under each step.
+This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on the date noted next to it — see the "Last verified" line under each step.
 
 ---
 
@@ -129,8 +129,24 @@ cd backend
 ./venv/Scripts/python.exe -m pytest -v
 ```
 
-**Expected:** all 6 tests pass together.
-**Last verified:** 2026-08-12 — `6 passed in 35.64s`.
+**Expected:** all tests pass together (31 as of Day 5 — 6 from Day 3, 4 from Day 4, 21 from Day 5).
+**Last verified:** 2026-08-14 — `31 passed in 41.69s`.
+
+---
+
+## 7. Day 5 — Event normalization + persistence (Pair 1 Day 5 deliverable, offline)
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/test_day5_normalizer.py tests/test_day5_event_service.py -v
+```
+
+Covers:
+- `test_day5_normalizer.py` — maps hand-crafted Sysmon-shaped records (the repo's only `sample.evtx` is Windows System-log data, not Sysmon, so real event ID 1/3/11 fixtures aren't available in the file itself) to `NormalizedEvent` for event IDs 1 (process creation → `process`/`command_line`/`user`), 3 (network connection → `protocol`/`source_ip`/`source_port`/`destination_ip`/`destination_port`), and 11 (file create → `target_filename`); handles `EventID` as a plain string vs. a qualifier dict, `EventData.Data` as a single dict vs. a list, and empty `<Data>` elements; confirms unrecognized event IDs still normalize (common fields only, no exception) and that genuinely malformed records (`Event`/`System` missing, `EventID`/`TimeCreated` unparseable) raise `EventNormalizationError`.
+- `test_day5_event_service.py` — in-memory SQLite (same pattern as `test_day3_models.py`), confirms `create_event`/`save_events` persist the `Event` row's flat columns from a `NormalizedEvent`, that `raw_json` holds both the original raw record and the normalized view (`{"raw": ..., "normalized": ...}`) so fields not yet promoted to flat columns aren't lost, that a batch commits and logs `"ingested N events"`, and that a persisted row round-trips correctly when queried back.
+
+**Expected:** `21 passed`.
+**Last verified:** 2026-08-14 — 21 passed in 0.97s.
 
 ---
 
@@ -149,6 +165,6 @@ cd backend
 ## Out of scope for this guide
 
 - Frontend testing (nothing built yet — Days 13+).
-- Sigma detection engine, ingestion API, incident endpoints (Pair 1 Days 4–12 — not yet built).
+- Sigma detection engine, ingestion API, incident endpoints (Pair 1 Days 6–12 — not yet built).
 - RAG retrieval/generation/chat endpoints (Pair 2 Days 5–12 — not yet built).
 - The formal Testing Report (Volume 3 §9.5) — that's produced during Days 20–21 Integration & Testing, covering unit/integration/E2E coverage and RAG accuracy scoring across the whole system.

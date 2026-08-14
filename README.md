@@ -42,7 +42,7 @@ Then open http://localhost:5173
 A 4-person team, working as two rotating pairs across backend, AI/RAG, and frontend tracks. See [`docs/02_NightOwl_Handbook_Vol2_Roadmap.md`](docs/02_NightOwl_Handbook_Vol2_Roadmap.md) for the current pair assignments and roadmap.
 
 ## Project Status
-Day 4 of the 25-day roadmap (both pairs). Pair 1 (backend/detection): FastAPI skeleton, DB models/migrations, and EVTX reading + JSON conversion are done. Pair 2 (AI/RAG): ChromaDB + embeddings setup, MITRE ATT&CK loader, and the real knowledge-base build are done. See [`docs/02_NightOwl_Handbook_Vol2_Roadmap.md`](docs/02_NightOwl_Handbook_Vol2_Roadmap.md) for the day-by-day roadmap and [`docs/05_NightOwl_Manual_Testing_Guide.md`](docs/05_NightOwl_Manual_Testing_Guide.md) for verified manual test steps.
+Day 5 of the 25-day roadmap (Pair 1 ahead of Pair 2). Pair 1 (backend/detection): FastAPI skeleton, DB models/migrations, EVTX reading + JSON conversion, and the normalized event schema + persistence are done. Pair 2 (AI/RAG): ChromaDB + embeddings setup, MITRE ATT&CK loader, and the real knowledge-base build are done. See [`docs/02_NightOwl_Handbook_Vol2_Roadmap.md`](docs/02_NightOwl_Handbook_Vol2_Roadmap.md) for the day-by-day roadmap and [`docs/05_NightOwl_Manual_Testing_Guide.md`](docs/05_NightOwl_Manual_Testing_Guide.md) for verified manual test steps.
 
 ## License
 See [`LICENSE`](LICENSE).
