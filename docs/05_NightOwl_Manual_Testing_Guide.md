@@ -24,6 +24,12 @@ This is a hands-on runbook, not the formal Testing Report (that template lives i
   ./venv/Scripts/python.exe -m pip install pip-system-certs
   ```
   This makes Python trust the same certificate store Windows/curl already trust. No app code changes needed — confirmed as the fix here.
+- **If `pip install -r requirements.txt` fails on `Failed to build 'hexdump'` / `AssertionError` in `_distutils_hack`** (a `python-evtx` sub-dependency hitting a setuptools/distutils conflict on Python 3.10 — seen on this machine): set `SETUPTOOLS_USE_DISTUTILS=stdlib` for the install, which disables setuptools' local-distutils override hack instead of asserting on it:
+  ```
+  SETUPTOOLS_USE_DISTUTILS=stdlib ./venv/Scripts/python.exe -m pip install -r requirements.txt
+  ```
+  Confirmed as the fix here — no app code changes needed, only needed once per venv (already-installed packages are skipped on repeat runs without the env var).
+- Only the Postgres/Alembic (§3) and DB-touching parts of the live-server check (§4) need Docker; everything else in this guide works without it. If Docker Desktop isn't installed at all (not just stopped) `docker info`/`docker --version` fail with "command not found" rather than a connection error — install it from docker.com before attempting §3.
 
 ---
 
@@ -40,6 +46,7 @@ Covers:
 
 **Expected:** `3 passed`.
 **Last verified:** 2026-08-12 — 3 passed in 1.16s.
+**Re-verified 2026-08-15:** `3 passed in 1.41s`.
 
 ---
 
@@ -59,6 +66,7 @@ Needs outbound internet (GitHub raw + HuggingFace Hub for model weights on first
 
 **Expected:** `3 passed` (first run ~80–90s while the embedding model downloads; cached runs are seconds).
 **Last verified:** 2026-08-12 — 3 passed in 84.61s.
+**Re-verified 2026-08-15:** `3 passed` (cached run, combined with §7's Day 4 EVTX tests: `7 passed in 25.71s`).
 
 ---
 
@@ -89,6 +97,8 @@ docker compose exec db psql -U nightowl -d nightowl -c "\dt"
 **Expected:** `alembic_version`, `alerts`, `chat_messages`, `events`, `incidents`, `rules` — 6 tables.
 **Last verified:** 2026-08-12 — all 6 tables present, `alembic current` = `fa0ac08ab62f (head)`. This was the first time the migration had been run against a live Postgres instance rather than only the in-memory SQLite used by tests.
 
+> **Not re-verified 2026-08-15:** Docker itself isn't installed on this machine (`docker`/`docker info` both fail with "command not found", not just "daemon not running"). §1/§2/§6 (all SQLite/Chroma-backed) and §4's `/health` route don't need it and were re-confirmed working standalone. Install Docker Desktop to re-run this section here.
+
 ---
 
 ## 4. Live FastAPI server smoke test
@@ -104,6 +114,7 @@ curl http://127.0.0.1:8000/health
 
 **Expected:** `{"status":"ok"}`, HTTP 200.
 **Last verified:** 2026-08-12 — confirmed `{"status":"ok"}` / HTTP 200 outside of the `TestClient` harness. Stop the server afterward (Ctrl+C, or on Windows find the PID with `netstat -ano | findstr :8000` and `taskkill /F /PID <pid>`).
+**Re-verified 2026-08-15 (Docker not installed on this machine):** `/health` doesn't touch the DB (`app/main.py` builds no engine/session at import time), so the server starts and responds `{"status":"ok"}` / HTTP 200 even with no Postgres available at all — confirming this route has no hidden DB dependency.
 
 ---
 
@@ -118,25 +129,22 @@ Downloads/parses the MITRE dataset, chunks all non-deprecated/non-revoked techni
 
 **Expected:** a summary line like `MITRE techniques: N processed, M skipped (deprecated/revoked)`, `Playbooks: 5 processed`, and a final `Upserted <count> chunks into Chroma collection 'knowledge_base' (<count> total in collection)`.
 **Last verified:** 2026-08-12 — 697 techniques processed, 161 skipped (deprecated/revoked), 5 playbooks processed, 1888 total chunks upserted.
+**Re-verified 2026-08-15:** identical counts (697/161/5/1888) — confirms the build is stable/idempotent (Chroma `upsert` on unchanged source data doesn't change the collection).
 
 ---
 
 ## 6. Full regression pass
 
-Once Postgres is up and the MITRE/embedding caches are warm:
+All 34 tests are pure-Python/in-memory-SQLite/local-Chroma — none need live Postgres, so this runs standalone (Docker not required):
 ```
 cd backend
 ./venv/Scripts/python.exe -m pytest -v
 ```
 
-**Expected:** all tests pass together (31 as of Day 5 — 6 from Day 3, 4 from Day 4, 21 from Day 5).
-**Last verified:** 2026-08-14 — `31 passed in 41.69s`.
+**Expected:** all tests pass together (34 as of Day 5 — 6 from Day 3, 4 from Day 4, 24 from Day 5: 21 normalization/persistence + 3 retrieval).
+**Last verified:** 2026-08-15 — `34 passed in 31.61s`.
 
-> **Known local env gap (2026-08-15):** on this machine's venv, `fastapi`/`sqlalchemy`/`python-evtx` (Pair 1's Day 3+ deps, declared in `requirements.txt`) are not installed — `python-evtx`'s `hexdump` sub-dependency currently fails to build here (`AssertionError` in `_distutils_hack`, a setuptools/distutils quirk unrelated to any NightOwl code). This makes the bare `pytest -v` above collection-error on `test_day3_backend_setup.py`, `test_day3_models.py`, `test_day4_evtx_reader.py`, `test_day5_event_service.py`. Until that's fixed, run the pure-Python/RAG-only subset instead:
-> ```
-> ./venv/Scripts/python.exe -m pytest tests/test_day3_setup.py tests/test_day5_normalizer.py tests/test_day5_retriever.py -v
-> ```
-> **Last verified:** 2026-08-15 — `20 passed in 33.44s`. This is a pre-existing environment gap unrelated to Day 5 retrieval work, not a regression — flag it to Pair 1/Akshay so the venv gets `pip install -r requirements.txt` re-run once the `hexdump` build issue is resolved.
+> **Resolved (2026-08-15):** this venv was previously missing `fastapi`/`sqlalchemy`/`python-evtx` (Pair 1's Day 3+ deps) because `pip install -r requirements.txt` failed on `python-evtx`'s `hexdump` sub-dependency (`AssertionError` in `_distutils_hack`). Fixed with the `SETUPTOOLS_USE_DISTUTILS=stdlib` workaround now documented in Prerequisites (§0) — all 34 tests collect and pass together as of this run.
 
 ---
 
@@ -153,6 +161,7 @@ Covers:
 
 **Expected:** `21 passed`.
 **Last verified:** 2026-08-14 — 21 passed in 0.97s.
+**Re-verified 2026-08-15:** `21 passed in 0.98s`.
 
 ### 7.1. Real Sysmon sample (superseded — kept for process history only)
 
@@ -248,6 +257,7 @@ for r in records:
 ```
 **Expected:** 4 records — 3× `event_id=1` (cmd.exe, whoami.exe, curl.exe process creations), 1× `event_id=11` (the named temp file), none raise `EventNormalizationError`.
 **Last verified:** 2026-08-14 — all 4 normalized cleanly as expected; full suite re-run afterward: `31 passed in 40.24s`.
+**Re-verified 2026-08-15:** identical output (3× `event_id=1`, 1× `event_id=11`, none raised); full suite re-run afterward: `34 passed in 31.61s`.
 
 **Planned future method for real ID 3 (not built yet — Path A, deferred):**
 1. Clean Windows VM/sandbox with no conflicting AV.
@@ -329,8 +339,9 @@ Matches `docs/research/retrieval-eval.md` exactly (§2 there). **Known finding, 
 | `pg_isready` never succeeds / port 5433 already in use | Another Postgres instance already bound to 5433, or the container needs more time | `docker compose ps`, `docker compose logs db`; confirm nothing else owns host port 5433 |
 | First run of `test_day3_setup.py` or `build_kb.py` is slow (~1–2 min) | `sentence-transformers`/`torch` downloading model weights and MITRE JSON on first use | Expected once; subsequent runs use local caches (`data/mitre/enterprise-attack.json`, HF cache, `data/chroma/`) |
 | `uvicorn` port 8000 still bound after stopping | Reload/watcher spawned a child process with a different PID | `netstat -ano \| findstr :8000` then `taskkill /F /PID <pid>` |
-| `pytest -v` (bare, whole `tests/` dir) collection-errors with `ModuleNotFoundError: fastapi`/`sqlalchemy`/`Evtx` | Those Pair 1 deps aren't installed in this venv | Run the RAG-only subset (§6's known-gap note) until `pip install -r requirements.txt` succeeds; `python-evtx`'s `hexdump` build currently fails separately (see next row) |
-| `pip install -r requirements.txt` fails on `Failed to build 'hexdump'` / `AssertionError` in `_distutils_hack` | `python-evtx`'s `hexdump` sub-dependency hits a setuptools/distutils conflict on this Python 3.10 install | Not yet resolved here — pre-existing gap, unrelated to Day 5 RAG code; needs its own fix (e.g. a newer setuptools pin or building `hexdump` in isolation) before Pair 1's tests can run on this machine |
+| `pytest -v` (bare, whole `tests/` dir) collection-errors with `ModuleNotFoundError: fastapi`/`sqlalchemy`/`Evtx` | Those Pair 1 deps aren't installed in this venv | `SETUPTOOLS_USE_DISTUTILS=stdlib ./venv/Scripts/python.exe -m pip install -r requirements.txt` (see next row / §0) |
+| `pip install -r requirements.txt` fails on `Failed to build 'hexdump'` / `AssertionError` in `_distutils_hack` | `python-evtx`'s `hexdump` sub-dependency hits a setuptools/distutils conflict on this Python 3.10 install | **Resolved 2026-08-15:** `SETUPTOOLS_USE_DISTUTILS=stdlib` env var on the install disables the conflicting hack (see §0) |
+| `docker` / `docker info` fail with "command not found" (not a connection error) | Docker Desktop isn't installed on this machine at all | Install Docker Desktop from docker.com; until then, §1/§2/§6/§4's `/health` check all work without it |
 
 ---
 
