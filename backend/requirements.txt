@@ -14,3 +14,4 @@ pydantic-settings>=2.3.0
 httpx>=0.27.0
 python-evtx>=0.7.4
 xmltodict>=0.13.0
+python-multipart>=0.0.9
