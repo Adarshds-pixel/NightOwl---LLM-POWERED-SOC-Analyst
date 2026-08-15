@@ -1,6 +1,6 @@
 # NightOwl Handbook — Volume 5: Manual Testing Guide
 
-**Scope:** verifying everything built through **Pair 1 Day 5** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence) and **Pair 2 Day 3–4** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build), as of **2026-08-14**.
+**Scope:** verifying everything built through **Pair 1 Day 5** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence) and **Pair 2 Day 3–5** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval), as of **2026-08-15**.
 
 This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on the date noted next to it — see the "Last verified" line under each step.
 
@@ -132,6 +132,12 @@ cd backend
 **Expected:** all tests pass together (31 as of Day 5 — 6 from Day 3, 4 from Day 4, 21 from Day 5).
 **Last verified:** 2026-08-14 — `31 passed in 41.69s`.
 
+> **Known local env gap (2026-08-15):** on this machine's venv, `fastapi`/`sqlalchemy`/`python-evtx` (Pair 1's Day 3+ deps, declared in `requirements.txt`) are not installed — `python-evtx`'s `hexdump` sub-dependency currently fails to build here (`AssertionError` in `_distutils_hack`, a setuptools/distutils quirk unrelated to any NightOwl code). This makes the bare `pytest -v` above collection-error on `test_day3_backend_setup.py`, `test_day3_models.py`, `test_day4_evtx_reader.py`, `test_day5_event_service.py`. Until that's fixed, run the pure-Python/RAG-only subset instead:
+> ```
+> ./venv/Scripts/python.exe -m pytest tests/test_day3_setup.py tests/test_day5_normalizer.py tests/test_day5_retriever.py -v
+> ```
+> **Last verified:** 2026-08-15 — `20 passed in 33.44s`. This is a pre-existing environment gap unrelated to Day 5 retrieval work, not a regression — flag it to Pair 1/Akshay so the venv gets `pip install -r requirements.txt` re-run once the `hexdump` build issue is resolved.
+
 ---
 
 ## 7. Day 5 — Event normalization + persistence (Pair 1 Day 5 deliverable, offline)
@@ -255,6 +261,65 @@ This is scoped as a standalone future task, not attempted as part of Day 5.
 
 ---
 
+## 8. Day 5 — Retrieval (Pair 2 Day 5 deliverable)
+
+### 8.1. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/test_day5_retriever.py -v
+```
+
+Covers `backend/app/rag/retriever.py`'s `retrieve(query, k, source_type, technique_id)`:
+- `test_retrieve_returns_k_results_ranked_by_score` — returns exactly `k` hits, scores strictly descending, at least one `source_type` in `{mitre_technique, playbook}`.
+- `test_retrieve_technique_id_filter_restricts_results` — the `technique_id` metadata filter actually restricts Chroma's `where` clause (all returned hits match `T1059.001`).
+- `test_retrieve_source_type_filter_restricts_results` — same for the `source_type` filter (`playbook`).
+
+**Expected:** `3 passed`.
+**Last verified:** 2026-08-15 — `3 passed` (in ~28-34s combined with the Day 3 RAG tests, embedding model load dominates).
+
+### 8.2. Manual smoke test
+
+```
+cd backend
+./venv/Scripts/python.exe -m app.rag.retriever
+```
+
+Runs `retrieve("obfuscated powershell command line", k=3)` against the real `knowledge_base` collection populated in Day 4.
+
+**Expected:** 3 lines of `<score>  <chunk_id>  <document snippet>`, all PowerShell/command-obfuscation related, highest score first.
+**Last verified:** 2026-08-15 —
+```
+0.6179  mitre:T1027.010:1  'eter](https://attack.mitre.org/techniques/T1059).(Citation: Akamai JS)(Citation:'
+0.5403  mitre:T1027.010:0  'Command Obfuscation Adversaries may obfuscate content during command execution t'
+0.5376  mitre:T1059.001:0  'PowerShell Adversaries may abuse PowerShell commands and scripts for execution. '
+```
+
+### 8.3. Manual retrieval-quality check (roadmap-required deliverable)
+
+The roadmap requires manually testing 10 queries and verifying retrieved chunks make sense — done and written up in full in [`docs/research/retrieval-eval.md`](research/retrieval-eval.md) (not duplicated here). Spot-check reproduction:
+
+```
+cd backend
+./venv/Scripts/python.exe -c "
+from app.rag.retriever import retrieve
+for h in retrieve('scheduled task created for persistence', k=4):
+    print(h['score'], h['chunk_id'], h['metadata'].get('technique_name') or h['metadata'].get('title'))
+"
+```
+
+**Expected:** top hits are `T1053.005`/`playbook:T1053_005_scheduled_task_persistence` chunks.
+**Last verified:** 2026-08-15 —
+```
+0.6247727607796864 playbook:T1053_005_scheduled_task_persistence:1 Scheduled Task Persistence Response Playbook
+0.6228405693455012 mitre:T1053.005:0 Scheduled Task
+0.5716664856770546 playbook:T1053_005_scheduled_task_persistence:2 Scheduled Task Persistence Response Playbook
+0.5233292607942249 playbook:T1053_005_scheduled_task_persistence:0 Scheduled Task Persistence Response Playbook
+```
+Matches `docs/research/retrieval-eval.md` exactly (§2 there). **Known finding, not a bug:** C2/"beaconing"-phrased queries don't surface the `T1071.001` web-protocol-C2 playbook in a practical top-k, even though it's correctly ingested — see that doc's "Issue found" section for the full writeup and the Day 7+ mitigation recommended (retrieve with the Sigma-matched `technique_id` filter when it's already known, rather than free-text alone).
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -264,6 +329,8 @@ This is scoped as a standalone future task, not attempted as part of Day 5.
 | `pg_isready` never succeeds / port 5433 already in use | Another Postgres instance already bound to 5433, or the container needs more time | `docker compose ps`, `docker compose logs db`; confirm nothing else owns host port 5433 |
 | First run of `test_day3_setup.py` or `build_kb.py` is slow (~1–2 min) | `sentence-transformers`/`torch` downloading model weights and MITRE JSON on first use | Expected once; subsequent runs use local caches (`data/mitre/enterprise-attack.json`, HF cache, `data/chroma/`) |
 | `uvicorn` port 8000 still bound after stopping | Reload/watcher spawned a child process with a different PID | `netstat -ano \| findstr :8000` then `taskkill /F /PID <pid>` |
+| `pytest -v` (bare, whole `tests/` dir) collection-errors with `ModuleNotFoundError: fastapi`/`sqlalchemy`/`Evtx` | Those Pair 1 deps aren't installed in this venv | Run the RAG-only subset (§6's known-gap note) until `pip install -r requirements.txt` succeeds; `python-evtx`'s `hexdump` build currently fails separately (see next row) |
+| `pip install -r requirements.txt` fails on `Failed to build 'hexdump'` / `AssertionError` in `_distutils_hack` | `python-evtx`'s `hexdump` sub-dependency hits a setuptools/distutils conflict on this Python 3.10 install | Not yet resolved here — pre-existing gap, unrelated to Day 5 RAG code; needs its own fix (e.g. a newer setuptools pin or building `hexdump` in isolation) before Pair 1's tests can run on this machine |
 
 ---
 
@@ -271,5 +338,5 @@ This is scoped as a standalone future task, not attempted as part of Day 5.
 
 - Frontend testing (nothing built yet — Days 13+).
 - Sigma detection engine, ingestion API, incident endpoints (Pair 1 Days 6–12 — not yet built).
-- RAG retrieval/generation/chat endpoints (Pair 2 Days 5–12 — not yet built).
+- RAG generation/self-critique/chat endpoints (Pair 2 Days 6–12 — not yet built; retrieval itself is done, see §8).
 - The formal Testing Report (Volume 3 §9.5) — that's produced during Days 20–21 Integration & Testing, covering unit/integration/E2E coverage and RAG accuracy scoring across the whole system.
