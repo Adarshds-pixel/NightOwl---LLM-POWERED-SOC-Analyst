@@ -22,6 +22,12 @@ upload failure -- one corrupt/truncated record in a large real-world log
 shouldn't block ingesting the rest of an otherwise-good batch, matching
 normalizer.py's existing policy that narrow record-level problems aren't
 fatal.
+
+Day 7 adds detection: every normalized event is evaluated against the
+loaded Sigma rules (detection/rule_loader.py + detection/engine.py) before
+being persisted. This only counts/reports matches on the response --
+persisting them as `alerts` rows is Day 8's job (models/alert.py,
+services/detection_service.py), not built here yet.
 """
 
 import logging
@@ -33,6 +39,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.detection.engine import evaluate_event
+from app.detection.rule_loader import get_loaded_rules
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts
 from app.ingestion.normalizer import EventNormalizationError, normalize_event
 from app.services.event_service import save_events
@@ -49,6 +57,8 @@ class IngestResponse(BaseModel):
     records_read: int
     events_ingested: int
     events_skipped: int
+    rule_matches: int
+    matched_rule_titles: list[str]
 
 
 @router.post("/ingest", response_model=IngestResponse)
@@ -86,15 +96,26 @@ def ingest_evtx(file: UploadFile = File(...), db: Session = Depends(get_db)) -> 
 
         saved = save_events(db, normalized_events)
 
+        rules = get_loaded_rules()
+        matched_titles: list[str] = []
+        rule_matches = 0
+        for normalized_event in normalized_events:
+            for match in evaluate_event(normalized_event, rules):
+                rule_matches += 1
+                if match.title not in matched_titles:
+                    matched_titles.append(match.title)
+
         logger.info(
-            "ingest %s: %d records read, %d events ingested, %d skipped",
-            filename, records_read, len(saved), skipped,
+            "ingest %s: %d records read, %d events ingested, %d skipped, %d rule matches",
+            filename, records_read, len(saved), skipped, rule_matches,
         )
         return IngestResponse(
             filename=filename,
             records_read=records_read,
             events_ingested=len(saved),
             events_skipped=skipped,
+            rule_matches=rule_matches,
+            matched_rule_titles=matched_titles,
         )
     finally:
         if tmp_path is not None and tmp_path.exists():

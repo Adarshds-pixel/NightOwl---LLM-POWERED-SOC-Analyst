@@ -33,6 +33,15 @@ class NormalizedEvent(BaseModel):
     # Event ID 11 -- file create
     target_filename: str | None = None
 
+    # Flattened Sysmon EventData (Image, CommandLine, DestinationIp, ...),
+    # every field the record carries -- not just the ones above that get
+    # promoted to their own column. Lets detection/engine.py match rules
+    # written against real Sysmon field names (portable from public Sigma
+    # rules) without re-parsing the raw XML itself; normalizer.py has
+    # already computed this dict for its own type_fields extraction, so
+    # this just exposes that existing computation instead of duplicating it.
+    event_data: dict[str, str | None] = Field(default_factory=dict, repr=False)
+
     # Full original xmltodict-parsed record, for provenance/audit trail.
     # Excluded from model_dump() by default so reuse of this schema
     # elsewhere (API responses, logs) never leaks the raw blob

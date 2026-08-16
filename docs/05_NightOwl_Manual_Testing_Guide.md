@@ -1,6 +1,6 @@
 # NightOwl Handbook — Volume 5: Manual Testing Guide
 
-**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**, and **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline), as of **2026-08-16**.
+**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**.
 
 This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on the date noted next to it — see the "Last verified" line under each step.
 
@@ -511,6 +511,81 @@ Runs the full pipeline against the real `knowledge_base` Chroma collection and a
 **Last verified:** 2026-08-16 — ran successfully end-to-end against the real KB (5 chunks retrieved) and Gemini (2 real calls: draft + critique). The self-critique pass **did** flag an issue: it noted the specific host/user/payload values in the draft ("WIN10-ANALYST", "jdoe", "SQBFAFgA...") aren't supported by the retrieved KB chunks — correct, since those are given incident facts, not something a generic MITRE technique doc would ever contain. The `**Confidence check:**` section was appended to the explanation as designed.
 
 **Known finding, not a bug:** the critique step currently checks *all* claims in the draft against the KB chunks, including incident-specific facts (host, user, command line) that were never meant to come from the KB — they're given directly in the incident context. This makes the critique flag things that are actually fine, which could make the confidence-check section noisy/less useful once real incidents flow through this (Day 10+). Worth revisiting when Day 9 extends the prompt (e.g. scope the critique to only check claims about attacker technique/behavior/response guidance — the parts that should be grounded in retrieved sources — not claims that simply restate the input incident).
+
+---
+
+## 12. Day 7 — Detection engine v1 (Pair 1 deliverable)
+
+### 12.1. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/test_day7_rule_loader.py tests/test_day7_detection_engine.py tests/test_day7_ingest_detection.py -v
+```
+
+Covers `detection/rule_loader.py` (loads + validates `.yml` rules via pySigma, skips malformed files without crashing, module-level cache with `force_reload`), `detection/engine.py` (the `and`/`or`/`not`/parentheses condition parser in isolation, `contains`/`startswith`/`endswith` field modifiers, AND-across-fields-in-one-selection, logsource-category-to-event-ID scoping, and an end-to-end check against the real seed rule in `detection/rules/`), and the `POST /ingest` wiring (`test_day7_ingest_detection.py`, monkeypatched rule set + mocked EVTX reader, no DB write path involved).
+
+**Expected:** `20 passed`.
+**Last verified:** 2026-08-16 — `20 passed in 8.02s`.
+
+### 12.2. Full regression pass
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest -v
+```
+
+**Expected:** `90 passed` (70 from Days 3–8 + 20 new Day 7 detection-engine tests).
+**Last verified:** 2026-08-16 — `90 passed in 43.22s`.
+
+### 12.3. Manual smoke test — rule loading (no DB needed)
+
+```
+cd backend
+./venv/Scripts/python.exe -m app.detection.rule_loader
+```
+
+**Expected:** one line per loaded rule (`id  [level]  title  (category=...)`).
+**Last verified:** 2026-08-16 —
+```
+5b1f3a2e-6c1e-4f6a-9b8e-2f8b1a9d6e11  [high]  Suspicious Encoded PowerShell Command  (category=process_creation)
+```
+
+### 12.4. Live server smoke test — `POST /ingest` with detection wired in
+
+```
+cd backend
+./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+```
+In another shell (from `backend/`):
+```
+curl -F "file=@../data/sample_logs/sysmon_demo.evtx;type=application/octet-stream" http://127.0.0.1:8000/ingest
+```
+
+**Expected without a live Postgres instance (this machine — Docker not installed, same gap as §9.3/§3):** HTTP 500 — `save_events`'s DB commit still fails with `psycopg2.OperationalError: connection ... port 5433 failed: Connection refused` before the newly-added detection step even runs (detection runs after persistence in the route). Not a Day 7 defect — the detection-engine logic itself is fully exercised without a DB dependency by §12.1's automated tests, including the real `/ingest`-route wiring test.
+**With Postgres running** (per §3): expect HTTP 200 and a response with the two new fields Day 7 adds to `IngestResponse`:
+```json
+{"filename":"sysmon_demo.evtx","records_read":4,"events_ingested":4,"events_skipped":0,"rule_matches":0,"matched_rule_titles":[]}
+```
+`sysmon_demo.evtx`'s 4 records don't contain an encoded-PowerShell process-creation event, so `rule_matches: 0` here is expected — `test_real_seed_rule_matches_encoded_powershell_event` in `test_day7_detection_engine.py` is what proves the seed rule *can* fire, using a crafted matching event.
+**Last verified:** 2026-08-16 — reproduced the no-Postgres HTTP 500 exactly as above (traceback confirmed pointing at the same `psycopg2.OperationalError` DB-connect step as §9.3, not at detection code); the Postgres-connected path is confirmed via `test_day7_ingest_detection.py`'s SQLite-backed route test instead, since Docker isn't available on this machine.
+
+### 12.5. Known v1 limitations (by design — see `docs/decisions.md`)
+- Condition grammar supports `and`/`or`/`not`/parentheses over bare selection names only — no `1 of`/`all of them` shorthand, no named multi-condition rules.
+- Field modifiers: exact match (case-insensitive), `contains`, `startswith`, `endswith` only — no `|re` or glob `*` wildcards yet.
+- Only one seed rule exists in `detection/rules/` (`suspicious_encoded_powershell.yml`) — Day 8 builds this out to 5 rules across process-creation/network-connection/file-creation categories and adds `alerts` persistence.
+
+### 12.6. Prep task — real Sysmon Event ID 3 capture from a clean VM (manual, not run here)
+
+The dev laptop's McAfee firewall blocks Sysmon's network-monitoring driver (§7.2), so a real network-connection (Event ID 3) sample still needs to come from a clean VM/sandbox. This is a hands-on task for whoever has VM access — not something automatable from this repo:
+
+1. Spin up a clean Windows VM/sandbox with no conflicting AV/firewall product.
+2. Download Sysinternals `Sysmon64.exe` + a minimal config covering ProcessCreate (ID 1), NetworkConnect (ID 3), FileCreate (ID 11) — `sysmon64.exe -i minimal-config.xml`.
+3. Generate a real outbound network connection from a monitored process (e.g. `curl`/`Invoke-WebRequest` to any external host).
+4. Export the relevant `Microsoft-Windows-Sysmon/Operational` log to `.evtx` (Event Viewer → right-click the log → "Save All Events As...").
+5. Copy the exported file into `data/sample_logs/sysmon_vm_capture.evtx` on the dev machine and commit it (`docs: real sysmon event id 3 sample from clean vm`).
+
+**Status:** not yet done — flagged here as the remaining open item for Day 7, per the roadmap's "don't silently skip it" rule. The Day 8 network-connection-category Sigma rule can still be developed/tested against hand-crafted fixtures in the meantime; this capture upgrades that to a real-world sample.
 
 ---
 

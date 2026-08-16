@@ -19,3 +19,8 @@ httpx>=0.27.0
 python-evtx>=0.7.4
 xmltodict>=0.13.0
 python-multipart>=0.0.9
+
+# Detection engine (Pair 1, Day 7+) — pySigma validates rule YAML structure;
+# NightOwl's own engine.py does the actual per-event matching (see docs/decisions.md)
+pysigma>=0.11.0
+PyYAML>=6.0

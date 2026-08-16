@@ -1,0 +1,23 @@
+title: Suspicious Encoded PowerShell Command
+id: 5b1f3a2e-6c1e-4f6a-9b8e-2f8b1a9d6e11
+status: experimental
+description: >
+  Detects PowerShell process creation with an encoded/inline command flag,
+  a common technique to obfuscate malicious commands from casual log review.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-16
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+tags:
+  - attack.execution
+  - attack.t1059.001
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|contains: powershell
+    CommandLine|contains:
+      - '-enc'
+      - '-EncodedCommand'
+  condition: selection
+level: high

@@ -147,7 +147,9 @@ def normalize_event(record: dict) -> NormalizedEvent:
     extractor = _EVENT_ID_DISPATCH.get(event_id)
     type_fields = extractor(data) if extractor else {}
 
-    return NormalizedEvent(host=host, timestamp=timestamp, event_id=event_id, raw=record, **type_fields)
+    return NormalizedEvent(
+        host=host, timestamp=timestamp, event_id=event_id, raw=record, event_data=data, **type_fields
+    )
 
 
 def normalize_events(records: Iterable[dict]) -> Iterator[NormalizedEvent]:
