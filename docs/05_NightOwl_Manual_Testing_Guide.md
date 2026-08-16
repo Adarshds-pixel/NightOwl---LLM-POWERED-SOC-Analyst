@@ -585,7 +585,12 @@ The dev laptop's McAfee firewall blocks Sysmon's network-monitoring driver (§7.
 4. Export the relevant `Microsoft-Windows-Sysmon/Operational` log to `.evtx` (Event Viewer → right-click the log → "Save All Events As...").
 5. Copy the exported file into `data/sample_logs/sysmon_vm_capture.evtx` on the dev machine and commit it (`docs: real sysmon event id 3 sample from clean vm`).
 
-**Status:** not yet done — flagged here as the remaining open item for Day 7, per the roadmap's "don't silently skip it" rule. The Day 8 network-connection-category Sigma rule can still be developed/tested against hand-crafted fixtures in the meantime; this capture upgrades that to a real-world sample.
+**Status:** done — `data/sample_logs/sysmon_vm_capture.evtx` (63MB) captured from a clean VM (`Computer=Nightowl`, 2026-08-16). Verified by running it through the real pipeline at three levels, not just counting event IDs:
+- **Raw read** (`evtx_reader.read_records_as_dicts`): 64,558 records, 0 read errors.
+- **Normalize + detect** (`normalizer.normalize_event` → `detection.engine.evaluate_event`): 0 normalize errors across all 64,558 records. Event-ID breakdown: `FileCreate(11): 64413, ProcessCreate(1): 26, ProcessTerminate(5): 19, NetworkConnect(3): 100` — 100 genuine Event ID 3 records present, with real fields (`Image`, `Protocol`, `SourceIp`, `DestinationIp`, ports). 0 rule matches, expected — the only seed rule targets encoded-PowerShell process creation, not present in this capture.
+- **Full `POST /ingest` route** (`TestClient` + in-memory SQLite, same pattern as §12.4/`test_day7_ingest_detection.py`): HTTP 200, `records_read: 64558, events_ingested: 64558, events_skipped: 0, rule_matches: 0` — the entire real-world file flows through read → normalize → persist → detect without a single dropped record.
+
+Not wired into pytest as a hard dependency (same rationale as §12's other real-file checks — a machine-specific real file shouldn't be a hard dependency of the automated suite); this was a manual verification pass. The Day 8 network-connection-category Sigma rule can be developed/tested against this real fixture instead of only hand-crafted ones.
 
 ---
 
