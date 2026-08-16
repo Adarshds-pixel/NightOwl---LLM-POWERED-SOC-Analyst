@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     # (another, unrelated Postgres process already owns 5432 on dev machines).
     database_url: str = "postgresql+psycopg2://nightowl:nightowl@localhost:5433/nightowl"
 
+    # LLM wiring (Pair 2, Day 7+) — Gemini free tier via langchain-google-genai.
+    llm_api_key: str = ""
+    # Alias that auto-tracks Google's current recommended free-tier Flash
+    # model rather than a pinned dated snapshot that could be deprecated
+    # mid-roadmap (e.g. the Gemini 2.5 family, retiring 2026-10-16) — see
+    # docs/decisions.md. Override via LLM_MODEL in .env to pin a version.
+    llm_model: str = "gemini-flash-latest"
+
 
 @lru_cache
 def get_settings() -> Settings:
