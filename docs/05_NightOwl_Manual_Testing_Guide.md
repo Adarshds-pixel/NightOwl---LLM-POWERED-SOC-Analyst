@@ -1,6 +1,6 @@
 # NightOwl Handbook — Volume 5: Manual Testing Guide
 
-**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**.
+**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §13 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps.
 
 This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on the date noted next to it — see the "Last verified" line under each step.
 
@@ -47,6 +47,7 @@ Covers:
 **Expected:** `3 passed`.
 **Last verified:** 2026-08-12 — 3 passed in 1.16s.
 **Re-verified 2026-08-15:** `3 passed in 1.41s`.
+**Re-verified 2026-08-17:** covered as part of the full 90-test regression run (§6) — passed.
 
 ---
 
@@ -67,6 +68,7 @@ Needs outbound internet (GitHub raw + HuggingFace Hub for model weights on first
 **Expected:** `3 passed` (first run ~80–90s while the embedding model downloads; cached runs are seconds).
 **Last verified:** 2026-08-12 — 3 passed in 84.61s.
 **Re-verified 2026-08-15:** `3 passed` (cached run, combined with §7's Day 4 EVTX tests: `7 passed in 25.71s`).
+**Re-verified 2026-08-17:** covered as part of the full 90-test regression run (§6) — passed.
 
 ---
 
@@ -98,6 +100,8 @@ docker compose exec db psql -U nightowl -d nightowl -c "\dt"
 **Last verified:** 2026-08-12 — all 6 tables present, `alembic current` = `fa0ac08ab62f (head)`. This was the first time the migration had been run against a live Postgres instance rather than only the in-memory SQLite used by tests.
 
 > **Not re-verified 2026-08-15:** Docker itself isn't installed on this machine (`docker`/`docker info` both fail with "command not found", not just "daemon not running"). §1/§2/§6 (all SQLite/Chroma-backed) and §4's `/health` route don't need it and were re-confirmed working standalone. Install Docker Desktop to re-run this section here.
+
+> **Resolved 2026-08-17:** Docker Desktop is now installed on this machine (`docker --version` → `29.4.1`) but its daemon wasn't running by default — started via `Docker Desktop.exe`, daemon ready within seconds. Re-ran this section for real: `docker compose up -d db` → container created and started cleanly, `pg_isready` succeeded, `alembic upgrade head` applied with no errors, `alembic current` → `fa0ac08ab62f (head)`, and `\dt` confirmed all 6 tables (`alembic_version`, `alerts`, `chat_messages`, `events`, `incidents`, `rules`). Postgres data persists in a named Docker volume across `down`/`up` cycles — the `events` table already had 8 rows from earlier (2026-08-12-era) verification sessions before this run added 4 more via §9.3's re-verified happy path. Docker Desktop does not auto-start with Windows on this machine, so it needs to be launched manually each session before this section will work.
 
 ---
 
@@ -143,6 +147,7 @@ cd backend
 
 **Expected:** all tests pass together (34 as of Day 5 — 6 from Day 3, 4 from Day 4, 24 from Day 5: 21 normalization/persistence + 3 retrieval).
 **Last verified:** 2026-08-15 — `34 passed in 31.61s`.
+**Re-verified 2026-08-17:** superseded by the larger §12.2 full-suite run (90 tests as of Day 7/8) — `90 passed in 39.85s`, no failures, no regressions.
 
 > **Resolved (2026-08-15):** this venv was previously missing `fastapi`/`sqlalchemy`/`python-evtx` (Pair 1's Day 3+ deps) because `pip install -r requirements.txt` failed on `python-evtx`'s `hexdump` sub-dependency (`AssertionError` in `_distutils_hack`). Fixed with the `SETUPTOOLS_USE_DISTUTILS=stdlib` workaround now documented in Prerequisites (§0) — all 34 tests collect and pass together as of this run.
 
@@ -346,6 +351,7 @@ Covers:
 
 **Expected:** `13 passed`.
 **Last verified:** 2026-08-15 — `13 passed in 2.24s`.
+**Re-verified 2026-08-17:** covered as part of the full 90-test regression run (§12.2) — passed.
 
 ### 9.2. Full regression pass
 
@@ -376,6 +382,12 @@ curl -F "file=@../data/sample_logs/sysmon_demo.evtx;type=application/octet-strea
 {"filename":"sysmon_demo.evtx","records_read":4,"events_ingested":4,"events_skipped":0}
 ```
 **Last verified:** 2026-08-15 — HTTP 500 as above (no Postgres on this machine); the identical request path is covered end-to-end against SQLite by the automated test in §9.1, so the DB-write logic itself is confirmed working — only this specific live/Postgres combination is unverified on this machine.
+**Re-verified 2026-08-17 (first pass, before Docker was started):** same HTTP 500, same `psycopg2.OperationalError ... port 5433 ... Connection refused` traceback confirmed in the server log — no change from prior days.
+**Re-verified 2026-08-17 (second pass, after starting Docker Desktop + `docker compose up -d db` + `alembic upgrade head`, per §3's resolution note):** HTTP 200 —
+```json
+{"filename":"sysmon_demo.evtx","records_read":4,"events_ingested":4,"events_skipped":0,"rule_matches":0,"matched_rule_titles":[]}
+```
+(the two extra fields are Day 7's detection-engine additions, see §12.4 — not present in the original Day 6 example above). Confirmed the 4 new rows actually landed in Postgres (`SELECT COUNT(*) FROM events` went from 8 → 12). The previously-documented HTTP 500 was never a code defect — it was purely this machine not having Postgres up; with Postgres available the same route returns 200 as designed.
 
 The three error-handling cases (all pure validation/parsing, no DB touched, so they work with or without Postgres):
 ```
@@ -385,6 +397,7 @@ curl -F "file=@<path-to-a-file-with-a-few-garbage-bytes>;type=application/octet-
 ```
 **Expected:** all three HTTP 400, with `detail` messages `"unsupported file type: expected '.evtx', got '<name>'"`, `"uploaded file is empty"`, and `"failed to parse EVTX file: ..."` respectively.
 **Last verified:** 2026-08-15 — all three reproduced exactly as expected.
+**Re-verified 2026-08-17:** all three reproduced again, byte-for-byte identical `detail` messages.
 
 > **Windows/git-bash `curl` gotcha:** if your fixture file path starts with `/` (e.g. `/tmp/foo.txt`), `curl -F "file=@/tmp/foo.txt"` fails with `curl: (26) Failed to open/read local data from file/application` — this environment's `curl.exe` is a native mingw64 binary that only path-translates a POSIX path when it *leads* the argument; embedded after `-F file=@`, it's passed through literally and Windows can't resolve it. Fix: use a path relative to your shell's cwd (as above), or convert to a Windows path first with `cygpath -w /tmp/foo.txt`.
 
@@ -397,6 +410,7 @@ curl http://127.0.0.1:8000/mitre/techniques
 
 **Expected:** HTTP 200, a JSON object `{"techniques": [...], "count": N}`, techniques sorted by ID, each with `id`/`name`/`description`/`tactics`/`is_deprecated`/`is_revoked`.
 **Last verified:** 2026-08-15 — HTTP 200, `count: 858`, first entry `T1001` ("Data Obfuscation"), last entry `T1690` ("Prevent Command History Logging"), `T1059.001` present with `tactics: ["execution"]`, `is_deprecated: False`, `is_revoked: False`. Confirms this route has no hidden DB dependency, same as `/health` in §4.
+**Re-verified 2026-08-17:** identical response — `count: 858`, same first/last entries, same `T1059.001` flags.
 
 ### 9.5. Manual smoke test — `mitre/validator.py` scaffold (Pair 2)
 
@@ -437,6 +451,7 @@ Covers:
 
 **Expected:** `16 passed`.
 **Last verified:** 2026-08-16 — `16 passed in 12.59s`.
+**Re-verified 2026-08-17:** covered as part of the full 90-test regression run (§12.2) — passed.
 
 ### 10.2. Full regression pass
 
@@ -447,6 +462,7 @@ cd backend
 
 **Expected:** `63 passed` (47 from Day 3–6 + 16 from Day 7).
 **Last verified:** 2026-08-16 — `63 passed in 27.77s`.
+**Re-verified 2026-08-17:** superseded by the larger §12.2 full-suite run (90 tests as of Day 7/8) — `90 passed in 39.85s`.
 
 ### 10.3. Manual prompt-rendering smoke test (no API key needed)
 
@@ -457,6 +473,7 @@ cd backend
 
 **Expected:** prints the rendered system message (grounding rules) followed by the rendered human message (sample incident context + one retrieved chunk).
 **Last verified:** 2026-08-16 — rendered exactly as expected; system message carries the "What happened"/"Why it matters"/"Recommended next steps" structure, human message embeds `WIN10-ANALYST` and `T1059.001`.
+**Re-verified 2026-08-17:** identical output, byte-for-byte.
 
 ### 10.4. Manual end-to-end LLM smoke test
 
@@ -469,6 +486,11 @@ Chains `prompts.build_explanation_prompt()` into `llm_client.generate()` for a r
 
 **Expected:** a ~150–300 word explanation of the sample PowerShell incident, structured into the three headed sections defined in `SYSTEM_PROMPT`.
 **Last verified:** 2026-08-16 — real call against `gemini-flash-latest` succeeded, returned a correctly-structured "What happened" / "Why it matters" / "Recommended next steps" explanation referencing `T1059.001`.
+**Not re-verified 2026-08-17 (first pass):** `LLM_API_KEY` is empty in this machine's `.env` today, so this live-Gemini check was skipped rather than faked. `test_day7_llm_client.py`'s fully-mocked automated tests (§10.1) still cover the request/response logic offline.
+
+> **Bug found + fixed 2026-08-17:** after a real key was added to `.env`, this step still raised `LLMProviderError: LLM_API_KEY is not set` even though the key was present. Root cause: `Settings.model_config` in `app/core/config.py` used `env_file=".env"`, a path pydantic-settings resolves **relative to the process's current working directory** — but every command in this guide runs from `backend/`, while the real `.env` lives at the repo root. Since Postgres's `DATABASE_URL` default happens to match `.env.example`'s value, this silently never surfaced there, but `LLM_API_KEY`'s empty-string default made it fail loudly. Fixed by resolving the `.env` path from `config.py`'s own file location instead of cwd: `_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"`. Full 90-test suite re-run after the fix: `90 passed in 31.98s`, no regressions.
+
+**Re-verified 2026-08-17 (second pass, after the config.py fix):** real call against `gemini-flash-latest` succeeded — a correctly-structured "What happened" / "Why it matters" / "Recommended next steps" explanation referencing `T1059.001`, `WIN10-ANALYST`, and `jdoe`. Matches the 2026-08-16 baseline in structure and content.
 
 > **Bug found + fixed during this verification:** the current `langchain-google-genai` (4.3.4) returns `AIMessage.content` as a list of content blocks (`[{"type": "text", "text": ..., "extras": {"signature": ...}}]`), not a plain string as `generate()` originally assumed. This silently passed the raw list through instead of raising or returning text. Fixed in `llm_client.py` with a `_extract_text()` helper that concatenates `type: "text"` blocks (and passes plain strings through unchanged, so older/other providers still work); covered by a new regression test, `test_generate_extracts_text_from_content_block_list`, in `test_day7_llm_client.py`.
 
@@ -487,6 +509,7 @@ Covers `rag/explain_service.py`'s `generate_explanation()`: builds a retrieval q
 
 **Expected:** `6 passed`.
 **Last verified:** 2026-08-16 — `6 passed in 13.47s`.
+**Re-verified 2026-08-17:** covered as part of the full 90-test regression run (§12.2) — passed.
 
 ### 11.2. Full regression pass
 
@@ -497,6 +520,7 @@ cd backend
 
 **Expected:** `70 passed` (47 from Day 3–6 + 17 from Day 7 + 6 from Day 8 — Day 7 count includes the content-block regression test added during Day 8's verification).
 **Last verified:** 2026-08-16 — `70 passed in 47.19s`.
+**Re-verified 2026-08-17:** superseded by the larger §12.2 full-suite run (90 tests as of Day 7's detection engine) — `90 passed in 39.85s`.
 
 ### 11.3. Manual end-to-end smoke test — real retrieval + real Gemini calls
 
@@ -509,6 +533,9 @@ Runs the full pipeline against the real `knowledge_base` Chroma collection and a
 
 **Expected:** a structured explanation for the sample PowerShell/`T1059.001` incident, followed by a line reporting how many chunks were used and whether the self-critique pass flagged any issues.
 **Last verified:** 2026-08-16 — ran successfully end-to-end against the real KB (5 chunks retrieved) and Gemini (2 real calls: draft + critique). The self-critique pass **did** flag an issue: it noted the specific host/user/payload values in the draft ("WIN10-ANALYST", "jdoe", "SQBFAFgA...") aren't supported by the retrieved KB chunks — correct, since those are given incident facts, not something a generic MITRE technique doc would ever contain. The `**Confidence check:**` section was appended to the explanation as designed.
+**Not re-verified 2026-08-17 (first pass):** same reason as §10.4 — `LLM_API_KEY` is empty in this machine's `.env` today, so the 2 real Gemini calls this step needs were skipped rather than faked. `test_day8_explain_service.py`'s fully-mocked automated tests (§11.1) still cover the pipeline logic offline.
+
+**Re-verified 2026-08-17 (second pass, after a real key was added and §10.4's config.py cwd-resolution bug was fixed):** ran successfully end-to-end against the real KB (5 chunks retrieved) and Gemini (2 real calls: draft + critique). Same known finding as 2026-08-16 — the critique flagged the incident-specific host/user/encoded-command values as unsupported by the KB chunks (correct behavior, not a new bug; see the "Known finding, not a bug" note below), and the `**Confidence check:**` section was appended as designed.
 
 **Known finding, not a bug:** the critique step currently checks *all* claims in the draft against the KB chunks, including incident-specific facts (host, user, command line) that were never meant to come from the KB — they're given directly in the incident context. This makes the critique flag things that are actually fine, which could make the confidence-check section noisy/less useful once real incidents flow through this (Day 10+). Worth revisiting when Day 9 extends the prompt (e.g. scope the critique to only check claims about attacker technique/behavior/response guidance — the parts that should be grounded in retrieved sources — not claims that simply restate the input incident).
 
@@ -527,6 +554,7 @@ Covers `detection/rule_loader.py` (loads + validates `.yml` rules via pySigma, s
 
 **Expected:** `20 passed`.
 **Last verified:** 2026-08-16 — `20 passed in 8.02s`.
+**Re-verified 2026-08-17:** covered as part of the full 90-test regression run directly below — passed.
 
 ### 12.2. Full regression pass
 
@@ -537,6 +565,7 @@ cd backend
 
 **Expected:** `90 passed` (70 from Days 3–8 + 20 new Day 7 detection-engine tests).
 **Last verified:** 2026-08-16 — `90 passed in 43.22s`.
+**Re-verified 2026-08-17:** `90 passed in 39.85s`, zero failures — full suite unchanged and stable one day later.
 
 ### 12.3. Manual smoke test — rule loading (no DB needed)
 
@@ -550,6 +579,7 @@ cd backend
 ```
 5b1f3a2e-6c1e-4f6a-9b8e-2f8b1a9d6e11  [high]  Suspicious Encoded PowerShell Command  (category=process_creation)
 ```
+**Re-verified 2026-08-17:** identical output — same single seed rule, same ID.
 
 ### 12.4. Live server smoke test — `POST /ingest` with detection wired in
 
@@ -569,6 +599,8 @@ curl -F "file=@../data/sample_logs/sysmon_demo.evtx;type=application/octet-strea
 ```
 `sysmon_demo.evtx`'s 4 records don't contain an encoded-PowerShell process-creation event, so `rule_matches: 0` here is expected — `test_real_seed_rule_matches_encoded_powershell_event` in `test_day7_detection_engine.py` is what proves the seed rule *can* fire, using a crafted matching event.
 **Last verified:** 2026-08-16 — reproduced the no-Postgres HTTP 500 exactly as above (traceback confirmed pointing at the same `psycopg2.OperationalError` DB-connect step as §9.3, not at detection code); the Postgres-connected path is confirmed via `test_day7_ingest_detection.py`'s SQLite-backed route test instead, since Docker isn't available on this machine.
+**Re-verified 2026-08-17 (first pass, before Docker was started):** same HTTP 500 / same `psycopg2.OperationalError` traceback, still ahead of the detection step — no change; see §9.3's matching re-verification for the shared traceback.
+**Re-verified 2026-08-17 (second pass, with Postgres up — see §3/§9.3's resolution):** HTTP 200, `{"filename":"sysmon_demo.evtx","records_read":4,"events_ingested":4,"events_skipped":0,"rule_matches":0,"matched_rule_titles":[]}` — matches the "With Postgres running" expectation above exactly, including the two Day 7 detection fields. `rule_matches: 0` is correct — `sysmon_demo.evtx` doesn't contain an encoded-PowerShell event.
 
 ### 12.5. Known v1 limitations (by design — see `docs/decisions.md`)
 - Condition grammar supports `and`/`or`/`not`/parentheses over bare selection names only — no `1 of`/`all of them` shorthand, no named multi-condition rules.
@@ -594,6 +626,118 @@ Not wired into pytest as a hard dependency (same rationale as §12's other real-
 
 ---
 
+## 13. Full Repository Manual Test Runbook (consolidated, run everything)
+
+Everything above (§1–§12) is a detailed, day-by-day reference — what each piece covers, why, and
+its full verification history. This section is the opposite: a single linear checklist to run the
+**whole repo** end-to-end in one sitting, e.g. before a demo or a milestone check-in. It doesn't
+re-explain anything — it just sequences the commands and points back to the section with the full
+detail/expected output for each step.
+
+### 13.1. Prerequisites checklist
+
+- [ ] `backend/venv` exists with deps installed (§0). If not: `cd backend && python -m venv venv && ./venv/Scripts/pip install -r requirements.txt` (see §0 for the two Windows install gotchas).
+- [ ] Repo-root `.env` exists (`cp .env.example .env` if not).
+- [ ] *Optional, for §13.3's Postgres block:* Docker Desktop installed and running (`docker info` succeeds).
+- [ ] *Optional, for §13.3's live-LLM block:* `LLM_API_KEY` set in `.env` (free key: https://aistudio.google.com/apikey).
+
+Everything in §13.2 runs with **just the first two boxes checked**. §13.3 is gated on Docker/API key and is explicitly optional/skippable.
+
+### 13.2. Core pass — no Docker, no API key required
+
+Run top to bottom from the repo root unless noted:
+
+```
+cd backend
+
+# 1. Full automated suite — everything Pair 1 + Pair 2 have built so far
+./venv/Scripts/python.exe -m pytest -v
+# Expect: 90 passed (see §12.2 for the authoritative running total)
+
+# 2. Start the API server in one shell, then run the rest from a second shell
+./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+```
+
+In a second shell (from `backend/`, so relative sample-log paths resolve):
+```
+# 3. Health check
+curl http://127.0.0.1:8000/health
+# Expect: {"status":"ok"}                                          (§4)
+
+# 4. MITRE techniques endpoint (no DB dependency)
+curl http://127.0.0.1:8000/mitre/techniques
+# Expect: HTTP 200, {"techniques":[...],"count":858}, sorted by ID  (§9.4)
+
+# 5. Ingest happy path (sysmon_demo.evtx fixture)
+curl -F "file=@../data/sample_logs/sysmon_demo.evtx;type=application/octet-stream" http://127.0.0.1:8000/ingest
+# Expect: HTTP 200 + rule_matches/matched_rule_titles fields WITH Postgres running (§3, §13.3)
+# Expect: HTTP 500 (psycopg2 "port 5433 ... Connection refused") WITHOUT Postgres — a known,
+#         non-defect gap, not a new bug. The same request path is separately proven correct
+#         end-to-end against SQLite by the automated suite in step 1.               (§9.3/§12.4)
+
+# 6. Ingest error handling — three cases, all pure validation, no DB touched
+curl -F "file=@<a-non-evtx-file>;type=text/plain" http://127.0.0.1:8000/ingest
+curl -F "file=@<a-0-byte-file>;type=application/octet-stream" http://127.0.0.1:8000/ingest
+curl -F "file=@<a-file-with-garbage-bytes>;type=application/octet-stream" http://127.0.0.1:8000/ingest
+# Expect: all three HTTP 400, with the three specific `detail` messages in §9.3
+```
+
+Back in the first shell, stop the server (Ctrl+C), then run the two no-server, no-key module smoke tests:
+```
+cd backend
+./venv/Scripts/python.exe -m app.detection.rule_loader
+# Expect: one line for the seed rule (id, level, title, category)                  (§12.3)
+
+./venv/Scripts/python.exe -m app.rag.prompts
+# Expect: rendered system message (grounding rules) + human message (sample incident + 1 chunk)  (§10.3)
+```
+
+### 13.3. Optional extended pass — needs Docker and/or an LLM API key
+
+Only run the parts your environment supports:
+
+```
+# Needs Docker Desktop running:
+docker compose up -d db                        # §3
+docker compose exec db pg_isready -U nightowl
+cd backend
+./venv/Scripts/python.exe -m alembic upgrade head
+./venv/Scripts/python.exe -m alembic current    # Expect: fa0ac08ab62f (head)
+docker compose exec db psql -U nightowl -d nightowl -c "\dt"   # Expect: 6 tables
+
+# With Postgres now up, re-run step 5 of §13.2 — expect HTTP 200 this time instead of 500.
+
+# Needs LLM_API_KEY set in .env:
+./venv/Scripts/python.exe -m app.rag.llm_client       # real Gemini call, §10.4
+./venv/Scripts/python.exe -m app.rag.explain_service  # real retrieve + 2 Gemini calls, §11.3
+```
+
+### 13.4. Sign-off checklist
+
+| Component | Section | Result | Notes |
+|---|---|---|---|
+| Full pytest suite (90 tests) | §12.2 | ☐ Pass ☐ Fail | |
+| `/health` | §4 | ☐ Pass ☐ Fail | |
+| `GET /mitre/techniques` | §9.4 | ☐ Pass ☐ Fail | |
+| `POST /ingest` happy path | §9.3/§12.4 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | HTTP 500 without Postgres is expected, not a fail |
+| `POST /ingest` error cases (×3) | §9.3 | ☐ Pass ☐ Fail | |
+| `rule_loader` module smoke | §12.3 | ☐ Pass ☐ Fail | |
+| `prompts` module smoke | §10.3 | ☐ Pass ☐ Fail | |
+| Postgres/Alembic (6 tables) | §3 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | |
+| Live Gemini call (`llm_client`) | §10.4 | ☐ Pass ☐ Fail ☐ Skipped (no API key) | |
+| Live explain_service (2 Gemini calls) | §11.3 | ☐ Pass ☐ Fail ☐ Skipped (no API key) | |
+| Real Sysmon VM capture through full pipeline | §12.6 | ☐ Pass ☐ Fail ☐ Not re-run (63MB file, manual only) | |
+
+Tester: ____________  Date: ____________  Environment (Docker? API key?): ____________
+
+**Scope reminder** (matches "Out of scope" below): this runbook covers everything built through Pair 1 Day 7 (detection engine) and Pair 2 Day 8 (explain_service). It does **not** cover the frontend (none built yet), incident endpoints, the `/explain` HTTP endpoint, chat endpoints, or the formal Testing Report — those are still ahead on the roadmap.
+
+**2026-08-17 run of this exact checklist:** §13.2's entire core pass executed for real — 90/90 tests passed (39.85s), `/health` 200, `/mitre/techniques` 200 (count 858), all 3 ingest error cases HTTP 400 as expected, `rule_loader` and `prompts` module smoke tests both matched their documented output exactly. Ingest happy path initially returned HTTP 500 (Docker Desktop wasn't running yet — same known gap as prior days); §13.3's Docker block was then run for real (Docker Desktop started, `docker compose up -d db`, `alembic upgrade head` → `fa0ac08ab62f (head)`, 6 tables confirmed), after which the happy path returned HTTP 200 as designed — see §3/§9.3/§12.4's "second pass" notes.
+
+A real Gemini key was then added to `.env`, which surfaced one genuine bug (not environmental): `app/core/config.py`'s `Settings` resolved `.env` relative to the process's cwd, but every command here runs from `backend/`, so the key was never actually read regardless of what was in the file. Fixed in `config.py` (resolve `.env` from the module's own file location instead of cwd) — full 90-test suite re-confirmed green after the fix, then both live-Gemini checks (§10.4, §11.3) ran for real and succeeded. **As of 2026-08-17, every check in this runbook has been executed for real and passes** — no known gaps remain except Docker Desktop needing a manual start each session (it doesn't auto-launch on this machine).
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -606,6 +750,7 @@ Not wired into pytest as a hard dependency (same rationale as §12's other real-
 | `pytest -v` (bare, whole `tests/` dir) collection-errors with `ModuleNotFoundError: fastapi`/`sqlalchemy`/`Evtx` | Those Pair 1 deps aren't installed in this venv | `SETUPTOOLS_USE_DISTUTILS=stdlib ./venv/Scripts/python.exe -m pip install -r requirements.txt` (see next row / §0) |
 | `pip install -r requirements.txt` fails on `Failed to build 'hexdump'` / `AssertionError` in `_distutils_hack` | `python-evtx`'s `hexdump` sub-dependency hits a setuptools/distutils conflict on this Python 3.10 install | **Resolved 2026-08-15:** `SETUPTOOLS_USE_DISTUTILS=stdlib` env var on the install disables the conflicting hack (see §0) |
 | `docker` / `docker info` fail with "command not found" (not a connection error) | Docker Desktop isn't installed on this machine at all | Install Docker Desktop from docker.com; until then, §1/§2/§6/§4's `/health` check and §9.4's `/mitre/techniques` check all work without it |
+| `docker info` fails with a connection/pipe error (Docker *is* installed — `docker --version` works) | Docker Desktop is installed but its daemon isn't running/auto-started | Launch `Docker Desktop.exe` (Start Menu, or `C:\Program Files\Docker\Docker\Docker Desktop.exe`) and wait a few seconds for the daemon; confirmed fixed 2026-08-17 (see §3's resolution note) — it does not auto-start with Windows on this machine, so repeat each session |
 | `POST /ingest` returns HTTP 500 with `psycopg2.OperationalError: connection ... port 5433 failed: Connection refused` in the server log | No live Postgres (Docker not running/installed) — same root cause as the `docker` rows above | Start Postgres per §3, or treat as expected on a machine without Docker; the route's own parse/validate logic is separately confirmed via §9.1's SQLite-backed automated test |
 | `curl -F "file=@/tmp/foo.txt"` fails with `curl: (26) Failed to open/read local data from file/application` | This environment's `curl.exe` (native mingw64 build) only path-translates a POSIX path when it leads the argument; embedded after `-F file=@`, `/tmp/...` is passed through literally and Windows can't resolve it | Use a path relative to your shell's cwd, or `cygpath -w /tmp/foo.txt` to get a Windows path first (see §9.3) |
 

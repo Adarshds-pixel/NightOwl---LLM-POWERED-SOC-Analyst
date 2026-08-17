@@ -6,12 +6,19 @@ os.environ calls around the codebase.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Repo root .env, resolved from this file's location rather than the
+# process's cwd -- every documented workflow runs commands from backend/,
+# where a relative "env_file" would silently miss the real .env and fall
+# back to field defaults instead of raising.
+_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     app_name: str = "NightOwl"
     env: str = "local"
