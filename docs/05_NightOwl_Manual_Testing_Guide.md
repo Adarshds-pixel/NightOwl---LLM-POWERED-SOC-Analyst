@@ -37,7 +37,7 @@ This is a hands-on runbook, not the formal Testing Report (that template lives i
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day3_backend_setup.py tests/test_day3_models.py -v
+./venv/Scripts/python.exe -m pytest tests/test_health_and_models.py -v
 ```
 
 Covers:
@@ -55,7 +55,7 @@ Covers:
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day3_setup.py -v
+./venv/Scripts/python.exe -m pytest tests/test_setup_integrations.py -v
 ```
 
 Covers:
@@ -157,12 +157,12 @@ cd backend
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day5_normalizer.py tests/test_day5_event_service.py -v
+./venv/Scripts/python.exe -m pytest tests/ingestion/test_normalizer.py tests/services/test_event_service.py -v
 ```
 
 Covers:
-- `test_day5_normalizer.py` — maps hand-crafted Sysmon-shaped records (the repo's only `sample.evtx` is Windows System-log data, not Sysmon, so real event ID 1/3/11 fixtures aren't available in the file itself) to `NormalizedEvent` for event IDs 1 (process creation → `process`/`command_line`/`user`), 3 (network connection → `protocol`/`source_ip`/`source_port`/`destination_ip`/`destination_port`), and 11 (file create → `target_filename`); handles `EventID` as a plain string vs. a qualifier dict, `EventData.Data` as a single dict vs. a list, and empty `<Data>` elements; confirms unrecognized event IDs still normalize (common fields only, no exception) and that genuinely malformed records (`Event`/`System` missing, `EventID`/`TimeCreated` unparseable) raise `EventNormalizationError`.
-- `test_day5_event_service.py` — in-memory SQLite (same pattern as `test_day3_models.py`), confirms `create_event`/`save_events` persist the `Event` row's flat columns from a `NormalizedEvent`, that `raw_json` holds both the original raw record and the normalized view (`{"raw": ..., "normalized": ...}`) so fields not yet promoted to flat columns aren't lost, that a batch commits and logs `"ingested N events"`, and that a persisted row round-trips correctly when queried back.
+- `ingestion/test_normalizer.py` — maps hand-crafted Sysmon-shaped records (the repo's only `sample.evtx` is Windows System-log data, not Sysmon, so real event ID 1/3/11 fixtures aren't available in the file itself) to `NormalizedEvent` for event IDs 1 (process creation → `process`/`command_line`/`user`), 3 (network connection → `protocol`/`source_ip`/`source_port`/`destination_ip`/`destination_port`), and 11 (file create → `target_filename`); handles `EventID` as a plain string vs. a qualifier dict, `EventData.Data` as a single dict vs. a list, and empty `<Data>` elements; confirms unrecognized event IDs still normalize (common fields only, no exception) and that genuinely malformed records (`Event`/`System` missing, `EventID`/`TimeCreated` unparseable) raise `EventNormalizationError`.
+- `services/test_event_service.py` — in-memory SQLite (same pattern as `test_health_and_models.py`), confirms `create_event`/`save_events` persist the `Event` row's flat columns from a `NormalizedEvent`, that `raw_json` holds both the original raw record and the normalized view (`{"raw": ..., "normalized": ...}`) so fields not yet promoted to flat columns aren't lost, that a batch commits and logs `"ingested N events"`, and that a persisted row round-trips correctly when queried back.
 
 **Expected:** `21 passed`.
 **Last verified:** 2026-08-14 — 21 passed in 0.97s.
@@ -193,7 +193,7 @@ $xpath = "*[System[(EventRecordID=932193 or EventRecordID=932194 or EventRecordI
 wevtutil epl Microsoft-Windows-Sysmon/Operational "$env:TEMP\sysmon_sample_trimmed.evtx" /q:$xpath
 ```
 
-**Known gap — Event ID 3 and 11 are not present in this sample.** `sysmon.exe -c` on this machine showed `No rules installed` and `Network connection: disabled` — this Sysmon deployment only logs ProcessCreate (ID 1); NetworkConnect and FileCreate aren't enabled at all, regardless of what real activity happens. Enabling them would mean deploying a new Sysmon config XML on the live machine, which is a change to real endpoint monitoring, not just this repo — out of scope here. ID 3/11 mapping stays covered by the hand-crafted fixtures in `test_day5_normalizer.py`; `sysmon_sample.evtx` is real-world ID 1 data only.
+**Known gap — Event ID 3 and 11 are not present in this sample.** `sysmon.exe -c` on this machine showed `No rules installed` and `Network connection: disabled` — this Sysmon deployment only logs ProcessCreate (ID 1); NetworkConnect and FileCreate aren't enabled at all, regardless of what real activity happens. Enabling them would mean deploying a new Sysmon config XML on the live machine, which is a change to real endpoint monitoring, not just this repo — out of scope here. ID 3/11 mapping stays covered by the hand-crafted fixtures in `ingestion/test_normalizer.py`; `sysmon_sample.evtx` is real-world ID 1 data only.
 
 **Verification pass** (read + normalize, manual — not wired into pytest, since a machine-specific real file shouldn't be a hard dependency of the automated suite):
 ```
@@ -216,7 +216,7 @@ event_id=1 host=LAPTOP-5GVGMJ14 process=C:\Windows\System32\cmd.exe      command
 event_id=1 host=LAPTOP-5GVGMJ14 process=C:\Windows\System32\whoami.exe   command_line='whoami'
 event_id=1 host=LAPTOP-5GVGMJ14 process=C:\Windows\System32\curl.exe    command_line='"C:\Windows\system32\curl.exe" -s -o NUL https://example.com'
 ```
-`test_day4_evtx_reader.py` and `test_day5_normalizer.py`/`test_day5_event_service.py` re-run afterward, unaffected: `25 passed in 1.77s`.
+`ingestion/test_evtx_reader.py` and `ingestion/test_normalizer.py`/`services/test_event_service.py` re-run afterward, unaffected: `25 passed in 1.77s`.
 
 ### 7.2. Second real capture (`data/sample_logs/sysmon_demo.evtx`) — adds ID 11, investigates ID 3
 
@@ -282,7 +282,7 @@ This is scoped as a standalone future task, not attempted as part of Day 5.
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day5_retriever.py -v
+./venv/Scripts/python.exe -m pytest tests/rag/test_retriever.py -v
 ```
 
 Covers `backend/app/rag/retriever.py`'s `retrieve(query, k, source_type, technique_id)`:
@@ -341,13 +341,13 @@ Matches `docs/research/retrieval-eval.md` exactly (§2 there). **Known finding, 
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day6_ingest_route.py tests/test_day6_mitre_route.py tests/test_day6_mitre_validator.py -v
+./venv/Scripts/python.exe -m pytest tests/api/test_ingest_route.py tests/api/test_mitre_route.py tests/mitre/test_validator.py -v
 ```
 
 Covers:
-- `test_day6_ingest_route.py` (Pair 1) — `POST /ingest` end-to-end against the real `sysmon_demo.evtx` fixture (via `TestClient` + an in-memory SQLite override of `get_db`), plus the three named failure modes: wrong extension, empty file, malformed/corrupted EVTX bytes; and that a malformed *record* inside an otherwise-good file is skipped and counted, not treated as a whole-upload failure.
-- `test_day6_mitre_route.py` (Pair 2) — `GET /mitre/techniques` returns the full catalog sorted by ID, includes `is_deprecated`/`is_revoked` flags per entry, and handles an empty lookup cleanly. `load_mitre_techniques` is monkeypatched to a small fixed lookup so this test doesn't depend on the full downloaded MITRE dataset.
-- `test_day6_mitre_validator.py` (Pair 2) — `mitre/validator.py`'s `validate_technique_id`/`validate_technique_ids` scaffold: valid ID, unknown ID, deprecated-flagged ID, revoked-flagged ID, and the batch form. Also monkeypatched against a fixed lookup.
+- `api/test_ingest_route.py` (Pair 1) — `POST /ingest` end-to-end against the real `sysmon_demo.evtx` fixture (via `TestClient` + an in-memory SQLite override of `get_db`), plus the three named failure modes: wrong extension, empty file, malformed/corrupted EVTX bytes; and that a malformed *record* inside an otherwise-good file is skipped and counted, not treated as a whole-upload failure.
+- `api/test_mitre_route.py` (Pair 2) — `GET /mitre/techniques` returns the full catalog sorted by ID, includes `is_deprecated`/`is_revoked` flags per entry, and handles an empty lookup cleanly. `load_mitre_techniques` is monkeypatched to a small fixed lookup so this test doesn't depend on the full downloaded MITRE dataset.
+- `mitre/test_validator.py` (Pair 2) — `mitre/validator.py`'s `validate_technique_id`/`validate_technique_ids` scaffold: valid ID, unknown ID, deprecated-flagged ID, revoked-flagged ID, and the batch form. Also monkeypatched against a fixed lookup.
 
 **Expected:** `13 passed`.
 **Last verified:** 2026-08-15 — `13 passed in 2.24s`.
@@ -361,9 +361,9 @@ cd backend
 ```
 
 **Expected:** `47 passed` (34 from Day 3–5 + 13 from Day 6).
-**Last verified:** 2026-08-15 — `44 passed, 3 failed in 90.64s`. The 3 failures are all in `tests/test_day5_retriever.py` (`retrieve()` returning 0 hits against the real `knowledge_base` Chroma collection in this environment) — pre-existing as of this run, unrelated to any Day 6 code (neither `routes_ingest.py`, `routes_mitre.py`, nor `validator.py` touch `rag/retriever.py` or the Chroma collection), and not fixed as part of Day 6. Flagged here for Kiran/the team to look into before Day 7 builds the LLM/prompt layer on top of retrieval — see §8.1 for the isolated repro.
+**Last verified:** 2026-08-15 — `44 passed, 3 failed in 90.64s`. The 3 failures are all in `tests/rag/test_retriever.py` (`retrieve()` returning 0 hits against the real `knowledge_base` Chroma collection in this environment) — pre-existing as of this run, unrelated to any Day 6 code (neither `routes_ingest.py`, `routes_mitre.py`, nor `validator.py` touch `rag/retriever.py` or the Chroma collection), and not fixed as part of Day 6. Flagged here for Kiran/the team to look into before Day 7 builds the LLM/prompt layer on top of retrieval — see §8.1 for the isolated repro.
 
-> **Resolved (2026-08-16):** re-ran `pytest -v` before starting Day 7 — `47 passed in 29.03s`, all 3 `test_day5_retriever.py` cases now green. On-disk inspection (sqlite embedding row count, HNSW segment file size, a live `retrieve()` call) showed a complete, consistent index; the most likely explanation is a transient stale on-disk index state on 2026-08-15 that resynced on a later write/read cycle. No change was needed in `retriever.py`/`chroma_client.py`.
+> **Resolved (2026-08-16):** re-ran `pytest -v` before starting Day 7 — `47 passed in 29.03s`, all 3 `rag/test_retriever.py` cases now green. On-disk inspection (sqlite embedding row count, HNSW segment file size, a live `retrieve()` call) showed a complete, consistent index; the most likely explanation is a transient stale on-disk index state on 2026-08-15 that resynced on a later write/read cycle. No change was needed in `retriever.py`/`chroma_client.py`.
 
 ### 9.3. Live server smoke test — `POST /ingest` (Pair 1)
 
@@ -442,12 +442,12 @@ This is a scaffold only — real per-rule-file validation logic (reading `detect
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day7_prompts.py tests/test_day7_llm_client.py -v
+./venv/Scripts/python.exe -m pytest tests/rag/test_prompts.py tests/rag/test_llm_client.py -v
 ```
 
 Covers:
-- `test_day7_prompts.py` — `rag/prompts.py`'s `format_incident_context`/`format_chunks`/`build_explanation_prompt`: renders incident fields, drops empty ones, formats retrieved chunks (score + metadata + document text) in `retriever.retrieve()`'s exact shape, and confirms the rendered prompt is exactly a `[SystemMessage, HumanMessage]` pair with the grounding rules and technique ID embedded correctly. Handles empty incident/chunks input.
-- `test_day7_llm_client.py` — `rag/llm_client.py`'s `get_llm_client`/`generate`: raises `LLMProviderError` when `LLM_API_KEY` is unset (no key needed to run this — that's the point); constructs `ChatGoogleGenerativeAI` with the configured model/key; caches the client instance; returns the mocked response content on success; retries once then raises after repeated failure; recovers if the retry succeeds; raises on an empty response. `ChatGoogleGenerativeAI` is fully mocked (`monkeypatch`, same pattern as `test_day6_mitre_validator.py`'s `load_mitre_techniques` mocking) — fully offline, no network call, no real API key used.
+- `rag/test_prompts.py` — `rag/prompts.py`'s `format_incident_context`/`format_chunks`/`build_explanation_prompt`: renders incident fields, drops empty ones, formats retrieved chunks (score + metadata + document text) in `retriever.retrieve()`'s exact shape, and confirms the rendered prompt is exactly a `[SystemMessage, HumanMessage]` pair with the grounding rules and technique ID embedded correctly. Handles empty incident/chunks input.
+- `rag/test_llm_client.py` — `rag/llm_client.py`'s `get_llm_client`/`generate`: raises `LLMProviderError` when `LLM_API_KEY` is unset (no key needed to run this — that's the point); constructs `ChatGoogleGenerativeAI` with the configured model/key; caches the client instance; returns the mocked response content on success; retries once then raises after repeated failure; recovers if the retry succeeds; raises on an empty response. `ChatGoogleGenerativeAI` is fully mocked (`monkeypatch`, same pattern as `mitre/test_validator.py`'s `load_mitre_techniques` mocking) — fully offline, no network call, no real API key used.
 
 **Expected:** `16 passed`.
 **Last verified:** 2026-08-16 — `16 passed in 12.59s`.
@@ -486,13 +486,13 @@ Chains `prompts.build_explanation_prompt()` into `llm_client.generate()` for a r
 
 **Expected:** a ~150–300 word explanation of the sample PowerShell incident, structured into the three headed sections defined in `SYSTEM_PROMPT`.
 **Last verified:** 2026-08-16 — real call against `gemini-flash-latest` succeeded, returned a correctly-structured "What happened" / "Why it matters" / "Recommended next steps" explanation referencing `T1059.001`.
-**Not re-verified 2026-08-17 (first pass):** `LLM_API_KEY` is empty in this machine's `.env` today, so this live-Gemini check was skipped rather than faked. `test_day7_llm_client.py`'s fully-mocked automated tests (§10.1) still cover the request/response logic offline.
+**Not re-verified 2026-08-17 (first pass):** `LLM_API_KEY` is empty in this machine's `.env` today, so this live-Gemini check was skipped rather than faked. `rag/test_llm_client.py`'s fully-mocked automated tests (§10.1) still cover the request/response logic offline.
 
 > **Bug found + fixed 2026-08-17:** after a real key was added to `.env`, this step still raised `LLMProviderError: LLM_API_KEY is not set` even though the key was present. Root cause: `Settings.model_config` in `app/core/config.py` used `env_file=".env"`, a path pydantic-settings resolves **relative to the process's current working directory** — but every command in this guide runs from `backend/`, while the real `.env` lives at the repo root. Since Postgres's `DATABASE_URL` default happens to match `.env.example`'s value, this silently never surfaced there, but `LLM_API_KEY`'s empty-string default made it fail loudly. Fixed by resolving the `.env` path from `config.py`'s own file location instead of cwd: `_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"`. Full 90-test suite re-run after the fix: `90 passed in 31.98s`, no regressions.
 
 **Re-verified 2026-08-17 (second pass, after the config.py fix):** real call against `gemini-flash-latest` succeeded — a correctly-structured "What happened" / "Why it matters" / "Recommended next steps" explanation referencing `T1059.001`, `WIN10-ANALYST`, and `jdoe`. Matches the 2026-08-16 baseline in structure and content.
 
-> **Bug found + fixed during this verification:** the current `langchain-google-genai` (4.3.4) returns `AIMessage.content` as a list of content blocks (`[{"type": "text", "text": ..., "extras": {"signature": ...}}]`), not a plain string as `generate()` originally assumed. This silently passed the raw list through instead of raising or returning text. Fixed in `llm_client.py` with a `_extract_text()` helper that concatenates `type: "text"` blocks (and passes plain strings through unchanged, so older/other providers still work); covered by a new regression test, `test_generate_extracts_text_from_content_block_list`, in `test_day7_llm_client.py`.
+> **Bug found + fixed during this verification:** the current `langchain-google-genai` (4.3.4) returns `AIMessage.content` as a list of content blocks (`[{"type": "text", "text": ..., "extras": {"signature": ...}}]`), not a plain string as `generate()` originally assumed. This silently passed the raw list through instead of raising or returning text. Fixed in `llm_client.py` with a `_extract_text()` helper that concatenates `type: "text"` blocks (and passes plain strings through unchanged, so older/other providers still work); covered by a new regression test, `test_generate_extracts_text_from_content_block_list`, in `rag/test_llm_client.py`.
 
 ---
 
@@ -502,7 +502,7 @@ Chains `prompts.build_explanation_prompt()` into `llm_client.generate()` for a r
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day8_explain_service.py -v
+./venv/Scripts/python.exe -m pytest tests/rag/test_explain_service.py -v
 ```
 
 Covers `rag/explain_service.py`'s `generate_explanation()`: builds a retrieval query from whatever incident fields are present (falls back to `"security incident"` if the incident dict is empty); passes `k` and `technique_id` through to `retriever.retrieve()`; when the self-critique pass responds `"No issues found."`, the returned `explanation` equals the draft unchanged; when the critique flags an unsupported claim, the returned `explanation` is the draft plus an appended `**Confidence check:**` section containing the critique text; an `LLMProviderError` from either the draft or critique call propagates to the caller rather than being swallowed. `retriever.retrieve` and `llm_client.generate` are both mocked — fully offline, no network call, no real API key used.
@@ -533,7 +533,7 @@ Runs the full pipeline against the real `knowledge_base` Chroma collection and a
 
 **Expected:** a structured explanation for the sample PowerShell/`T1059.001` incident, followed by a line reporting how many chunks were used and whether the self-critique pass flagged any issues.
 **Last verified:** 2026-08-16 — ran successfully end-to-end against the real KB (5 chunks retrieved) and Gemini (2 real calls: draft + critique). The self-critique pass **did** flag an issue: it noted the specific host/user/payload values in the draft ("WIN10-ANALYST", "jdoe", "SQBFAFgA...") aren't supported by the retrieved KB chunks — correct, since those are given incident facts, not something a generic MITRE technique doc would ever contain. The `**Confidence check:**` section was appended to the explanation as designed.
-**Not re-verified 2026-08-17 (first pass):** same reason as §10.4 — `LLM_API_KEY` is empty in this machine's `.env` today, so the 2 real Gemini calls this step needs were skipped rather than faked. `test_day8_explain_service.py`'s fully-mocked automated tests (§11.1) still cover the pipeline logic offline.
+**Not re-verified 2026-08-17 (first pass):** same reason as §10.4 — `LLM_API_KEY` is empty in this machine's `.env` today, so the 2 real Gemini calls this step needs were skipped rather than faked. `rag/test_explain_service.py`'s fully-mocked automated tests (§11.1) still cover the pipeline logic offline.
 
 **Re-verified 2026-08-17 (second pass, after a real key was added and §10.4's config.py cwd-resolution bug was fixed):** ran successfully end-to-end against the real KB (5 chunks retrieved) and Gemini (2 real calls: draft + critique). Same known finding as 2026-08-16 — the critique flagged the incident-specific host/user/encoded-command values as unsupported by the KB chunks (correct behavior, not a new bug; see the "Known finding, not a bug" note below), and the `**Confidence check:**` section was appended as designed.
 
@@ -547,13 +547,14 @@ Runs the full pipeline against the real `knowledge_base` Chroma collection and a
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day7_rule_loader.py tests/test_day7_detection_engine.py tests/test_day7_ingest_detection.py -v
+./venv/Scripts/python.exe -m pytest tests/detection/test_rule_loader.py tests/detection/test_engine.py tests/api/test_ingest_detection.py -v
 ```
 
-Covers `detection/rule_loader.py` (loads + validates `.yml` rules via pySigma, skips malformed files without crashing, module-level cache with `force_reload`), `detection/engine.py` (the `and`/`or`/`not`/parentheses condition parser in isolation, `contains`/`startswith`/`endswith` field modifiers, AND-across-fields-in-one-selection, logsource-category-to-event-ID scoping, and an end-to-end check against the real seed rule in `detection/rules/`), and the `POST /ingest` wiring (`test_day7_ingest_detection.py`, monkeypatched rule set + mocked EVTX reader, no DB write path involved).
+Covers `detection/rule_loader.py` (loads + validates `.yml` rules via pySigma, skips malformed files without crashing, module-level cache with `force_reload`), `detection/engine.py` (the `and`/`or`/`not`/parentheses condition parser in isolation, `contains`/`startswith`/`endswith` field modifiers, AND-across-fields-in-one-selection, logsource-category-to-event-ID scoping, and an end-to-end check against the real seed rule in `detection/rules/`), and the `POST /ingest` wiring (`api/test_ingest_detection.py`, monkeypatched rule set + mocked EVTX reader, no DB write path involved).
 
 **Expected:** `20 passed`.
 **Last verified:** 2026-08-16 — `20 passed in 8.02s`.
+**Note (2026-08-19):** `detection/test_rule_loader.py` was later merged with Day 9's rule-count/tag-parsing tests as part of a `backend/tests/` reorg (see `docs/decisions.md`) — running the command above today collects more than 20 tests as a result. This "20 passed" figure is the historical Day 7-only count; see §16 for the current authoritative full-suite total.
 **Re-verified 2026-08-17:** covered as part of the full 90-test regression run directly below — passed.
 
 ### 12.2. Full regression pass
@@ -597,8 +598,8 @@ curl -F "file=@../data/sample_logs/sysmon_demo.evtx;type=application/octet-strea
 ```json
 {"filename":"sysmon_demo.evtx","records_read":4,"events_ingested":4,"events_skipped":0,"rule_matches":0,"matched_rule_titles":[]}
 ```
-`sysmon_demo.evtx`'s 4 records don't contain an encoded-PowerShell process-creation event, so `rule_matches: 0` here is expected — `test_real_seed_rule_matches_encoded_powershell_event` in `test_day7_detection_engine.py` is what proves the seed rule *can* fire, using a crafted matching event.
-**Last verified:** 2026-08-16 — reproduced the no-Postgres HTTP 500 exactly as above (traceback confirmed pointing at the same `psycopg2.OperationalError` DB-connect step as §9.3, not at detection code); the Postgres-connected path is confirmed via `test_day7_ingest_detection.py`'s SQLite-backed route test instead, since Docker isn't available on this machine.
+`sysmon_demo.evtx`'s 4 records don't contain an encoded-PowerShell process-creation event, so `rule_matches: 0` here is expected — `test_real_seed_rule_matches_encoded_powershell_event` in `detection/test_engine.py` is what proves the seed rule *can* fire, using a crafted matching event.
+**Last verified:** 2026-08-16 — reproduced the no-Postgres HTTP 500 exactly as above (traceback confirmed pointing at the same `psycopg2.OperationalError` DB-connect step as §9.3, not at detection code); the Postgres-connected path is confirmed via `api/test_ingest_detection.py`'s SQLite-backed route test instead, since Docker isn't available on this machine.
 **Re-verified 2026-08-17 (first pass, before Docker was started):** same HTTP 500 / same `psycopg2.OperationalError` traceback, still ahead of the detection step — no change; see §9.3's matching re-verification for the shared traceback.
 **Re-verified 2026-08-17 (second pass, with Postgres up — see §3/§9.3's resolution):** HTTP 200, `{"filename":"sysmon_demo.evtx","records_read":4,"events_ingested":4,"events_skipped":0,"rule_matches":0,"matched_rule_titles":[]}` — matches the "With Postgres running" expectation above exactly, including the two Day 7 detection fields. `rule_matches: 0` is correct — `sysmon_demo.evtx` doesn't contain an encoded-PowerShell event.
 
@@ -622,7 +623,7 @@ The dev laptop's McAfee firewall blocks Sysmon's network-monitoring driver (§7.
 **Status:** done — `data/sample_logs/sysmon_vm_capture.evtx` (63MB) captured from a clean VM (`Computer=Nightowl`, 2026-08-16). Verified by running it through the real pipeline at three levels, not just counting event IDs:
 - **Raw read** (`evtx_reader.read_records_as_dicts`): 64,558 records, 0 read errors.
 - **Normalize + detect** (`normalizer.normalize_event` → `detection.engine.evaluate_event`): 0 normalize errors across all 64,558 records. Event-ID breakdown: `FileCreate(11): 64413, ProcessCreate(1): 26, ProcessTerminate(5): 19, NetworkConnect(3): 100` — 100 genuine Event ID 3 records present, with real fields (`Image`, `Protocol`, `SourceIp`, `DestinationIp`, ports). 0 rule matches, expected — the only seed rule targets encoded-PowerShell process creation, not present in this capture.
-- **Full `POST /ingest` route** (`TestClient` + in-memory SQLite, same pattern as §12.4/`test_day7_ingest_detection.py`): HTTP 200, `records_read: 64558, events_ingested: 64558, events_skipped: 0, rule_matches: 0` — the entire real-world file flows through read → normalize → persist → detect without a single dropped record.
+- **Full `POST /ingest` route** (`TestClient` + in-memory SQLite, same pattern as §12.4/`api/test_ingest_detection.py`): HTTP 200, `records_read: 64558, events_ingested: 64558, events_skipped: 0, rule_matches: 0` — the entire real-world file flows through read → normalize → persist → detect without a single dropped record.
 
 Not wired into pytest as a hard dependency (same rationale as §12's other real-file checks — a machine-specific real file shouldn't be a hard dependency of the automated suite); this was a manual verification pass. The Day 8 network-connection-category Sigma rule can be developed/tested against this real fixture instead of only hand-crafted ones.
 
@@ -659,28 +660,31 @@ no `1 of`, etc.) and match against real Sysmon field names, matching the Day 7 d
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day8_detection_rules.py tests/test_day8_detection_service.py tests/test_day8_ingest_alerts.py -v
+./venv/Scripts/python.exe -m pytest tests/services/test_detection_service.py tests/api/test_ingest_alerts.py -v
 ```
 
 Covers:
-- `test_day8_detection_rules.py` — `rule_loader.load_rules()` returns exactly 5 rules covering all
-  3 categories; each of the 4 new rules fires on a crafted matching event and does *not* fire on a
-  crafted benign look-alike (e.g. `certutil.exe -verify` doesn't trip the urlcache/split rule).
-- `test_day8_detection_service.py` — in-memory SQLite: `create_alert`/`save_alerts` persist the
+- `services/test_detection_service.py` — in-memory SQLite: `create_alert`/`save_alerts` persist the
   `event_id` FK, `rule_id`, severity pass-through, and `matched_at`; batch commit; empty-list no-op;
   round-trip query. (SQLite drops tzinfo on read-back, unlike Postgres — the one test that checks
   `matched_at` compares tolerantly for that reason; not an app-level concern.)
-- `test_day8_ingest_alerts.py` — extends `test_day7_ingest_detection.py`'s `TestClient` +
+- `api/test_ingest_alerts.py` — extends `api/test_ingest_detection.py`'s `TestClient` +
   in-memory-SQLite pattern: a matching event now produces both `alerts_created: 1` in the response
   *and* a real `Alert` row queryable from the same session, with the correct FK to the persisted
   `Event` row; multiple matching events in one upload produce multiple alert rows; benign events
   produce zero.
 
-**Expected:** `18 passed`.
+**Expected:** `18 passed` (as originally verified — see note below for the current command's count).
 **Last verified:** 2026-08-18 — `18 passed in ~1.5s`.
 
+**Note (2026-08-19):** the original command above also ran a third file, `test_day8_detection_rules.py`
+(rule-fire/no-fire checks for the 4 new rules — 10 tests), which was deleted during a `backend/tests/`
+reorg once confirmed to be a strict subset of `detection/test_rules_matrix.py`'s full 10-rule fire/
+no-fire matrix (see `docs/decisions.md`). Running the updated command above today collects 8 tests,
+not 18 — the missing 10 are still covered, just in `detection/test_rules_matrix.py` (§15.1) instead.
+
 Two existing Day 6 tests (`test_ingest_sysmon_demo_happy_path`,
-`test_ingest_skips_malformed_records_and_ingests_the_rest` in `test_day6_ingest_route.py`) hardcode
+`test_ingest_skips_malformed_records_and_ingests_the_rest` in `api/test_ingest_route.py`) hardcode
 the full `IngestResponse` JSON shape and needed one line added (`"alerts_created": 0`) for the new
 field — both still pass, this was an expected, mechanical update, not a behavior change.
 
@@ -797,27 +801,33 @@ column, `alerts` gained a nullable `incident_id` FK (migration `6b1a55c7f800`). 
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day9_detection_rules.py tests/test_day9_incident_service.py tests/test_day9_ingest_incidents.py -v
+./venv/Scripts/python.exe -m pytest tests/detection/test_rule_loader.py tests/services/test_incident_service.py tests/api/test_ingest_incidents.py -v
 ```
 
 Covers:
-- `test_day9_detection_rules.py` — 10 rules load, all 4 categories present, every rule's
-  `technique_id`/`tactics` parse correctly from its own tags.
-- `test_day9_incident_service.py` — `find_or_create_incident`: same host+window merges into one
+- rule-count/category/tag-parsing tests (now merged into `detection/test_rule_loader.py`, see the
+  §12.1 note) — 10 rules load, all 4 categories present, every rule's `technique_id`/`tactics`
+  parse correctly from its own tags.
+- `services/test_incident_service.py` — `find_or_create_incident`: same host+window merges into one
   incident (technique ids accumulate without duplicates, severity bumps to the higher of the two);
   different host, or outside the window, creates a separate incident; a closed incident is never
   reused.
-- `test_day9_ingest_incidents.py` — extends `test_day8_ingest_alerts.py`'s `TestClient`+SQLite
+- `api/test_ingest_incidents.py` — extends `api/test_ingest_alerts.py`'s `TestClient`+SQLite
   pattern: two matching alerts on the same host in one upload link to the same incident with both
   technique ids; different hosts get separate incidents; benign events create none.
 
 Two existing tests needed mechanical updates for the shape changes (same pattern as Day 8's Day 6
-updates): `test_day6_ingest_route.py`'s two full-response-dict assertions gained
-`"incident_ids": []`, and `test_day8_detection_service.py`'s `save_alerts(...)` calls gained a 4th
-tuple element (`incident_id`, `None` in those tests). Also, `test_day8_detection_rules.py`'s two
-exact-count assertions (`== 5 rules`, `== {3 categories}`) were loosened to lower-bound checks
-(`>= 5`, subset) since Day 9 legitimately grows both — the exact current totals now live in
-§14.1's own tests.
+updates): `api/test_ingest_route.py`'s two full-response-dict assertions gained
+`"incident_ids": []`, and `services/test_detection_service.py`'s `save_alerts(...)` calls gained a 4th
+tuple element (`incident_id`, `None` in those tests). Also, the old `test_day8_detection_rules.py`'s
+two exact-count assertions (`== 5 rules`, `== {3 categories}`) were loosened to lower-bound checks
+(`>= 5`, subset) since Day 9 legitimately grows both — that file was later deleted entirely once its
+remaining coverage became a strict subset of `detection/test_rules_matrix.py` (§15.1/§13.1's note);
+the exact current rule-count/category totals live in `detection/test_rule_loader.py`.
+
+**Note (2026-08-19):** file paths above updated for the `backend/tests/` reorg (`docs/decisions.md`);
+`detection/test_rule_loader.py` now also contains Day 7's rule-loading tests, so this command's
+current test count is higher than what was originally verified for "Day 9's own tests" alone.
 
 **Expected:** `17 passed` (7 + 7 + 3).
 **Last verified:** 2026-08-19 — `17 passed`.
@@ -829,7 +839,7 @@ cd backend
 ./venv/Scripts/python.exe -m pytest -v
 ```
 
-**Expected:** `155 passed` (108 through Day 8 + 17 new Day 9 tests + 30 new Day 10 tests, see §15).
+**Expected:** `155 passed` as originally verified 2026-08-19 (108 through Day 8 + 17 new Day 9 tests + 30 new Day 10 tests, see §15). **Superseded same day** by the `backend/tests/` reorg (`docs/decisions.md`), which deleted 10 tests confirmed fully redundant with `detection/test_rules_matrix.py` — current expected total is `145 passed`, see §16.2.
 **Last verified:** 2026-08-19 — `155 passed in 45.80s`.
 
 ### 14.3. Manual smoke test — rule loading (no DB needed)
@@ -893,28 +903,30 @@ change, since existing tests with no tactics see weight 0 (unchanged behavior).
 
 ```
 cd backend
-./venv/Scripts/python.exe -m pytest tests/test_day10_severity_service.py tests/test_detection.py -v
+./venv/Scripts/python.exe -m pytest tests/detection/test_severity_service.py tests/detection/test_rules_matrix.py -v
 ```
 
 Covers:
-- `test_day10_severity_service.py` — no tactics leaves the base level unchanged; a single low-weight
+- `detection/test_severity_service.py` — no tactics leaves the base level unchanged; a single low-weight
   tactic bumps by one rank; a high-weight tactic (e.g. `impact`) bumps and caps at `critical`;
   multiple tactics use only the highest weight; an already-`critical` base stays capped; unknown
   levels default to medium's rank; unknown tactics contribute zero weight; `higher_severity` picks
   the higher-ranked label (or either, on a tie).
-- `test_detection.py` (**exact filename from the roadmap's Day 10 Files column**) — the full
-  fire/no-fire matrix for all 10 rules: a data-driven `@pytest.mark.parametrize` table of
-  (matching event, benign look-alike) pairs per rule, asserting every rule fires on its matching
-  event and does *not* false-positive on the look-alike, plus one check that the matrix itself
-  covers exactly the 10 real rule titles (so a future rule addition without a matching test case
-  fails loudly).
+- `detection/test_rules_matrix.py` (**originally `test_detection.py`, the exact filename from the
+  roadmap's Day 10 Files column — moved during the `backend/tests/` reorg for structural
+  consistency, an acknowledged deviation recorded in `docs/decisions.md`**) — the full fire/no-fire
+  matrix for all 10 rules: a data-driven `@pytest.mark.parametrize` table of (matching event, benign
+  look-alike) pairs per rule, asserting every rule fires on its matching event and does *not*
+  false-positive on the look-alike, plus one check that the matrix itself covers exactly the 10 real
+  rule titles (so a future rule addition without a matching test case fails loudly).
 
 **Expected:** `30 passed` (9 + 21).
 **Last verified:** 2026-08-19 — `30 passed`.
 
 ### 15.2. Full regression pass
 
-Same command/result as §14.2 (`155 passed`) — Day 9 and Day 10 landed together in this session.
+Same command as §16.2 (full `pytest -v`) — Day 9 and Day 10 landed together in this session;
+current expected total is `145 passed`, see §16.2's note on the same-day reorg.
 
 ### 15.3. Manual smoke test — severity formula
 
@@ -972,7 +984,8 @@ cd backend
 
 # 1. Full automated suite — everything Pair 1 + Pair 2 have built so far
 ./venv/Scripts/python.exe -m pytest -v
-# Expect: 155 passed (see §14.2/§15.2 for the authoritative running total)
+# Expect: 145 passed (see §14.2/§15.2 for the authoritative running total, and their
+#         2026-08-19 notes on the same-day backend/tests/ reorg that landed this count)
 
 # 2. Start the API server in one shell, then run the rest from a second shell
 ./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
@@ -1036,7 +1049,7 @@ docker compose exec db psql -U nightowl -d nightowl -c "\dt"   # Expect: 6 table
 
 | Component | Section | Result | Notes |
 |---|---|---|---|
-| Full pytest suite (155 tests) | §14.2/§15.2 | ☐ Pass ☐ Fail | |
+| Full pytest suite (145 tests) | §14.2/§15.2 | ☐ Pass ☐ Fail | |
 | Alert persistence on rule match | §13.1/§13.4 | ☐ Pass ☐ Fail | |
 | Incident grouping (same host+window) | §14.1/§14.4 | ☐ Pass ☐ Fail | |
 | Severity scoring (base level + tactic weight) | §15.1/§15.4 | ☐ Pass ☐ Fail | |
@@ -1057,7 +1070,9 @@ Tester: ____________  Date: ____________  Environment (Docker? API key?): ______
 
 **2026-08-17 run of this exact checklist:** §16.2's entire core pass executed for real — 90/90 tests passed (39.85s), `/health` 200, `/mitre/techniques` 200 (count 858), all 3 ingest error cases HTTP 400 as expected, `rule_loader` and `prompts` module smoke tests both matched their documented output exactly. Ingest happy path initially returned HTTP 500 (Docker Desktop wasn't running yet — same known gap as prior days); §16.3's Docker block was then run for real (Docker Desktop started, `docker compose up -d db`, `alembic upgrade head` → `fa0ac08ab62f (head)`, 6 tables confirmed), after which the happy path returned HTTP 200 as designed — see §3/§9.3/§12.4's "second pass" notes.
 
-**2026-08-19 update:** Pair 1's Day 9 (10 rules, incident grouping) and Day 10 (severity scoring, `test_detection.py`) landed in one session — full suite now `155 passed`, live-verified against the same real Postgres instance (§14.4). Pair 2's Day 9/10 (explain endpoint, hallucination spot-check) intentionally not covered here — that's the teammates' own work.
+**2026-08-19 update:** Pair 1's Day 9 (10 rules, incident grouping) and Day 10 (severity scoring, `detection/test_rules_matrix.py`, originally `test_detection.py`) landed in one session — full suite reached `155 passed`, live-verified against the same real Postgres instance (§14.4). Pair 2's Day 9/10 (explain endpoint, hallucination spot-check) intentionally not covered here — that's the teammates' own work.
+
+**2026-08-19, later same day — `backend/tests/` reorg:** user requested cleaning up the test suite structure (24 files, all flat and `test_dayN_*`-named, didn't mirror `backend/app/`'s package layout). Reorganized into subpackages (`api/`, `detection/`, `services/`, `ingestion/`, `mitre/`, `rag/`) matching `app/`'s layout, dropped all `dayN` prefixes, added a shared `conftest.py` fixture (`api_client`) removing duplicated `TestClient`+SQLite boilerplate from 4 files, and merged/deleted a few files with confirmed-redundant or combinable coverage (see `docs/decisions.md`). Full suite re-verified after every step: **`145 passed`** (155 − 10 intentionally-removed redundant tests, zero coverage lost). See §16.2 for the current command.
 
 A real Gemini key was then added to `.env`, which surfaced one genuine bug (not environmental): `app/core/config.py`'s `Settings` resolved `.env` relative to the process's cwd, but every command here runs from `backend/`, so the key was never actually read regardless of what was in the file. Fixed in `config.py` (resolve `.env` from the module's own file location instead of cwd) — full 90-test suite re-confirmed green after the fix, then both live-Gemini checks (§10.4, §11.3) ran for real and succeeded. **As of 2026-08-17, every check in this runbook has been executed for real and passes** — no known gaps remain except Docker Desktop needing a manual start each session (it doesn't auto-launch on this machine).
 
@@ -1070,7 +1085,7 @@ A real Gemini key was then added to `.env`, which surfaced one genuine bug (not 
 | `failed to connect to the docker API ... dockerDesktopLinuxEngine` | Docker Desktop isn't running | Launch Docker Desktop and wait ~10–20s, then retry |
 | `SSLError: CERTIFICATE_VERIFY_FAILED` on any GitHub/HuggingFace call | Corporate/AV TLS interception not trusted by Python's `certifi` bundle | `pip install pip-system-certs` in the venv (see Prerequisites) |
 | `pg_isready` never succeeds / port 5433 already in use | Another Postgres instance already bound to 5433, or the container needs more time | `docker compose ps`, `docker compose logs db`; confirm nothing else owns host port 5433 |
-| First run of `test_day3_setup.py` or `build_kb.py` is slow (~1–2 min) | `sentence-transformers`/`torch` downloading model weights and MITRE JSON on first use | Expected once; subsequent runs use local caches (`data/mitre/enterprise-attack.json`, HF cache, `data/chroma/`) |
+| First run of `test_setup_integrations.py` or `build_kb.py` is slow (~1–2 min) | `sentence-transformers`/`torch` downloading model weights and MITRE JSON on first use | Expected once; subsequent runs use local caches (`data/mitre/enterprise-attack.json`, HF cache, `data/chroma/`) |
 | `uvicorn` port 8000 still bound after stopping | Reload/watcher spawned a child process with a different PID | `netstat -ano \| findstr :8000` then `taskkill /F /PID <pid>` |
 | `pytest -v` (bare, whole `tests/` dir) collection-errors with `ModuleNotFoundError: fastapi`/`sqlalchemy`/`Evtx` | Those Pair 1 deps aren't installed in this venv | `SETUPTOOLS_USE_DISTUTILS=stdlib ./venv/Scripts/python.exe -m pip install -r requirements.txt` (see next row / §0) |
 | `pip install -r requirements.txt` fails on `Failed to build 'hexdump'` / `AssertionError` in `_distutils_hack` | `python-evtx`'s `hexdump` sub-dependency hits a setuptools/distutils conflict on this Python 3.10 install | **Resolved 2026-08-15:** `SETUPTOOLS_USE_DISTUTILS=stdlib` env var on the install disables the conflicting hack (see §0) |

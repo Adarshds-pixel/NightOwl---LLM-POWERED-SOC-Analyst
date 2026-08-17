@@ -1,6 +1,6 @@
 """Day 9 verification (Pair 1): incident_service.py groups alerts into
 incidents by same host + a 1-hour window. Uses an in-memory SQLite engine,
-same pattern as test_day5_event_service.py/test_day8_detection_service.py.
+same pattern as services/test_event_service.py/services/test_detection_service.py.
 """
 
 from datetime import datetime, timedelta, timezone

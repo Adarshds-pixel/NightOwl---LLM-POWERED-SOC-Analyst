@@ -1,6 +1,6 @@
 """Day 5 verification (Pair 1): event_service.py persists NormalizedEvent
 rows via the Event model. Uses an in-memory SQLite engine, same pattern as
-test_day3_models.py, so this runs offline without a live Postgres.
+test_health_and_models.py, so this runs offline without a live Postgres.
 """
 
 from datetime import datetime, timezone

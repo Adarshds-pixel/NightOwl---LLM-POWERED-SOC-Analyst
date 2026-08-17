@@ -1,6 +1,6 @@
 """Day 8 verification (Pair 1): detection_service.py persists rule matches
 as Alert rows. Uses an in-memory SQLite engine, same pattern as
-test_day5_event_service.py, so this runs offline without a live Postgres.
+services/test_event_service.py, so this runs offline without a live Postgres.
 """
 
 from datetime import datetime, timezone
