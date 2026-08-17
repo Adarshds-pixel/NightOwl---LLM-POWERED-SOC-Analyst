@@ -1,0 +1,23 @@
+title: Registry Run Key Persistence
+id: 9d4f2a17-3b8e-4c6d-a1f5-7e2c9b4d8f61
+status: experimental
+description: >
+  Detects a value being set under a Run/RunOnce registry key, a classic
+  technique for making a program launch automatically at logon.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-19
+references:
+  - https://attack.mitre.org/techniques/T1547/001/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1547.001
+logsource:
+  category: registry_event
+detection:
+  selection:
+    TargetObject|contains:
+      - '\CurrentVersion\Run\'
+      - '\CurrentVersion\RunOnce\'
+  condition: selection
+level: medium

@@ -1,0 +1,27 @@
+title: Suspicious Mshta Execution
+id: 1a6d3e78-4f9c-4b2e-8a1d-7c5b3f9e6d24
+status: experimental
+description: >
+  Detects mshta.exe (a signed, trusted Windows binary for running HTML
+  Applications) being invoked with a remote URL or inline script -- a
+  common LOLBin technique for executing attacker code while evading
+  binary-allowlisting controls.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-19
+references:
+  - https://attack.mitre.org/techniques/T1218/005/
+tags:
+  - attack.defense_evasion
+  - attack.execution
+  - attack.t1218.005
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|contains: mshta.exe
+    CommandLine|contains:
+      - 'http'
+      - '.hta'
+      - 'javascript:'
+  condition: selection
+level: high

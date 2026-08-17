@@ -32,3 +32,28 @@ One entry per significant decision, per Volume 3 §8.6.
 - **Why pass-through instead:** `Alert.severity` is a plain `String(50)` with no DB-level constraint, and every rule file's `level` already comes from Sigma's own small standard vocabulary (`informational`/`low`/`medium`/`high`/`critical`). A translation table would just map each string to itself — added indirection with no behavior difference.
 - **Decision:** `services/detection_service.py`'s `create_alert` sets `severity = match.level` directly.
 - **Reversible?** Yes — confined to one line in `create_alert`; if a real enum constraint is added to the `alerts` table later, only this function needs to change.
+- **Update (2026-08-19, Day 10):** `match.level` is no longer the raw, unweighted Sigma rule level — `engine.evaluate_event` now runs it through `severity_service.compute_severity()` before building the `RuleMatch` (see the Day 10 entry below), so this pass-through decision still holds, but what's being passed through changed meaning.
+
+---
+
+**2026-08-19 — Registry-based detection scoped to Sysmon Event ID 13 (Value Set) only (Day 9, 10 rules total).**
+- **What we needed:** rules for registry-based persistence (T1547.001 Run keys, T1546.012 IFEO debugger hijack), per the roadmap's "cover registry... categories" goal.
+- **Alternatives considered:** a `registry_event` category spanning all of Sysmon's registry event IDs (12 "Object create/delete", 13 "Value Set", 14 "Value Rename"), matching Sigma's own broader `registry_event` category semantics.
+- **Why ID 13 only:** the engine's `CATEGORY_TO_EVENT_ID` maps one category to exactly one event ID (a v1 design constraint from Day 7, not changed here). Value-Set is the event that actually carries the interesting data (`TargetObject`, `Details`) for both target rules — a Run key being *set* to point at malware, or a Debugger value being *set*. Object create/delete and value-rename would need either a second category name or a multi-event-ID mapping, both bigger changes than this scope needs.
+- **No `normalizer.py` change needed:** `NormalizedEvent.event_data` already carries every raw `EventData` field regardless of event ID (confirmed working since Day 5's "unrecognized event IDs still normalize" test coverage), so registry rules match `TargetObject`/`Details` out of `event_data` exactly like existing rules match `Image`/`CommandLine`.
+- **Reversible?** Yes — extending to IDs 12/14 later is additive (either a new category name, or evolving `CATEGORY_TO_EVENT_ID` to a category -> set-of-event-IDs mapping); no existing rule or test depends on ID 13 being the only registry event supported.
+
+---
+
+**2026-08-19 — "Scheduled task" rules (T1053.005) are `process_creation` rules, not a dedicated scheduled-task logsource (Day 9).**
+- **Why:** Sigma's scheduled-task-management category isn't backed by a Sysmon event the way this project's other categories are (it's typically Security-log Event ID 4698, which this project doesn't ingest). Detecting `schtasks.exe /create` and PowerShell's `Register-ScheduledTask`/`New-ScheduledTaskAction` cmdlets as `process_creation` events (Sysmon Event ID 1, already fully supported) is both the standard real-world detection approach and needs zero engine changes.
+- **Reversible?** Yes — if Security-log ingestion is ever added, a dedicated category could be introduced without touching these two rules' logic, just their `logsource.category`.
+
+---
+
+**2026-08-19 — Severity scoring combines base Sigma level + MITRE tactic weight, both derived from each rule's own `tags:` list (Day 10).**
+- **What we needed:** "combine rule severity + technique tactic weight" per the roadmap, so e.g. a "medium" rule tagged `command_and_control` ranks above a "medium" rule tagged only `reconnaissance`.
+- **Where the tactic comes from:** rule authors already tag rules with both a technique id (`attack.t1547.001`) and tactic name(s) (`attack.persistence`) — Day 9's `rule_loader.py` change parses both out of the plain `tags:` list (not from pySigma's parsed object model, consistent with how `condition`/`detections` are already parsed from the raw YAML dict). This is tag *extraction*, not MITRE-dataset validation — validating tag values against the real ATT&CK dataset stays Day 11's job (`mitre/validator.py`).
+- **Formula:** `services/severity_service.py`'s `compute_severity(base_level, tactics)` — base rank 1-5 (informational..critical) plus the *highest* weight among the rule's tactics (0 for recon/resource-dev, +1 for initial-access/execution/persistence/priv-esc/defense-evasion, +2 for credential-access/discovery/lateral-movement/collection, +3 for command-and-control/exfiltration/impact), capped at critical. Tactic *tag spelling* matches this project's existing convention (underscores, e.g. `command_and_control`, not MITRE's site hyphens) since that's what the Day 7/8 seed rules already use.
+- **Where it's applied:** `engine.evaluate_event` calls this when building each `RuleMatch`, so `RuleMatch.level` (and therefore `Alert.severity`) is always the final weighted value, not the raw rule level. Confirmed live: the Day 7 seed rule (`level: high`, tagged `attack.execution`) now produces `severity: critical` alerts (high=4 + execution weight 1 = 5), a visible, intentional behavior change from Day 8.
+- **Reversible?** Yes — the weight table and formula are isolated in one function; existing tests/rules with no tactics see zero behavior change (weight 0), which is why no Day 7/8 test needed updating for this.

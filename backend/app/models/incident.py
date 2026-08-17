@@ -22,3 +22,7 @@ class Incident(Base):
     severity: Mapped[str] = mapped_column(String(50))
     mitre_technique_ids: Mapped[list[str]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Alerts are grouped into one incident by same host + time window
+    # (Day 9) -- stored directly here rather than derived by joining
+    # through alerts->events on every grouping lookup.
+    host: Mapped[str] = mapped_column(String(255))

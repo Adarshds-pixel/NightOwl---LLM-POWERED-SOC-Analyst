@@ -1,0 +1,26 @@
+title: Suspicious Scheduled Task via PowerShell Cmdlet
+id: 7f2a4c19-8e3b-4d6a-a1c7-5f9b2e8d4a63
+status: experimental
+description: >
+  Detects PowerShell's ScheduledTasks cmdlets being used to register a new
+  scheduled task -- the script-based equivalent of schtasks.exe /create,
+  also used for persistence.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-19
+references:
+  - https://attack.mitre.org/techniques/T1053/005/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.execution
+  - attack.t1053.005
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|contains: powershell.exe
+    CommandLine|contains:
+      - 'Register-ScheduledTask'
+      - 'New-ScheduledTaskAction'
+  condition: selection
+level: medium

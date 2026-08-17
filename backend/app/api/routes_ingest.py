@@ -28,7 +28,11 @@ loaded Sigma rules (detection/rule_loader.py + detection/engine.py) before
 being persisted. Day 8 persists each match as an `alerts` row
 (models/alert.py, services/detection_service.py), keyed off the just-saved
 Event row's DB id -- not the raw Sysmon/Windows Event ID on the
-normalized event, which is a different number.
+normalized event, which is a different number. Day 9 additionally groups
+each match's alert into an incident (services/incident_service.py, same
+host + a 1-hour window reuses the most recent open incident) before the
+alert is persisted, so the alert's `incident_id` FK is set on creation
+rather than backfilled later.
 """
 
 import logging
@@ -47,6 +51,7 @@ from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts
 from app.ingestion.normalizer import EventNormalizationError, normalize_event
 from app.services.detection_service import save_alerts
 from app.services.event_service import save_events
+from app.services.incident_service import find_or_create_incident
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +68,7 @@ class IngestResponse(BaseModel):
     rule_matches: int
     matched_rule_titles: list[str]
     alerts_created: int
+    incident_ids: list[int]
 
 
 @router.post("/ingest", response_model=IngestResponse)
@@ -104,19 +110,24 @@ def ingest_evtx(file: UploadFile = File(...), db: Session = Depends(get_db)) -> 
         matched_titles: list[str] = []
         rule_matches = 0
         alert_data = []
+        incident_ids: list[int] = []
         matched_at = datetime.now(UTC)
         for event_row, normalized_event in zip(saved, normalized_events, strict=True):
             for match in evaluate_event(normalized_event, rules):
                 rule_matches += 1
                 if match.title not in matched_titles:
                     matched_titles.append(match.title)
-                alert_data.append((event_row.id, match, matched_at))
+                incident = find_or_create_incident(db, normalized_event.host, matched_at, match)
+                if incident.id not in incident_ids:
+                    incident_ids.append(incident.id)
+                alert_data.append((event_row.id, match, matched_at, incident.id))
 
         alerts = save_alerts(db, alert_data)
 
         logger.info(
-            "ingest %s: %d records read, %d events ingested, %d skipped, %d rule matches, %d alerts created",
-            filename, records_read, len(saved), skipped, rule_matches, len(alerts),
+            "ingest %s: %d records read, %d events ingested, %d skipped, %d rule matches, "
+            "%d alerts created, %d incidents involved",
+            filename, records_read, len(saved), skipped, rule_matches, len(alerts), len(incident_ids),
         )
         return IngestResponse(
             filename=filename,
@@ -126,6 +137,7 @@ def ingest_evtx(file: UploadFile = File(...), db: Session = Depends(get_db)) -> 
             rule_matches=rule_matches,
             matched_rule_titles=matched_titles,
             alerts_created=len(alerts),
+            incident_ids=incident_ids,
         )
     finally:
         if tmp_path is not None and tmp_path.exists():

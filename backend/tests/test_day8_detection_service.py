@@ -65,7 +65,7 @@ def test_save_alerts_commits_and_returns_rows_with_ids():
 
         rows = save_alerts(
             db,
-            [(event.id, match_1, MATCHED_AT), (event.id, match_2, MATCHED_AT)],
+            [(event.id, match_1, MATCHED_AT, None), (event.id, match_2, MATCHED_AT, None)],
         )
 
         assert len(rows) == 2
@@ -85,7 +85,7 @@ def test_save_alerts_logs_persisted_count(caplog):
         event = _persisted_event(db)
         match = RuleMatch(rule_id="rule-1", title="Test Rule", level="high")
         with caplog.at_level("INFO"):
-            save_alerts(db, [(event.id, match, MATCHED_AT)])
+            save_alerts(db, [(event.id, match, MATCHED_AT, None)])
         assert "persisted 1 alerts" in caplog.text
 
 

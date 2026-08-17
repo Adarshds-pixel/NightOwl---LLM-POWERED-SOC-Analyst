@@ -1,6 +1,6 @@
 # NightOwl Handbook — Volume 5: Manual Testing Guide
 
-**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §14 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps. **Pair 1 Day 8** (5 Sigma rules across process-creation/network-connection/file-creation + `alerts` table persistence, `app/services/detection_service.py`) was added and fully verified — including live persistence against real Postgres — on **2026-08-18** (§13).
+**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §14 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps. **Pair 1 Day 8** (5 Sigma rules across process-creation/network-connection/file-creation + `alerts` table persistence, `app/services/detection_service.py`) was added and fully verified — including live persistence against real Postgres — on **2026-08-18** (§13). **Pair 1 Day 9** (5 more rules — 10 total, adding a registry category — + incident grouping, `app/services/incident_service.py`) and **Pair 1 Day 10** (severity scoring, `app/services/severity_service.py`, plus the roadmap-specified `tests/test_detection.py`) landed together and were fully verified — including live incident grouping/severity scoring against real Postgres — on **2026-08-19** (§14/§15). Pair 2's own Day 9/10 (explain endpoint, hallucination spot-check) is the teammates' responsibility and is intentionally not covered by this guide.
 
 This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on the date noted next to it — see the "Last verified" line under each step.
 
@@ -765,7 +765,188 @@ by the DB rather than the filesystem.
 
 ---
 
-## 14. Full Repository Manual Test Runbook (consolidated, run everything)
+## 14. Day 9 — 10 rules + incident grouping (Pair 1 deliverable)
+
+Builds directly on §13's detection engine: the rule set grows from 5 to 10, adding a 4th category
+(`registry_event`, Sysmon Event ID 13 — Value Set only, see `docs/decisions.md`), and every match
+is now grouped into an `Incident` (same host + a 1-hour window reuses the most recent open
+incident) rather than staying as a bare, ungrouped alert.
+
+**The 5 new rules** (`app/detection/rules/*.yml`):
+
+| Title | Category | Technique | Level |
+|---|---|---|---|
+| Registry Run Key Persistence | registry_event | T1547.001 | medium |
+| Registry IFEO Debugger Hijack | registry_event | T1546.012 | high |
+| Scheduled Task Creation via schtasks.exe | process_creation | T1053.005 | medium |
+| Suspicious Scheduled Task via PowerShell Cmdlet | process_creation | T1053.005 | medium |
+| Suspicious Mshta Execution | process_creation | T1218.005 | high |
+
+("Scheduled task" rules stay in `process_creation` rather than a dedicated logsource — see
+`docs/decisions.md` for why.)
+
+**`rule_loader.py`** now also parses `technique_id`/`tactics` out of each rule's own `tags:` list
+(e.g. `attack.t1547.001` → technique id, `attack.persistence` → tactic) — tag *extraction*, not
+MITRE-dataset validation (that stays Day 11's job). **New `app/services/incident_service.py`** —
+`find_or_create_incident(db, host, matched_at, match)`, mirroring `event_service.py`/
+`detection_service.py`'s create/save layering. **Schema change:** `incidents` gained a `host`
+column, `alerts` gained a nullable `incident_id` FK (migration `6b1a55c7f800`). `POST /ingest`'s
+`IngestResponse` gained `incident_ids: list[int]`.
+
+### 14.1. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/test_day9_detection_rules.py tests/test_day9_incident_service.py tests/test_day9_ingest_incidents.py -v
+```
+
+Covers:
+- `test_day9_detection_rules.py` — 10 rules load, all 4 categories present, every rule's
+  `technique_id`/`tactics` parse correctly from its own tags.
+- `test_day9_incident_service.py` — `find_or_create_incident`: same host+window merges into one
+  incident (technique ids accumulate without duplicates, severity bumps to the higher of the two);
+  different host, or outside the window, creates a separate incident; a closed incident is never
+  reused.
+- `test_day9_ingest_incidents.py` — extends `test_day8_ingest_alerts.py`'s `TestClient`+SQLite
+  pattern: two matching alerts on the same host in one upload link to the same incident with both
+  technique ids; different hosts get separate incidents; benign events create none.
+
+Two existing tests needed mechanical updates for the shape changes (same pattern as Day 8's Day 6
+updates): `test_day6_ingest_route.py`'s two full-response-dict assertions gained
+`"incident_ids": []`, and `test_day8_detection_service.py`'s `save_alerts(...)` calls gained a 4th
+tuple element (`incident_id`, `None` in those tests). Also, `test_day8_detection_rules.py`'s two
+exact-count assertions (`== 5 rules`, `== {3 categories}`) were loosened to lower-bound checks
+(`>= 5`, subset) since Day 9 legitimately grows both — the exact current totals now live in
+§14.1's own tests.
+
+**Expected:** `17 passed` (7 + 7 + 3).
+**Last verified:** 2026-08-19 — `17 passed`.
+
+### 14.2. Full regression pass
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest -v
+```
+
+**Expected:** `155 passed` (108 through Day 8 + 17 new Day 9 tests + 30 new Day 10 tests, see §15).
+**Last verified:** 2026-08-19 — `155 passed in 45.80s`.
+
+### 14.3. Manual smoke test — rule loading (no DB needed)
+
+```
+cd backend
+./venv/Scripts/python.exe -m app.detection.rule_loader
+```
+
+**Expected:** 10 lines across 4 categories (`process_creation` ×6, `registry_event` ×2,
+`network_connection` ×1, `file_event` ×1).
+**Last verified:** 2026-08-19 — all 10 rules printed, categories as expected.
+
+### 14.4. Live server smoke test — incident grouping against real Postgres
+
+A `TestClient`-driven script (same technique as §13.4) posted two crafted process-creation events
+on the same host (`DEMO-HOST-D9`) — one matching the encoded-PowerShell rule, one matching the new
+schtasks.exe rule — through the real running app and real Postgres:
+
+```json
+{"filename":"live_demo_day9.evtx","records_read":2,"events_ingested":2,"events_skipped":0,"rule_matches":2,"matched_rule_titles":["Suspicious Encoded PowerShell Command","Scheduled Task Creation via schtasks.exe"],"alerts_created":2,"incident_ids":[1]}
+```
+
+Both alerts grouped into **one** incident (`incident_ids: [1]`), confirmed via
+`docker compose exec db psql -U nightowl -d nightowl -c "SELECT id, title, severity, mitre_technique_ids, host FROM incidents ORDER BY id DESC LIMIT 3;"`:
+```
+ id |                         title                         | status | severity |    mitre_technique_ids     |     host
+----+-------------------------------------------------------+--------+----------+----------------------------+--------------
+  1 | Suspicious Encoded PowerShell Command on DEMO-HOST-D9 | open   | critical | ["T1059.001", "T1053.005"] | DEMO-HOST-D9
+```
+`mitre_technique_ids` correctly accumulated both techniques; `severity` shows `critical` — see
+§15.4 for why (Day 10's severity scoring landed in the same session and is visible in this same
+result).
+**Last verified:** 2026-08-19.
+
+### 14.5. Known v1 limitations
+
+- Registry detection covers Sysmon Event ID 13 (Value Set) only, not 12 (create/delete) or 14
+  (rename) — see `docs/decisions.md`.
+- Grouping window is a fixed 1 hour, same-host-only — no cross-host correlation, no configurable
+  window yet.
+- The `rules` DB table is still never populated (same gap noted in §13.6) — still deferred, not a
+  Day 9 blocker.
+
+---
+
+## 15. Day 10 — Severity scoring + unit tests (Pair 1 deliverable)
+
+Combines each matched rule's base Sigma `level` with a weight for the MITRE tactic(s) it's tagged
+with (parsed from `tags:` in Day 9), so the final alert/incident severity reflects real attacker
+progress, not just the rule author's raw level. See `docs/decisions.md` for the full formula and
+reasoning.
+
+**New `app/services/severity_service.py`** — `compute_severity(base_level, tactics) -> str` and
+`higher_severity(a, b) -> str` (used by `incident_service.py` when merging). `engine.evaluate_event`
+now calls `compute_severity` when building each `RuleMatch`, so `RuleMatch.level` (and therefore
+`Alert.severity`) is the final weighted value everywhere downstream — no other call site needed to
+change, since existing tests with no tactics see weight 0 (unchanged behavior).
+
+### 15.1. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/test_day10_severity_service.py tests/test_detection.py -v
+```
+
+Covers:
+- `test_day10_severity_service.py` — no tactics leaves the base level unchanged; a single low-weight
+  tactic bumps by one rank; a high-weight tactic (e.g. `impact`) bumps and caps at `critical`;
+  multiple tactics use only the highest weight; an already-`critical` base stays capped; unknown
+  levels default to medium's rank; unknown tactics contribute zero weight; `higher_severity` picks
+  the higher-ranked label (or either, on a tie).
+- `test_detection.py` (**exact filename from the roadmap's Day 10 Files column**) — the full
+  fire/no-fire matrix for all 10 rules: a data-driven `@pytest.mark.parametrize` table of
+  (matching event, benign look-alike) pairs per rule, asserting every rule fires on its matching
+  event and does *not* false-positive on the look-alike, plus one check that the matrix itself
+  covers exactly the 10 real rule titles (so a future rule addition without a matching test case
+  fails loudly).
+
+**Expected:** `30 passed` (9 + 21).
+**Last verified:** 2026-08-19 — `30 passed`.
+
+### 15.2. Full regression pass
+
+Same command/result as §14.2 (`155 passed`) — Day 9 and Day 10 landed together in this session.
+
+### 15.3. Manual smoke test — severity formula
+
+```
+cd backend
+./venv/Scripts/python.exe -c "
+from app.services.severity_service import compute_severity
+print(compute_severity('high', ['execution']))
+print(compute_severity('medium', ['impact']))
+print(compute_severity('low', []))
+"
+```
+**Expected:** `critical` (4+1=5), `critical` (3+3=6, capped at 5), `low` (no tactics, unchanged).
+**Last verified:** 2026-08-19 — exactly as expected.
+
+### 15.4. Live verification — visible in §14.4's real Postgres result
+
+§14.4's live demo already shows this working end to end: the seed rule (`level: high`, tagged
+`attack.execution`) produced an `Alert`/incident `severity` of `critical` (high=4 + execution
+weight 1 = 5), not `high` as it would have shown under Day 8's plain pass-through — a real,
+intentional, visible behavior change from one day to the next, not a regression.
+
+### 15.5. Known v1 limitations
+
+- Tactic weights are a small hand-picked table (`docs/decisions.md`), not derived from any formal
+  MITRE scoring methodology — reasonable defaults, not a calibrated risk model.
+- Severity is computed per-match at evaluation time; it is not recomputed retroactively if a rule's
+  tags are edited after alerts already exist for it.
+
+---
+
+## 16. Full Repository Manual Test Runbook (consolidated, run everything)
 
 Everything above (§1–§12) is a detailed, day-by-day reference — what each piece covers, why, and
 its full verification history. This section is the opposite: a single linear checklist to run the
@@ -773,16 +954,16 @@ its full verification history. This section is the opposite: a single linear che
 re-explain anything — it just sequences the commands and points back to the section with the full
 detail/expected output for each step.
 
-### 14.1. Prerequisites checklist
+### 16.1. Prerequisites checklist
 
 - [ ] `backend/venv` exists with deps installed (§0). If not: `cd backend && python -m venv venv && ./venv/Scripts/pip install -r requirements.txt` (see §0 for the two Windows install gotchas).
 - [ ] Repo-root `.env` exists (`cp .env.example .env` if not).
-- [ ] *Optional, for §14.3's Postgres block:* Docker Desktop installed and running (`docker info` succeeds).
-- [ ] *Optional, for §14.3's live-LLM block:* `LLM_API_KEY` set in `.env` (free key: https://aistudio.google.com/apikey).
+- [ ] *Optional, for §16.3's Postgres block:* Docker Desktop installed and running (`docker info` succeeds).
+- [ ] *Optional, for §16.3's live-LLM block:* `LLM_API_KEY` set in `.env` (free key: https://aistudio.google.com/apikey).
 
-Everything in §14.2 runs with **just the first two boxes checked**. §14.3 is gated on Docker/API key and is explicitly optional/skippable.
+Everything in §16.2 runs with **just the first two boxes checked**. §16.3 is gated on Docker/API key and is explicitly optional/skippable.
 
-### 14.2. Core pass — no Docker, no API key required
+### 16.2. Core pass — no Docker, no API key required
 
 Run top to bottom from the repo root unless noted:
 
@@ -791,7 +972,7 @@ cd backend
 
 # 1. Full automated suite — everything Pair 1 + Pair 2 have built so far
 ./venv/Scripts/python.exe -m pytest -v
-# Expect: 108 passed (see §13.2 for the authoritative running total)
+# Expect: 155 passed (see §14.2/§15.2 for the authoritative running total)
 
 # 2. Start the API server in one shell, then run the rest from a second shell
 ./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
@@ -809,7 +990,7 @@ curl http://127.0.0.1:8000/mitre/techniques
 
 # 5. Ingest happy path (sysmon_demo.evtx fixture)
 curl -F "file=@../data/sample_logs/sysmon_demo.evtx;type=application/octet-stream" http://127.0.0.1:8000/ingest
-# Expect: HTTP 200 + rule_matches/matched_rule_titles fields WITH Postgres running (§3, §14.3)
+# Expect: HTTP 200 + rule_matches/matched_rule_titles/incident_ids fields WITH Postgres running (§3, §16.3)
 # Expect: HTTP 500 (psycopg2 "port 5433 ... Connection refused") WITHOUT Postgres — a known,
 #         non-defect gap, not a new bug. The same request path is separately proven correct
 #         end-to-end against SQLite by the automated suite in step 1.               (§9.3/§12.4)
@@ -825,13 +1006,13 @@ Back in the first shell, stop the server (Ctrl+C), then run the two no-server, n
 ```
 cd backend
 ./venv/Scripts/python.exe -m app.detection.rule_loader
-# Expect: one line for the seed rule (id, level, title, category)                  (§12.3)
+# Expect: 10 lines across 4 categories (id, level, title, category)                (§14.3)
 
 ./venv/Scripts/python.exe -m app.rag.prompts
 # Expect: rendered system message (grounding rules) + human message (sample incident + 1 chunk)  (§10.3)
 ```
 
-### 14.3. Optional extended pass — needs Docker and/or an LLM API key
+### 16.3. Optional extended pass — needs Docker and/or an LLM API key
 
 Only run the parts your environment supports:
 
@@ -844,35 +1025,39 @@ cd backend
 ./venv/Scripts/python.exe -m alembic current    # Expect: fa0ac08ab62f (head)
 docker compose exec db psql -U nightowl -d nightowl -c "\dt"   # Expect: 6 tables
 
-# With Postgres now up, re-run step 5 of §14.2 — expect HTTP 200 this time instead of 500.
+# With Postgres now up, re-run step 5 of §16.2 — expect HTTP 200 this time instead of 500.
 
 # Needs LLM_API_KEY set in .env:
 ./venv/Scripts/python.exe -m app.rag.llm_client       # real Gemini call, §10.4
 ./venv/Scripts/python.exe -m app.rag.explain_service  # real retrieve + 2 Gemini calls, §11.3
 ```
 
-### 14.4. Sign-off checklist
+### 16.4. Sign-off checklist
 
 | Component | Section | Result | Notes |
 |---|---|---|---|
-| Full pytest suite (108 tests) | §13.2 | ☐ Pass ☐ Fail | |
+| Full pytest suite (155 tests) | §14.2/§15.2 | ☐ Pass ☐ Fail | |
 | Alert persistence on rule match | §13.1/§13.4 | ☐ Pass ☐ Fail | |
+| Incident grouping (same host+window) | §14.1/§14.4 | ☐ Pass ☐ Fail | |
+| Severity scoring (base level + tactic weight) | §15.1/§15.4 | ☐ Pass ☐ Fail | |
 | `/health` | §4 | ☐ Pass ☐ Fail | |
 | `GET /mitre/techniques` | §9.4 | ☐ Pass ☐ Fail | |
 | `POST /ingest` happy path | §9.3/§12.4 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | HTTP 500 without Postgres is expected, not a fail |
 | `POST /ingest` error cases (×3) | §9.3 | ☐ Pass ☐ Fail | |
-| `rule_loader` module smoke | §12.3 | ☐ Pass ☐ Fail | |
+| `rule_loader` module smoke (10 rules) | §14.3 | ☐ Pass ☐ Fail | |
 | `prompts` module smoke | §10.3 | ☐ Pass ☐ Fail | |
 | Postgres/Alembic (6 tables) | §3 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | |
 | Live Gemini call (`llm_client`) | §10.4 | ☐ Pass ☐ Fail ☐ Skipped (no API key) | |
 | Live explain_service (2 Gemini calls) | §11.3 | ☐ Pass ☐ Fail ☐ Skipped (no API key) | |
-| Real Sysmon VM capture through full pipeline | §12.6 | ☐ Pass ☐ Fail ☐ Not re-run (63MB file, manual only) | |
+| Real Sysmon VM capture through full pipeline | §12.6/§13.5 | ☐ Pass ☐ Fail ☐ Not re-run (63MB file, manual only) | |
 
 Tester: ____________  Date: ____________  Environment (Docker? API key?): ____________
 
-**Scope reminder** (matches "Out of scope" below): this runbook covers everything built through Pair 1 Day 8 (5 detection rules + alert persistence) and Pair 2 Day 8 (explain_service). It does **not** cover the frontend (none built yet), incident endpoints, the `/explain` HTTP endpoint, chat endpoints, or the formal Testing Report — those are still ahead on the roadmap.
+**Scope reminder** (matches "Out of scope" below): this runbook covers everything built through Pair 1 Day 10 (10 detection rules, incident grouping, severity scoring) and Pair 2 Day 8 (explain_service). It does **not** cover Pair 2's Day 9/10 (explain endpoint with source attribution, hallucination spot-check — teammates' own work, not covered by this session), the frontend (none built yet), the `GET /incidents` list endpoint, chat endpoints, or the formal Testing Report — those are still ahead on the roadmap.
 
-**2026-08-17 run of this exact checklist:** §14.2's entire core pass executed for real — 90/90 tests passed (39.85s), `/health` 200, `/mitre/techniques` 200 (count 858), all 3 ingest error cases HTTP 400 as expected, `rule_loader` and `prompts` module smoke tests both matched their documented output exactly. Ingest happy path initially returned HTTP 500 (Docker Desktop wasn't running yet — same known gap as prior days); §14.3's Docker block was then run for real (Docker Desktop started, `docker compose up -d db`, `alembic upgrade head` → `fa0ac08ab62f (head)`, 6 tables confirmed), after which the happy path returned HTTP 200 as designed — see §3/§9.3/§12.4's "second pass" notes.
+**2026-08-17 run of this exact checklist:** §16.2's entire core pass executed for real — 90/90 tests passed (39.85s), `/health` 200, `/mitre/techniques` 200 (count 858), all 3 ingest error cases HTTP 400 as expected, `rule_loader` and `prompts` module smoke tests both matched their documented output exactly. Ingest happy path initially returned HTTP 500 (Docker Desktop wasn't running yet — same known gap as prior days); §16.3's Docker block was then run for real (Docker Desktop started, `docker compose up -d db`, `alembic upgrade head` → `fa0ac08ab62f (head)`, 6 tables confirmed), after which the happy path returned HTTP 200 as designed — see §3/§9.3/§12.4's "second pass" notes.
+
+**2026-08-19 update:** Pair 1's Day 9 (10 rules, incident grouping) and Day 10 (severity scoring, `test_detection.py`) landed in one session — full suite now `155 passed`, live-verified against the same real Postgres instance (§14.4). Pair 2's Day 9/10 (explain endpoint, hallucination spot-check) intentionally not covered here — that's the teammates' own work.
 
 A real Gemini key was then added to `.env`, which surfaced one genuine bug (not environmental): `app/core/config.py`'s `Settings` resolved `.env` relative to the process's cwd, but every command here runs from `backend/`, so the key was never actually read regardless of what was in the file. Fixed in `config.py` (resolve `.env` from the module's own file location instead of cwd) — full 90-test suite re-confirmed green after the fix, then both live-Gemini checks (§10.4, §11.3) ran for real and succeeded. **As of 2026-08-17, every check in this runbook has been executed for real and passes** — no known gaps remain except Docker Desktop needing a manual start each session (it doesn't auto-launch on this machine).
 
@@ -899,6 +1084,6 @@ A real Gemini key was then added to `.env`, which surfaced one genuine bug (not 
 ## Out of scope for this guide
 
 - Frontend testing (nothing built yet — Days 13+).
-- Incident grouping/severity scoring, `GET /incidents` endpoints, rules-manager UI (Pair 1 Days 9–12 — not yet built; the ingest API, Sigma detection engine, 5 detection rules, and alert persistence are done, see §9/§12/§13).
-- Explain endpoint, hallucination spot-check, chat endpoints (Pair 2 Days 9–12 — not yet built; retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, and the explain_service retrieve→draft→self-critique pipeline are done, see §8/§9/§10/§11).
+- `GET /incidents` list endpoint, MITRE-mapping validation against `mitre/validator.py`, rules-manager UI (Pair 1 Days 11–12 — not yet built; the ingest API, Sigma detection engine, 10 detection rules, alert persistence, incident grouping, and severity scoring are done, see §9/§12/§13/§14/§15).
+- Explain endpoint, hallucination spot-check, chat endpoints (Pair 2 Days 9–12 — this is the teammates' own work, not covered by this session; retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, and the explain_service retrieve→draft→self-critique pipeline are done, see §8/§9/§10/§11).
 - The formal Testing Report (Volume 3 §9.5) — that's produced during Days 20–21 Integration & Testing, covering unit/integration/E2E coverage and RAG accuracy scoring across the whole system.

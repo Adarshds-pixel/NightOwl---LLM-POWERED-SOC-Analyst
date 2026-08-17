@@ -18,6 +18,7 @@ shouldn't take down detection for every other rule).
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -28,6 +29,8 @@ from sigma.rule import SigmaRule
 logger = logging.getLogger(__name__)
 
 RULES_DIR = Path(__file__).resolve().parent / "rules"
+
+_TECHNIQUE_TAG_RE = re.compile(r"^attack\.(t\d{4}(?:\.\d{3})?)$", re.IGNORECASE)
 
 
 class RuleLoadError(Exception):
@@ -46,6 +49,36 @@ class LoadedRule:
     detections: dict[str, object]
     condition: str
     yaml_path: str
+    # Parsed from the rule's own `tags:` list (Day 9), e.g. `attack.t1547.001`
+    # -> technique_id, `attack.persistence` -> a tactic. Defaulted so every
+    # existing LoadedRule(...) construction in Day 7/8 tests keeps working
+    # unchanged. This is tag *extraction*, not MITRE-dataset validation --
+    # that stays Day 11's job (mitre/validator.py).
+    technique_id: str | None = None
+    tactics: list[str] = field(default_factory=list)
+
+
+def _parse_tags(tags: object) -> tuple[str | None, list[str]]:
+    """Splits a rule's raw `tags:` list into (technique_id, tactics).
+    Tags are plain strings from `yaml.safe_load`, e.g. ["attack.execution",
+    "attack.t1059.001"] -- the technique-id-shaped tag is picked out via
+    regex, everything else under the `attack.` namespace is treated as a
+    tactic name.
+    """
+    if not isinstance(tags, list):
+        return None, []
+
+    technique_id: str | None = None
+    tactics: list[str] = []
+    for tag in tags:
+        if not isinstance(tag, str):
+            continue
+        match = _TECHNIQUE_TAG_RE.match(tag)
+        if match:
+            technique_id = match.group(1).upper()
+        elif tag.lower().startswith("attack."):
+            tactics.append(tag[len("attack."):].lower())
+    return technique_id, tactics
 
 
 def _validate_with_pysigma(text: str, path: Path) -> SigmaRule:
@@ -79,6 +112,7 @@ def _load_one(path: Path) -> LoadedRule:
         raise RuleLoadError(f"{path}: rule has no selections under 'detection'")
 
     logsource = raw.get("logsource") or {}
+    technique_id, tactics = _parse_tags(raw.get("tags"))
 
     return LoadedRule(
         rule_id=str(sigma_rule.id) if sigma_rule.id else path.stem,
@@ -88,6 +122,8 @@ def _load_one(path: Path) -> LoadedRule:
         detections=detections,
         condition=condition,
         yaml_path=str(path),
+        technique_id=technique_id,
+        tactics=tactics,
     )
 
 

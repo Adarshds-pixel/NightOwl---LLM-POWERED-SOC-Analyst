@@ -21,15 +21,18 @@ def _event(event_id, event_data):
     )
 
 
-def test_load_rules_returns_five_rules():
+def test_load_rules_returns_at_least_five_rules():
+    # Day 8's own guarantee (grew from 1 to 5) -- not an exact-count check,
+    # since Day 9 legitimately grows this further to 10. The exact current
+    # total is asserted in test_day9_detection_rules.py.
     rules = rule_loader.load_rules()
-    assert len(rules) == 5
+    assert len(rules) >= 5
 
 
-def test_load_rules_covers_all_three_categories():
+def test_load_rules_covers_at_least_three_categories():
     rules = rule_loader.load_rules()
     categories = {r.category for r in rules}
-    assert categories == {"process_creation", "network_connection", "file_event"}
+    assert {"process_creation", "network_connection", "file_event"} <= categories
 
 
 def test_certutil_urlcache_download_rule_fires():

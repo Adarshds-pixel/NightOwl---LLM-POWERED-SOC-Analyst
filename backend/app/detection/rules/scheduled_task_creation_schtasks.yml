@@ -1,0 +1,23 @@
+title: Scheduled Task Creation via schtasks.exe
+id: 3c7b9e42-6d1a-4f8c-b2e5-9a4d7c1f6b38
+status: experimental
+description: >
+  Detects schtasks.exe being used to create a new scheduled task, a common
+  persistence mechanism (run a payload on a schedule or at logon/startup).
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-19
+references:
+  - https://attack.mitre.org/techniques/T1053/005/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.execution
+  - attack.t1053.005
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|contains: schtasks.exe
+    CommandLine|contains: '/create'
+  condition: selection
+level: medium

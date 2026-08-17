@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 from app.detection.rule_loader import LoadedRule
 from app.schemas.event import NormalizedEvent
+from app.services import severity_service
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,10 @@ CATEGORY_TO_EVENT_ID: dict[str, int] = {
     "process_creation": 1,
     "network_connection": 3,
     "file_event": 11,
+    # Sysmon Event ID 13, "RegistryEvent (Value Set)" -- Day 9. Only
+    # value-set is covered (v1 scope), not key create/delete (12) or
+    # rename (14); see docs/decisions.md.
+    "registry_event": 13,
 }
 
 _SUPPORTED_MODIFIERS = {None, "contains", "startswith", "endswith"}
@@ -42,7 +47,10 @@ _TOKEN_RE = re.compile(r"\(|\)|[A-Za-z_][A-Za-z0-9_]*")
 class RuleMatch:
     rule_id: str
     title: str
+    # Final severity after severity_service.compute_severity (base Sigma
+    # level + tactic weight, Day 10) -- not the raw, unweighted rule level.
     level: str
+    technique_id: str | None = None
 
 
 class ConditionSyntaxError(Exception):
@@ -180,6 +188,14 @@ def evaluate_event(event: NormalizedEvent, rules: list[LoadedRule]) -> list[Rule
             continue
 
         if matched:
-            matches.append(RuleMatch(rule_id=rule.rule_id, title=rule.title, level=rule.level))
+            final_level = severity_service.compute_severity(rule.level, rule.tactics)
+            matches.append(
+                RuleMatch(
+                    rule_id=rule.rule_id,
+                    title=rule.title,
+                    level=final_level,
+                    technique_id=rule.technique_id,
+                )
+            )
 
     return matches
