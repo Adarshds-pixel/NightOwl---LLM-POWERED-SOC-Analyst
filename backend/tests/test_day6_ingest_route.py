@@ -67,6 +67,7 @@ def test_ingest_sysmon_demo_happy_path():
             "events_skipped": 0,
             "rule_matches": 0,
             "matched_rule_titles": [],
+            "alerts_created": 0,
         }
         with SessionLocal() as db:
             assert db.query(Event).count() == 4
@@ -145,6 +146,7 @@ def test_ingest_skips_malformed_records_and_ingests_the_rest(monkeypatch):
             "events_skipped": 1,
             "rule_matches": 0,
             "matched_rule_titles": [],
+            "alerts_created": 0,
         }
         with SessionLocal() as db:
             assert db.query(Event).count() == 2

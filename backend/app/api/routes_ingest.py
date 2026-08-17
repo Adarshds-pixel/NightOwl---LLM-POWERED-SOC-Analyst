@@ -25,13 +25,15 @@ fatal.
 
 Day 7 adds detection: every normalized event is evaluated against the
 loaded Sigma rules (detection/rule_loader.py + detection/engine.py) before
-being persisted. This only counts/reports matches on the response --
-persisting them as `alerts` rows is Day 8's job (models/alert.py,
-services/detection_service.py), not built here yet.
+being persisted. Day 8 persists each match as an `alerts` row
+(models/alert.py, services/detection_service.py), keyed off the just-saved
+Event row's DB id -- not the raw Sysmon/Windows Event ID on the
+normalized event, which is a different number.
 """
 
 import logging
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -43,6 +45,7 @@ from app.detection.engine import evaluate_event
 from app.detection.rule_loader import get_loaded_rules
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts
 from app.ingestion.normalizer import EventNormalizationError, normalize_event
+from app.services.detection_service import save_alerts
 from app.services.event_service import save_events
 
 logger = logging.getLogger(__name__)
@@ -59,6 +62,7 @@ class IngestResponse(BaseModel):
     events_skipped: int
     rule_matches: int
     matched_rule_titles: list[str]
+    alerts_created: int
 
 
 @router.post("/ingest", response_model=IngestResponse)
@@ -99,15 +103,20 @@ def ingest_evtx(file: UploadFile = File(...), db: Session = Depends(get_db)) -> 
         rules = get_loaded_rules()
         matched_titles: list[str] = []
         rule_matches = 0
-        for normalized_event in normalized_events:
+        alert_data = []
+        matched_at = datetime.now(UTC)
+        for event_row, normalized_event in zip(saved, normalized_events, strict=True):
             for match in evaluate_event(normalized_event, rules):
                 rule_matches += 1
                 if match.title not in matched_titles:
                     matched_titles.append(match.title)
+                alert_data.append((event_row.id, match, matched_at))
+
+        alerts = save_alerts(db, alert_data)
 
         logger.info(
-            "ingest %s: %d records read, %d events ingested, %d skipped, %d rule matches",
-            filename, records_read, len(saved), skipped, rule_matches,
+            "ingest %s: %d records read, %d events ingested, %d skipped, %d rule matches, %d alerts created",
+            filename, records_read, len(saved), skipped, rule_matches, len(alerts),
         )
         return IngestResponse(
             filename=filename,
@@ -116,6 +125,7 @@ def ingest_evtx(file: UploadFile = File(...), db: Session = Depends(get_db)) -> 
             events_skipped=skipped,
             rule_matches=rule_matches,
             matched_rule_titles=matched_titles,
+            alerts_created=len(alerts),
         )
     finally:
         if tmp_path is not None and tmp_path.exists():

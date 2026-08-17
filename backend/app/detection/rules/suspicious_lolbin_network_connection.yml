@@ -1,0 +1,24 @@
+title: Suspicious Network Connection from LOLBin
+id: 2a7e9c14-5d3f-4b6a-9e1c-8f4a2d7b6c53
+status: experimental
+description: >
+  Detects an outbound network connection initiated by a living-off-the-land
+  binary (powershell.exe, certutil.exe, curl.exe) commonly abused to reach
+  a command-and-control server or download second-stage tooling.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-18
+references:
+  - https://attack.mitre.org/techniques/T1071/001/
+tags:
+  - attack.command_and_control
+  - attack.t1071.001
+logsource:
+  category: network_connection
+detection:
+  selection:
+    Image|contains:
+      - powershell.exe
+      - certutil.exe
+      - curl.exe
+  condition: selection
+level: medium

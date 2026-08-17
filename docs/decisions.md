@@ -24,3 +24,11 @@ One entry per significant decision, per Volume 3 §8.6.
 - **Why real Sysmon names instead:** rules become portable from public Sigma/SigmaHQ sources — a stronger, more credible claim for the project than an invented vocabulary, and immediately recognizable to anyone familiar with real SOC tooling.
 - **How the coupling risk was avoided:** `normalizer.py` already computes a flattened `{FieldName: value}` dict from each record's `EventData` before mapping the 3 fields it promotes to columns. `NormalizedEvent` now also carries that full dict as `event_data` (`schemas/event.py`), so `engine.py` gets every Sysmon field for free — not just the 3 the normalizer promotes — without re-parsing XML itself. The engine matches against the union of `event_data` and the normalized fields, so both vocabularies work.
 - **Reversible?** Yes — `event_data` is additive; nothing that read `NormalizedEvent` before Day 7 is affected.
+
+---
+
+**2026-08-18 — `Alert.severity` is a direct pass-through of the matched rule's `level` string (Day 8 alert persistence).**
+- **Alternatives considered:** a fixed severity enum (`low`/`medium`/`high`/`critical`) with an explicit `level -> severity` translation table, in case rule authors ever use non-standard level strings.
+- **Why pass-through instead:** `Alert.severity` is a plain `String(50)` with no DB-level constraint, and every rule file's `level` already comes from Sigma's own small standard vocabulary (`informational`/`low`/`medium`/`high`/`critical`). A translation table would just map each string to itself — added indirection with no behavior difference.
+- **Decision:** `services/detection_service.py`'s `create_alert` sets `severity = match.level` directly.
+- **Reversible?** Yes — confined to one line in `create_alert`; if a real enum constraint is added to the `alerts` table later, only this function needs to change.

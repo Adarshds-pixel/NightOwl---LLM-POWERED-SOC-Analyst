@@ -1,0 +1,29 @@
+title: Suspicious Executable Written to Public or Temp Directory
+id: 6f3b8d21-9a1c-4e5f-8b2d-3c7a1e9f5d84
+status: experimental
+description: >
+  Detects an executable, DLL, PowerShell script, or batch file written to
+  a world-writable or commonly-abused staging directory (Users\Public or
+  the current user's AppData\Local\Temp), a common drop location for
+  tooling staged before execution.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-18
+references:
+  - https://attack.mitre.org/techniques/T1105/
+tags:
+  - attack.command_and_control
+  - attack.t1105
+logsource:
+  category: file_event
+detection:
+  selection:
+    TargetFilename|contains:
+      - '\Users\Public\'
+      - '\AppData\Local\Temp\'
+    TargetFilename|endswith:
+      - '.exe'
+      - '.dll'
+      - '.ps1'
+      - '.bat'
+  condition: selection
+level: medium

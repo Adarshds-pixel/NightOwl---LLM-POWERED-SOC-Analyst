@@ -1,0 +1,25 @@
+title: PowerShell Execution Policy Bypass
+id: 1d9a4e7c-2f6b-4c8a-b3d1-7e9c5a2f4b16
+status: experimental
+description: >
+  Detects PowerShell process creation with flags that bypass or suppress
+  the configured execution policy/profile, commonly used to run
+  unsigned/malicious scripts without prompting.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-18
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+tags:
+  - attack.execution
+  - attack.t1059.001
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|contains: powershell.exe
+    CommandLine|contains:
+      - '-ExecutionPolicy Bypass'
+      - '-ep bypass'
+      - '-nop'
+  condition: selection
+level: medium

@@ -1,6 +1,6 @@
 # NightOwl Handbook — Volume 5: Manual Testing Guide
 
-**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §13 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps.
+**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §14 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps. **Pair 1 Day 8** (5 Sigma rules across process-creation/network-connection/file-creation + `alerts` table persistence, `app/services/detection_service.py`) was added and fully verified — including live persistence against real Postgres — on **2026-08-18** (§13).
 
 This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on the date noted next to it — see the "Last verified" line under each step.
 
@@ -602,10 +602,12 @@ curl -F "file=@../data/sample_logs/sysmon_demo.evtx;type=application/octet-strea
 **Re-verified 2026-08-17 (first pass, before Docker was started):** same HTTP 500 / same `psycopg2.OperationalError` traceback, still ahead of the detection step — no change; see §9.3's matching re-verification for the shared traceback.
 **Re-verified 2026-08-17 (second pass, with Postgres up — see §3/§9.3's resolution):** HTTP 200, `{"filename":"sysmon_demo.evtx","records_read":4,"events_ingested":4,"events_skipped":0,"rule_matches":0,"matched_rule_titles":[]}` — matches the "With Postgres running" expectation above exactly, including the two Day 7 detection fields. `rule_matches: 0` is correct — `sysmon_demo.evtx` doesn't contain an encoded-PowerShell event.
 
+> **Day 8 note:** as of Day 8, `IngestResponse` has one more field, `alerts_created` (see §13) — running this exact command today returns the same JSON shape above plus `"alerts_created":0` at the end. §13.4 has the up-to-date example including that field.
+
 ### 12.5. Known v1 limitations (by design — see `docs/decisions.md`)
 - Condition grammar supports `and`/`or`/`not`/parentheses over bare selection names only — no `1 of`/`all of them` shorthand, no named multi-condition rules.
 - Field modifiers: exact match (case-insensitive), `contains`, `startswith`, `endswith` only — no `|re` or glob `*` wildcards yet.
-- Only one seed rule exists in `detection/rules/` (`suspicious_encoded_powershell.yml`) — Day 8 builds this out to 5 rules across process-creation/network-connection/file-creation categories and adds `alerts` persistence.
+- Only one seed rule exists in `detection/rules/` (`suspicious_encoded_powershell.yml`) — **resolved in Day 8** (§13): now 5 rules across process-creation/network-connection/file-creation categories, with `alerts` persistence wired in.
 
 ### 12.6. Prep task — real Sysmon Event ID 3 capture from a clean VM (manual, not run here)
 
@@ -626,7 +628,144 @@ Not wired into pytest as a hard dependency (same rationale as §12's other real-
 
 ---
 
-## 13. Full Repository Manual Test Runbook (consolidated, run everything)
+## 13. Day 8 — 5 Sigma rules + alert persistence (Pair 1 deliverable)
+
+Builds directly on §12's detection engine v1: the rule set grows from the single Day 7 seed rule
+to 5 rules covering all 3 categories the engine supports, and every match is now persisted as an
+`alerts` row (`app/models/alert.py`, already-migrated `alerts` table) instead of only being counted
+in the `POST /ingest` response.
+
+**The 5 rules** (`app/detection/rules/*.yml`):
+
+| Title | Category | Technique | Level |
+|---|---|---|---|
+| Suspicious Encoded PowerShell Command (Day 7 seed) | process_creation | T1059.001 | high |
+| Certutil Download via urlcache/split Flags | process_creation | T1105 | high |
+| PowerShell Execution Policy Bypass | process_creation | T1059.001 | medium |
+| Suspicious Network Connection from LOLBin | network_connection | T1071.001 | medium |
+| Suspicious Executable Written to Public or Temp Directory | file_event | T1105 | medium |
+
+All 5 stay within the engine's existing v1 grammar (§12.5's limitations still apply — no `|re`,
+no `1 of`, etc.) and match against real Sysmon field names, matching the Day 7 decision recorded in
+`docs/decisions.md`.
+
+**New module:** `app/services/detection_service.py` — `create_alert`/`save_alerts`, mirroring
+`event_service.py`'s create/save shape. `Alert.severity` is a direct pass-through of the rule's
+`level` string (no enum/translation table — the column has no constraint requiring one).
+`POST /ingest`'s `IngestResponse` gains a new `alerts_created: int` field alongside the existing
+`rule_matches`/`matched_rule_titles` (both unchanged, so this is additive, not breaking).
+
+### 13.1. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/test_day8_detection_rules.py tests/test_day8_detection_service.py tests/test_day8_ingest_alerts.py -v
+```
+
+Covers:
+- `test_day8_detection_rules.py` — `rule_loader.load_rules()` returns exactly 5 rules covering all
+  3 categories; each of the 4 new rules fires on a crafted matching event and does *not* fire on a
+  crafted benign look-alike (e.g. `certutil.exe -verify` doesn't trip the urlcache/split rule).
+- `test_day8_detection_service.py` — in-memory SQLite: `create_alert`/`save_alerts` persist the
+  `event_id` FK, `rule_id`, severity pass-through, and `matched_at`; batch commit; empty-list no-op;
+  round-trip query. (SQLite drops tzinfo on read-back, unlike Postgres — the one test that checks
+  `matched_at` compares tolerantly for that reason; not an app-level concern.)
+- `test_day8_ingest_alerts.py` — extends `test_day7_ingest_detection.py`'s `TestClient` +
+  in-memory-SQLite pattern: a matching event now produces both `alerts_created: 1` in the response
+  *and* a real `Alert` row queryable from the same session, with the correct FK to the persisted
+  `Event` row; multiple matching events in one upload produce multiple alert rows; benign events
+  produce zero.
+
+**Expected:** `18 passed`.
+**Last verified:** 2026-08-18 — `18 passed in ~1.5s`.
+
+Two existing Day 6 tests (`test_ingest_sysmon_demo_happy_path`,
+`test_ingest_skips_malformed_records_and_ingests_the_rest` in `test_day6_ingest_route.py`) hardcode
+the full `IngestResponse` JSON shape and needed one line added (`"alerts_created": 0`) for the new
+field — both still pass, this was an expected, mechanical update, not a behavior change.
+
+### 13.2. Full regression pass
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest -v
+```
+
+**Expected:** `108 passed` (90 from Days 3–8/Day 7 detection engine + 18 new Day 8 tests).
+**Last verified:** 2026-08-18 — `108 passed in 25.78s`.
+
+### 13.3. Manual smoke test — rule loading (no DB needed)
+
+```
+cd backend
+./venv/Scripts/python.exe -m app.detection.rule_loader
+```
+
+**Expected:** 5 lines, one per rule, covering all 3 categories.
+**Last verified:** 2026-08-18 —
+```
+8c2e5f11-4a3b-4d7e-9c1a-6b5e2f8a7d33  [high]  Certutil Download via urlcache/split Flags  (category=process_creation)
+1d9a4e7c-2f6b-4c8a-b3d1-7e9c5a2f4b16  [medium]  PowerShell Execution Policy Bypass  (category=process_creation)
+5b1f3a2e-6c1e-4f6a-9b8e-2f8b1a9d6e11  [high]  Suspicious Encoded PowerShell Command  (category=process_creation)
+6f3b8d21-9a1c-4e5f-8b2d-3c7a1e9f5d84  [medium]  Suspicious Executable Written to Public or Temp Directory  (category=file_event)
+2a7e9c14-5d3f-4b6a-9e1c-8f4a2d7b6c53  [medium]  Suspicious Network Connection from LOLBin  (category=network_connection)
+```
+
+### 13.4. Live server smoke test — real alert persisted against real Postgres
+
+```
+cd backend
+./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+```
+
+`sysmon_demo.evtx` (§9.3's fixture) still doesn't contain a matching event for any of the 5 rules,
+so posting it produces `alerts_created: 0` — same non-defect as §12.4. To prove alert persistence
+against a *real* HTTP request and the *real* Postgres database (not the test suite's SQLite
+override), a `TestClient`-driven script posted one crafted encoded-PowerShell record through the
+actual running `app.main:app` (only `read_records_as_dicts` monkeypatched to yield the record;
+everything else -- routing, detection, DB session, real `DATABASE_URL` -- is the real thing):
+
+```json
+{"filename":"live_demo.evtx","records_read":1,"events_ingested":1,"events_skipped":0,"rule_matches":1,"matched_rule_titles":["Suspicious Encoded PowerShell Command"],"alerts_created":1}
+```
+
+Confirmed via `docker compose exec db psql -U nightowl -d nightowl -c "SELECT id, event_id, rule_id, severity, matched_at FROM alerts ORDER BY id;"`:
+```
+ id | event_id |               rule_id                | severity |          matched_at
+----+----------+---------------------------------------+----------+-------------------------------
+  1 |       18 | 5b1f3a2e-6c1e-4f6a-9b8e-2f8b1a9d6e11  | high     | 2026-08-17 03:32:31.934447+00
+```
+`rule_id` matches the real seed rule's UUID, `severity` matches its `level`, and `event_id` (18)
+correctly points at the just-persisted `Event` row from the same request, not the raw Sysmon Event
+ID (1).
+**Last verified:** 2026-08-18.
+
+### 13.5. Real-data check — do the new rules fire against `sysmon_vm_capture.evtx`?
+
+Ran all 5 rules against the full 64,558-record real VM capture (§12.6) via
+`evtx_reader`→`normalizer`→`rule_loader`→`engine.evaluate_event`, same read-only pattern as §12.6's
+verification (not wired into pytest, machine-specific real file).
+
+**NetworkConnect(3) breakdown (100 records):** all are `svchost.exe` (93, SSDP/mDNS/LLMNR
+background chatter), `msedge.exe` (5), `explorer.exe` (1), and Windows Defender's
+`MpDefenderCoreService.exe` (1) — no LOLBin (`powershell.exe`/`certutil.exe`/`curl.exe`) network
+activity anywhere in this capture, so the new "Suspicious Network Connection from LOLBin" rule
+correctly does **not** fire against it. This is expected, benign VM background traffic, not a gap
+in the rule — it's verified to fire against a crafted event instead (§13.1).
+**Last verified:** 2026-08-18 — ran all 5 rules against all 64,558 records: `total matches: 0` across the board (process_creation, network_connection, and file_event alike) — this clean VM capture contains no malicious activity by design (§7.2/§12.6's capture process only generated harmless `whoami`/`curl`/temp-file actions plus normal OS background chatter), so zero matches across a real, large, mixed-category file is the correct result, not a rule defect. Each rule's ability to fire is separately proven with crafted matching events in §13.1/§13.3.
+
+### 13.6. Known v1 limitations carried forward from §12.5
+
+Same grammar limitations as Day 7 (no `|re`/glob, no `1 of`/`all of`, category-scoped to
+process_creation/network_connection/file_event only) — none of the 4 new rules needed anything
+outside this grammar. The `rules` DB table (`app/models/rule.py`) is still never populated by
+`rule_loader.py` (it only produces in-memory `LoadedRule` objects) — out of scope for Day 8 per the
+roadmap, worth flagging for whenever a Day 16 "rules manager" UI needs enable/disable state backed
+by the DB rather than the filesystem.
+
+---
+
+## 14. Full Repository Manual Test Runbook (consolidated, run everything)
 
 Everything above (§1–§12) is a detailed, day-by-day reference — what each piece covers, why, and
 its full verification history. This section is the opposite: a single linear checklist to run the
@@ -634,16 +773,16 @@ its full verification history. This section is the opposite: a single linear che
 re-explain anything — it just sequences the commands and points back to the section with the full
 detail/expected output for each step.
 
-### 13.1. Prerequisites checklist
+### 14.1. Prerequisites checklist
 
 - [ ] `backend/venv` exists with deps installed (§0). If not: `cd backend && python -m venv venv && ./venv/Scripts/pip install -r requirements.txt` (see §0 for the two Windows install gotchas).
 - [ ] Repo-root `.env` exists (`cp .env.example .env` if not).
-- [ ] *Optional, for §13.3's Postgres block:* Docker Desktop installed and running (`docker info` succeeds).
-- [ ] *Optional, for §13.3's live-LLM block:* `LLM_API_KEY` set in `.env` (free key: https://aistudio.google.com/apikey).
+- [ ] *Optional, for §14.3's Postgres block:* Docker Desktop installed and running (`docker info` succeeds).
+- [ ] *Optional, for §14.3's live-LLM block:* `LLM_API_KEY` set in `.env` (free key: https://aistudio.google.com/apikey).
 
-Everything in §13.2 runs with **just the first two boxes checked**. §13.3 is gated on Docker/API key and is explicitly optional/skippable.
+Everything in §14.2 runs with **just the first two boxes checked**. §14.3 is gated on Docker/API key and is explicitly optional/skippable.
 
-### 13.2. Core pass — no Docker, no API key required
+### 14.2. Core pass — no Docker, no API key required
 
 Run top to bottom from the repo root unless noted:
 
@@ -652,7 +791,7 @@ cd backend
 
 # 1. Full automated suite — everything Pair 1 + Pair 2 have built so far
 ./venv/Scripts/python.exe -m pytest -v
-# Expect: 90 passed (see §12.2 for the authoritative running total)
+# Expect: 108 passed (see §13.2 for the authoritative running total)
 
 # 2. Start the API server in one shell, then run the rest from a second shell
 ./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
@@ -670,7 +809,7 @@ curl http://127.0.0.1:8000/mitre/techniques
 
 # 5. Ingest happy path (sysmon_demo.evtx fixture)
 curl -F "file=@../data/sample_logs/sysmon_demo.evtx;type=application/octet-stream" http://127.0.0.1:8000/ingest
-# Expect: HTTP 200 + rule_matches/matched_rule_titles fields WITH Postgres running (§3, §13.3)
+# Expect: HTTP 200 + rule_matches/matched_rule_titles fields WITH Postgres running (§3, §14.3)
 # Expect: HTTP 500 (psycopg2 "port 5433 ... Connection refused") WITHOUT Postgres — a known,
 #         non-defect gap, not a new bug. The same request path is separately proven correct
 #         end-to-end against SQLite by the automated suite in step 1.               (§9.3/§12.4)
@@ -692,7 +831,7 @@ cd backend
 # Expect: rendered system message (grounding rules) + human message (sample incident + 1 chunk)  (§10.3)
 ```
 
-### 13.3. Optional extended pass — needs Docker and/or an LLM API key
+### 14.3. Optional extended pass — needs Docker and/or an LLM API key
 
 Only run the parts your environment supports:
 
@@ -705,18 +844,19 @@ cd backend
 ./venv/Scripts/python.exe -m alembic current    # Expect: fa0ac08ab62f (head)
 docker compose exec db psql -U nightowl -d nightowl -c "\dt"   # Expect: 6 tables
 
-# With Postgres now up, re-run step 5 of §13.2 — expect HTTP 200 this time instead of 500.
+# With Postgres now up, re-run step 5 of §14.2 — expect HTTP 200 this time instead of 500.
 
 # Needs LLM_API_KEY set in .env:
 ./venv/Scripts/python.exe -m app.rag.llm_client       # real Gemini call, §10.4
 ./venv/Scripts/python.exe -m app.rag.explain_service  # real retrieve + 2 Gemini calls, §11.3
 ```
 
-### 13.4. Sign-off checklist
+### 14.4. Sign-off checklist
 
 | Component | Section | Result | Notes |
 |---|---|---|---|
-| Full pytest suite (90 tests) | §12.2 | ☐ Pass ☐ Fail | |
+| Full pytest suite (108 tests) | §13.2 | ☐ Pass ☐ Fail | |
+| Alert persistence on rule match | §13.1/§13.4 | ☐ Pass ☐ Fail | |
 | `/health` | §4 | ☐ Pass ☐ Fail | |
 | `GET /mitre/techniques` | §9.4 | ☐ Pass ☐ Fail | |
 | `POST /ingest` happy path | §9.3/§12.4 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | HTTP 500 without Postgres is expected, not a fail |
@@ -730,9 +870,9 @@ docker compose exec db psql -U nightowl -d nightowl -c "\dt"   # Expect: 6 table
 
 Tester: ____________  Date: ____________  Environment (Docker? API key?): ____________
 
-**Scope reminder** (matches "Out of scope" below): this runbook covers everything built through Pair 1 Day 7 (detection engine) and Pair 2 Day 8 (explain_service). It does **not** cover the frontend (none built yet), incident endpoints, the `/explain` HTTP endpoint, chat endpoints, or the formal Testing Report — those are still ahead on the roadmap.
+**Scope reminder** (matches "Out of scope" below): this runbook covers everything built through Pair 1 Day 8 (5 detection rules + alert persistence) and Pair 2 Day 8 (explain_service). It does **not** cover the frontend (none built yet), incident endpoints, the `/explain` HTTP endpoint, chat endpoints, or the formal Testing Report — those are still ahead on the roadmap.
 
-**2026-08-17 run of this exact checklist:** §13.2's entire core pass executed for real — 90/90 tests passed (39.85s), `/health` 200, `/mitre/techniques` 200 (count 858), all 3 ingest error cases HTTP 400 as expected, `rule_loader` and `prompts` module smoke tests both matched their documented output exactly. Ingest happy path initially returned HTTP 500 (Docker Desktop wasn't running yet — same known gap as prior days); §13.3's Docker block was then run for real (Docker Desktop started, `docker compose up -d db`, `alembic upgrade head` → `fa0ac08ab62f (head)`, 6 tables confirmed), after which the happy path returned HTTP 200 as designed — see §3/§9.3/§12.4's "second pass" notes.
+**2026-08-17 run of this exact checklist:** §14.2's entire core pass executed for real — 90/90 tests passed (39.85s), `/health` 200, `/mitre/techniques` 200 (count 858), all 3 ingest error cases HTTP 400 as expected, `rule_loader` and `prompts` module smoke tests both matched their documented output exactly. Ingest happy path initially returned HTTP 500 (Docker Desktop wasn't running yet — same known gap as prior days); §14.3's Docker block was then run for real (Docker Desktop started, `docker compose up -d db`, `alembic upgrade head` → `fa0ac08ab62f (head)`, 6 tables confirmed), after which the happy path returned HTTP 200 as designed — see §3/§9.3/§12.4's "second pass" notes.
 
 A real Gemini key was then added to `.env`, which surfaced one genuine bug (not environmental): `app/core/config.py`'s `Settings` resolved `.env` relative to the process's cwd, but every command here runs from `backend/`, so the key was never actually read regardless of what was in the file. Fixed in `config.py` (resolve `.env` from the module's own file location instead of cwd) — full 90-test suite re-confirmed green after the fix, then both live-Gemini checks (§10.4, §11.3) ran for real and succeeded. **As of 2026-08-17, every check in this runbook has been executed for real and passes** — no known gaps remain except Docker Desktop needing a manual start each session (it doesn't auto-launch on this machine).
 
@@ -759,6 +899,6 @@ A real Gemini key was then added to `.env`, which surfaced one genuine bug (not 
 ## Out of scope for this guide
 
 - Frontend testing (nothing built yet — Days 13+).
-- Sigma detection engine, incident endpoints (Pair 1 Days 7–12 — not yet built; the ingest API itself is done, see §9).
+- Incident grouping/severity scoring, `GET /incidents` endpoints, rules-manager UI (Pair 1 Days 9–12 — not yet built; the ingest API, Sigma detection engine, 5 detection rules, and alert persistence are done, see §9/§12/§13).
 - Explain endpoint, hallucination spot-check, chat endpoints (Pair 2 Days 9–12 — not yet built; retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, and the explain_service retrieve→draft→self-critique pipeline are done, see §8/§9/§10/§11).
 - The formal Testing Report (Volume 3 §9.5) — that's produced during Days 20–21 Integration & Testing, covering unit/integration/E2E coverage and RAG accuracy scoring across the whole system.
