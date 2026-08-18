@@ -57,6 +57,7 @@ with SessionLocal() as db:
         severity="high",
         mitre_technique_ids=["T1059.001"],
         created_at=datetime.now(timezone.utc),
+        host="WIN10-ANALYST",
     )
     db.add(incident)
     db.commit()

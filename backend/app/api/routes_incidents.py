@@ -40,11 +40,20 @@ class ExplainResponse(BaseModel):
 def _incident_to_dict(incident: Incident) -> dict:
     """Map the (currently sparse) Incident model to the loose dict shape
     explain_service.generate_explanation expects -- see its docstring on why
-    that's a dict rather than the ORM model directly."""
+    that's a dict rather than the ORM model directly.
+
+    `technique_id` (singular) stays the *first* technique -- it's what
+    explain_service uses to filter retrieval, which only supports one
+    technique_id. `technique_ids` carries the full list so the LLM prompt
+    context (format_incident_context renders every dict key) still shows
+    every technique on incidents that grouped alerts for more than one.
+    """
     return {
         "description": incident.title,
         "severity": incident.severity,
+        "host": incident.host,
         "technique_id": incident.mitre_technique_ids[0] if incident.mitre_technique_ids else None,
+        "technique_ids": incident.mitre_technique_ids or [],
     }
 
 
@@ -59,6 +68,6 @@ def explain_incident(incident_id: int, db: Session = Depends(get_db)) -> Explain
     return ExplainResponse(
         incident_id=incident_id,
         explanation=result.explanation,
-        recommended_response=extract_recommended_response(result.explanation),
+        recommended_response=extract_recommended_response(result.draft),
         sources=[SourceChunk(**chunk) for chunk in result.chunks],
     )

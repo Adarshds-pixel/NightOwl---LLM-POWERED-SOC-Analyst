@@ -35,6 +35,7 @@ def _insert_incident(SessionLocal, **overrides) -> int:
         "severity": "high",
         "mitre_technique_ids": ["T1059.001"],
         "created_at": datetime.now(timezone.utc),
+        "host": "WIN10-ANALYST",
     }
     defaults.update(overrides)
     with SessionLocal() as db:
@@ -73,6 +74,39 @@ def test_explain_incident_happy_path(api_client, monkeypatch):
 
     assert captured["incident"]["technique_id"] == "T1059.001"
     assert captured["incident"]["severity"] == "high"
+    assert captured["incident"]["host"] == "WIN10-ANALYST"
+    assert captured["incident"]["technique_ids"] == ["T1059.001"]
+
+
+def test_explain_incident_recommended_response_excludes_critique(api_client, monkeypatch):
+    """When self-critique flags something, `explanation` gets a "Confidence
+    check" section appended (see explain_service.generate_explanation) --
+    `recommended_response` must still come from the draft only, not bleed in
+    the appended critique text."""
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    explanation_with_critique = (
+        f"{SAMPLE_EXPLANATION}\n\n**Confidence check:**\n- The host name is not confirmed by sources."
+    )
+
+    monkeypatch.setattr(
+        "app.api.routes_incidents.generate_explanation",
+        lambda incident: ExplanationResult(
+            explanation=explanation_with_critique,
+            draft=SAMPLE_EXPLANATION,
+            critique="- The host name is not confirmed by sources.",
+            chunks=SAMPLE_CHUNKS,
+        ),
+    )
+
+    response = client.post(f"/incidents/{incident_id}/explain")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["explanation"] == explanation_with_critique
+    assert body["recommended_response"] == "- Isolate the host.\n- Capture memory."
+    assert "Confidence check" not in body["recommended_response"]
 
 
 def test_explain_incident_recommended_response_empty_when_heading_missing(api_client, monkeypatch):
