@@ -1078,6 +1078,54 @@ A real Gemini key was then added to `.env`, which surfaced one genuine bug (not 
 
 ---
 
+## 17. Day 9 — Explain endpoint with source attribution (Pair 2 deliverable)
+
+Pair 1's incident grouping (§14, `services/incident_service.py`) landed since this was last verified, so real `Incident` rows now exist in principle — but Docker/Postgres aren't available in this environment (see Troubleshooting), so this section still verifies against manually-inserted rows via an in-memory SQLite substitution, same posture as `explain_service.py` (§11) itself.
+
+### 17.1. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/api/test_incidents_route.py tests/rag/test_prompts.py -v
+```
+
+Covers `api/routes_incidents.py`'s `POST /incidents/{incident_id}/explain`: 404s with the incident id in the message when it doesn't exist; on a real `Incident` row, calls `explain_service.generate_explanation()` (mocked) and returns `explanation` (full text, unchanged from Day 8), `recommended_response` (the `## Recommended next steps` section extracted via the new `prompts.extract_recommended_response()`), and `sources` (the retrieved chunks + similarity scores, unchanged shape from `retriever.retrieve()`). Also covers `extract_recommended_response()` directly: text after the heading, or `""` when the heading is missing or the input is empty. Fully offline — `generate_explanation` is mocked, no network call, no real API key used.
+
+**Expected:** `15 passed` (3 from `test_incidents_route.py` + 12 from `test_prompts.py`, which grew from 9 to 12 with the new `extract_recommended_response` cases).
+**Last verified:** 2026-08-18 — `15 passed in 13.11s`, both files rewritten during this rebase to fit Pair 1's same-day `backend/tests/` reorg (§16): `test_day9_explain_route.py` moved to `tests/api/test_incidents_route.py` and rewritten against the shared `api_client` fixture (`conftest.py`); the `extract_recommended_response` cases landed directly in `tests/rag/test_prompts.py` (git's rename detection carried them through the `test_day7_prompts.py` → `tests/rag/test_prompts.py` move automatically).
+
+### 17.2. Full regression pass
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest -v
+```
+
+**Expected:** `76 passed` against the pre-rebase Day 3–9 base (70 from Day 3–8 + 6 new: 3 route tests + 3 `extract_recommended_response` tests) — this was the count verified before rebasing onto Pair 1's Day 9/10 work; see §16.2 for the combined total after rebase.
+**Last verified:** 2026-08-18 — `76 passed in 34.86s`.
+
+> **Note on this venv:** the very first run after this session's changes hit `ModuleNotFoundError: Could not import module 'PreTrainedModel'` from inside `sentence_transformers` during collection (7 files errored). Re-running immediately after — with no changes — passed cleanly (`76 passed`), and `transformers`/`sentence_transformers` import fine standalone (`python -c "from sentence_transformers import SentenceTransformer"`). Looks like a transient cold-start issue in this venv (first heavy-import pass under pytest's collector), not a real incompatibility — `sentence-transformers==5.7.0`'s declared range (`transformers<6.0.0,>=4.41.0`) is satisfied by the installed `transformers==5.15.0`. Flagging in case it recurs: if a *fresh* venv reproduces this reliably (not just a one-off), it needs a real fix (pin a narrower `transformers` version in `requirements.txt`), not just a re-run.
+
+### 17.3. Manual end-to-end smoke test — real Incident row + real Gemini call
+
+Docker isn't installed in this environment (see Troubleshooting table), so this substitutes an in-memory SQLite DB for Postgres via the same `dependency_overrides[get_db]` pattern the automated route tests use — it exercises the real route code (`routes_incidents.py`'s incident lookup, `_incident_to_dict`, response building) end-to-end with *unmocked* `generate_explanation`, i.e. a real Chroma retrieval + two real Gemini calls (draft + self-critique), just without a real Postgres-backed `Incident` row. Requires a real `LLM_API_KEY` in `.env` (`backend/.env`, gitignored — not `.env.example`; the key previously found pasted into the tracked `.env.example` was treated as compromised and never reused here).
+
+```
+cd backend
+./venv/Scripts/python.exe scripts/smoke_test_explain_route.py
+```
+
+(ad hoc script: builds a `TestClient(app)` against an in-memory SQLite engine, inserts one `Incident` row — title "Suspicious PowerShell execution on WIN10-ANALYST", severity "high", `mitre_technique_ids=["T1059.001"]` — then `POST`s `/incidents/{id}/explain` and prints the JSON response.)
+
+**Expected:** HTTP 200 with a non-empty `explanation` (the same three-section structure as §10.4/§11.3), a `recommended_response` matching the `## Recommended next steps` section of that explanation, and a `sources` list of retrieved KB chunks with `score` fields.
+**Last verified:** 2026-08-18 — HTTP 200. Retrieved 5 real chunks (3 from the `T1059_001_powershell_execution` playbook, 2 from the MITRE `T1059.001` technique doc, scores 0.45–0.56). `explanation` came back correctly structured (What happened / Why it matters / Recommended next steps + a `**Confidence check:**` section). `recommended_response` correctly matched just the "Recommended next steps" text, split out via `extract_recommended_response()`. `sources` contained all 5 chunks with `chunk_id`/`document`/`metadata`/`score`.
+
+Same known finding as §11.3 recurred here (expected — Day 9 deliberately didn't touch critique scoping): the self-critique flagged the claim that the alert occurred on "WIN10-ANALYST" as unsupported by the KB chunks, since that's an incident-specific fact given directly rather than something a MITRE/playbook doc would ever state.
+
+**New finding from this session — free-tier quota is tight enough to hit during normal same-day testing.** Each `/explain` call costs 2 LLM requests (draft + self-critique). Re-running the script twice more the same day (once retried into a transient `503 UNAVAILABLE` "high demand" error, once into `429 RESOURCE_EXHAUSTED`) hit the free tier's `generativelanguage.googleapis.com/generate_content_free_tier_requests` cap — 20 requests/day for `gemini-3.7-flash` (the model `gemini-flash-latest` currently resolves to) on this key. In both failure cases `LLMProviderError` correctly propagated after the existing 2-attempt retry (confirming `llm_client.py`'s retry/error-wrapping behavior works as designed even under real provider failures) — but note `routes_incidents.py` doesn't catch it, so it currently surfaces as an unhandled 500 rather than a clean error response; deferred to Day 12 (`fix: llm call robustness`) per the roadmap, same as noted in the Day 9 plan. Worth remembering for Day 10's hallucination spot-check (10 more real calls) and beyond: space out same-day live-LLM runs, or budget for quota resets, when using a free-tier key for repeated manual verification.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -1093,6 +1141,8 @@ A real Gemini key was then added to `.env`, which surfaced one genuine bug (not 
 | `docker info` fails with a connection/pipe error (Docker *is* installed — `docker --version` works) | Docker Desktop is installed but its daemon isn't running/auto-started | Launch `Docker Desktop.exe` (Start Menu, or `C:\Program Files\Docker\Docker\Docker Desktop.exe`) and wait a few seconds for the daemon; confirmed fixed 2026-08-17 (see §3's resolution note) — it does not auto-start with Windows on this machine, so repeat each session |
 | `POST /ingest` returns HTTP 500 with `psycopg2.OperationalError: connection ... port 5433 failed: Connection refused` in the server log | No live Postgres (Docker not running/installed) — same root cause as the `docker` rows above | Start Postgres per §3, or treat as expected on a machine without Docker; the route's own parse/validate logic is separately confirmed via §9.1's SQLite-backed automated test |
 | `curl -F "file=@/tmp/foo.txt"` fails with `curl: (26) Failed to open/read local data from file/application` | This environment's `curl.exe` (native mingw64 build) only path-translates a POSIX path when it leads the argument; embedded after `-F file=@`, `/tmp/...` is passed through literally and Windows can't resolve it | Use a path relative to your shell's cwd, or `cygpath -w /tmp/foo.txt` to get a Windows path first (see §9.3) |
+| `LLMProviderError: ... 429 RESOURCE_EXHAUSTED ... free_tier_requests` | Free-tier Gemini key hit its daily cap (20 requests/day for `gemini-3.7-flash`) — each `/explain` call costs 2 requests (draft + self-critique) | Wait for the daily quota reset, or use a different free-tier key; don't re-run live-LLM smoke tests (§10.4/§11.3/§12.3) back-to-back in the same session (see §12.3) |
+| `LLMProviderError: ... 503 UNAVAILABLE ... high demand` | Transient Gemini overload, unrelated to this project's code | Retry after a short wait; `llm_client.py` already retries once automatically before raising |
 
 ---
 
@@ -1100,5 +1150,5 @@ A real Gemini key was then added to `.env`, which surfaced one genuine bug (not 
 
 - Frontend testing (nothing built yet — Days 13+).
 - `GET /incidents` list endpoint, MITRE-mapping validation against `mitre/validator.py`, rules-manager UI (Pair 1 Days 11–12 — not yet built; the ingest API, Sigma detection engine, 10 detection rules, alert persistence, incident grouping, and severity scoring are done, see §9/§12/§13/§14/§15).
-- Explain endpoint, hallucination spot-check, chat endpoints (Pair 2 Days 9–12 — this is the teammates' own work, not covered by this session; retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, and the explain_service retrieve→draft→self-critique pipeline are done, see §8/§9/§10/§11).
+- Hallucination spot-check, chat endpoints (Pair 2 Days 10–12 — not yet built; retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, the explain_service retrieve→draft→self-critique pipeline, and the explain endpoint with source attribution + recommended response are done, see §8/§9/§10/§11/§17). The Day 9 explain endpoint (§17) works against manually-inserted `Incident` rows in this guide's checks — Pair 1's incident grouping (§14) exists as of the same rebase, but this session didn't re-verify the explain endpoint against a real grouped incident (Docker/Postgres unavailable in this environment either way).
 - The formal Testing Report (Volume 3 §9.5) — that's produced during Days 20–21 Integration & Testing, covering unit/integration/E2E coverage and RAG accuracy scoring across the whole system.

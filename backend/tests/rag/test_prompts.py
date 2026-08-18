@@ -5,7 +5,12 @@ Pure string/template tests -- no network, no API key needed.
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.rag.prompts import build_explanation_prompt, format_chunks, format_incident_context
+from app.rag.prompts import (
+    build_explanation_prompt,
+    extract_recommended_response,
+    format_chunks,
+    format_incident_context,
+)
 
 SAMPLE_INCIDENT = {
     "host": "WIN10-ANALYST",
@@ -84,3 +89,21 @@ def test_build_explanation_prompt_handles_no_chunks():
     messages = build_explanation_prompt(SAMPLE_INCIDENT, [])
 
     assert "no relevant knowledge base context retrieved" in messages[1].content
+
+
+def test_extract_recommended_response_returns_text_after_heading():
+    explanation = (
+        "## What happened\nSomething happened.\n\n"
+        "## Why it matters\nIt matters.\n\n"
+        "## Recommended next steps\n- Isolate the host.\n- Capture memory."
+    )
+
+    assert extract_recommended_response(explanation) == "- Isolate the host.\n- Capture memory."
+
+
+def test_extract_recommended_response_missing_heading_returns_empty_string():
+    assert extract_recommended_response("## What happened\nSomething happened.") == ""
+
+
+def test_extract_recommended_response_empty_string():
+    assert extract_recommended_response("") == ""

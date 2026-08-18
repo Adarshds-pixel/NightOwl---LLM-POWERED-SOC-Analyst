@@ -25,10 +25,11 @@ guessing (e.g. "the retrieved context does not specify ...").
 them, and briefly explain what that technique means in this context.
 4. Write for a junior analyst: define jargon briefly, keep sentences short, and prefer concrete \
 detail (process names, command lines, hosts) over vague generalities.
-5. Structure your answer in three short sections, each with a heading:
-   - "What happened": a 2-4 sentence plain-English summary of the observed activity.
-   - "Why it matters": the ATT&CK technique(s) involved and the attacker goal they usually serve.
-   - "Recommended next steps": 2-4 concrete triage/response actions, grounded in the retrieved \
+5. Structure your answer in three short sections, each with a markdown heading using EXACTLY \
+this text (needed so callers can split the response programmatically):
+   - "## What happened": a 2-4 sentence plain-English summary of the observed activity.
+   - "## Why it matters": the ATT&CK technique(s) involved and the attacker goal they usually serve.
+   - "## Recommended next steps": 2-4 concrete triage/response actions, grounded in the retrieved \
 playbook context if present, or general SOC best practice if not.
 6. Keep the whole response under ~300 words. Do not repeat the raw input back verbatim."""
 
@@ -78,6 +79,24 @@ def build_explanation_prompt(incident: dict, chunks: list[dict]) -> list[BaseMes
         incident_context=format_incident_context(incident),
         retrieved_context=format_chunks(chunks),
     )
+
+
+RECOMMENDED_STEPS_HEADING = "## Recommended next steps"
+
+
+def extract_recommended_response(explanation: str) -> str:
+    """Pull the "## Recommended next steps" section out of a generated
+    explanation (Day 9: exposed as its own field on the explain endpoint's
+    response, alongside the full explanation).
+
+    Returns "" if the heading isn't present -- e.g. the LLM didn't follow the
+    requested format, or `explanation` is the empty string -- rather than
+    raising, since the full explanation text is still returned either way.
+    """
+    idx = explanation.find(RECOMMENDED_STEPS_HEADING)
+    if idx == -1:
+        return ""
+    return explanation[idx + len(RECOMMENDED_STEPS_HEADING):].strip()
 
 
 if __name__ == "__main__":
