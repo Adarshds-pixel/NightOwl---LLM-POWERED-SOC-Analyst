@@ -15,6 +15,13 @@ for the full writeup of this split.
 A malformed rule file is logged and skipped, not a startup crash, matching
 the existing ingest pipeline's per-record tolerance policy (one bad rule
 shouldn't take down detection for every other rule).
+
+Day 11 adds MITRE technique validation: each rule's parsed `technique_id`
+(Day 9's `_parse_tags`) is checked against the real MITRE ATT&CK dataset
+via `mitre/validator.py`. Unlike a malformed rule file, an unknown/
+deprecated/revoked technique tag is warn-only -- the rule still loads and
+still detects, since the detection logic itself (selections/condition) is
+unaffected by a bad MITRE tag; only the tag is untrustworthy.
 """
 
 import logging
@@ -25,6 +32,8 @@ from pathlib import Path
 import yaml
 from sigma.exceptions import SigmaError
 from sigma.rule import SigmaRule
+
+from app.mitre.validator import validate_technique_id
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +65,25 @@ class LoadedRule:
     # that stays Day 11's job (mitre/validator.py).
     technique_id: str | None = None
     tactics: list[str] = field(default_factory=list)
+
+
+def _validate_technique(path: Path, technique_id: str | None) -> None:
+    """Validates a rule's parsed technique_id against the real MITRE
+    ATT&CK dataset (Day 11) via mitre/validator.py (Pair 2's Day 6
+    scaffold). Warn-only, matching the loader's existing "log + keep
+    going" tolerance policy: an unknown/deprecated/revoked technique tag
+    is a rule-authoring problem worth surfacing, not a reason to drop an
+    otherwise-valid detection rule from the running rule set.
+    """
+    if technique_id is None:
+        return
+    result = validate_technique_id(technique_id)
+    if not result.is_valid:
+        logger.warning("%s: tagged with unknown MITRE technique id %r", path, technique_id)
+    elif result.is_revoked:
+        logger.warning("%s: tagged with revoked MITRE technique id %r", path, technique_id)
+    elif result.is_deprecated:
+        logger.warning("%s: tagged with deprecated MITRE technique id %r", path, technique_id)
 
 
 def _parse_tags(tags: object) -> tuple[str | None, list[str]]:
@@ -113,6 +141,7 @@ def _load_one(path: Path) -> LoadedRule:
 
     logsource = raw.get("logsource") or {}
     technique_id, tactics = _parse_tags(raw.get("tags"))
+    _validate_technique(path, technique_id)
 
     return LoadedRule(
         rule_id=str(sigma_rule.id) if sigma_rule.id else path.stem,

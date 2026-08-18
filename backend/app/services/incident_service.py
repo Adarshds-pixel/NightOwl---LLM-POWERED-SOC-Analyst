@@ -2,6 +2,10 @@
 GROUPING_WINDOW of each other, reuse the same open incident instead of
 creating a new one per alert -- mirrors event_service.py/detection_service.py's
 create/save layering (routes -> services -> models/db).
+
+The `mitre_technique_ids` merge in find_or_create_incident below already
+satisfies Day 11's "roll up technique IDs from an incident's alerts" --
+no separate Day 11 change needed here, see docs/decisions.md.
 """
 
 import logging

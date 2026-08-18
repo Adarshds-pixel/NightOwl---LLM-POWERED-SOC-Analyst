@@ -7,9 +7,17 @@ a 4th category (registry_event, Sysmon Event ID 13), and every rule's
 technique_id/tactics parse correctly from its own `tags:` list
 (rule_loader.py's new tag-extraction, not full MITRE-dataset validation --
 that's still Day 11's job).
+
+Day 11 verification (Pair 1): a rule's parsed technique_id is checked
+against the real MITRE ATT&CK dataset (mitre/validator.py); unknown/
+deprecated/revoked tags are warn-only -- the rule still loads (see
+rule_loader.py's module docstring for why).
 """
 
+import logging
+
 from app.detection import rule_loader
+from app.mitre.validator import TechniqueValidationResult
 
 VALID_RULE = """
 title: Test Rule
@@ -146,3 +154,96 @@ def test_mshta_rule_technique_id_and_tactics():
     rule = next(r for r in rules if r.title == "Suspicious Mshta Execution")
     assert rule.technique_id == "T1218.005"
     assert set(rule.tactics) == {"defense_evasion", "execution"}
+
+
+# -- Day 11: MITRE technique validation -----------------------------------
+
+def _rule_with_technique_tag(tag: str) -> str:
+    return f"""
+title: Test Rule With Technique Tag
+id: 22222222-2222-2222-2222-222222222222
+status: experimental
+tags:
+  - {tag}
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|contains: powershell
+  condition: selection
+level: high
+"""
+
+
+def test_valid_technique_id_loads_without_warning(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(
+        rule_loader,
+        "validate_technique_id",
+        lambda tid: TechniqueValidationResult(technique_id=tid, is_valid=True),
+    )
+    (tmp_path / "valid_tech.yml").write_text(_rule_with_technique_tag("attack.t1059.001"), encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING):
+        rules = rule_loader.load_rules(tmp_path)
+
+    assert len(rules) == 1
+    assert rules[0].technique_id == "T1059.001"
+    assert caplog.records == []
+
+
+def test_unknown_technique_id_warns_but_rule_still_loads(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(
+        rule_loader,
+        "validate_technique_id",
+        lambda tid: TechniqueValidationResult(technique_id=tid, is_valid=False),
+    )
+    (tmp_path / "unknown_tech.yml").write_text(_rule_with_technique_tag("attack.t9999.999"), encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING):
+        rules = rule_loader.load_rules(tmp_path)
+
+    assert len(rules) == 1
+    assert "unknown MITRE technique id" in caplog.text
+    assert "T9999.999" in caplog.text
+
+
+def test_deprecated_technique_id_warns_but_rule_still_loads(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(
+        rule_loader,
+        "validate_technique_id",
+        lambda tid: TechniqueValidationResult(technique_id=tid, is_valid=True, is_deprecated=True),
+    )
+    (tmp_path / "deprecated_tech.yml").write_text(_rule_with_technique_tag("attack.t1086"), encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING):
+        rules = rule_loader.load_rules(tmp_path)
+
+    assert len(rules) == 1
+    assert "deprecated MITRE technique id" in caplog.text
+
+
+def test_revoked_technique_id_warns_but_rule_still_loads(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(
+        rule_loader,
+        "validate_technique_id",
+        lambda tid: TechniqueValidationResult(technique_id=tid, is_valid=True, is_revoked=True),
+    )
+    (tmp_path / "revoked_tech.yml").write_text(_rule_with_technique_tag("attack.t1000"), encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING):
+        rules = rule_loader.load_rules(tmp_path)
+
+    assert len(rules) == 1
+    assert "revoked MITRE technique id" in caplog.text
+
+
+def test_real_seed_rules_all_have_valid_technique_ids():
+    """The 10 real rule files should tag only real, non-deprecated,
+    non-revoked technique ids -- a failure here means a rule's tags: list
+    has a typo, not a validator bug."""
+    rules = rule_loader.load_rules()
+    for rule in rules:
+        result = rule_loader.validate_technique_id(rule.technique_id)
+        assert result.is_valid, f"{rule.title}: unknown technique id {rule.technique_id!r}"
+        assert not result.is_deprecated, f"{rule.title}: deprecated technique id {rule.technique_id!r}"
+        assert not result.is_revoked, f"{rule.title}: revoked technique id {rule.technique_id!r}"
