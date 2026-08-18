@@ -37,7 +37,7 @@ rather than backfilled later.
 
 import logging
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -111,7 +111,7 @@ def ingest_evtx(file: UploadFile = File(...), db: Session = Depends(get_db)) -> 
         rule_matches = 0
         alert_data = []
         incident_ids: list[int] = []
-        matched_at = datetime.now(UTC)
+        matched_at = datetime.now(timezone.utc)
         for event_row, normalized_event in zip(saved, normalized_events, strict=True):
             for match in evaluate_event(normalized_event, rules):
                 rule_matches += 1
