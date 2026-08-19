@@ -1,13 +1,19 @@
-"""LangChain-wired client for the free-tier LLM provider (Google Gemini).
+"""LangChain-wired client for the free-tier LLM provider.
 
-Kept as a thin wrapper around ChatGoogleGenerativeAI, rather than importing
-the SDK directly elsewhere, so:
+Kept as a thin wrapper around the provider-specific LangChain chat client,
+rather than importing an SDK directly elsewhere, so:
   - the rest of the app (explain_service.py, Day 8+) never imports
-    langchain_google_genai directly -- swapping providers later only
-    touches this one file.
+    langchain_google_genai/langchain_groq directly -- swapping providers
+    only touches this one file.
   - failures (missing key, quota, network) come back as one
     LLMProviderError instead of leaking provider-specific exceptions up
     through unrelated call sites.
+
+Provider is picked by `settings.llm_provider` ("gemini", the project
+default, or "groq"). Groq was added for the Day 10 hallucination
+spot-check, where Gemini's 20 req/day free-tier cap can't reliably cover
+10 explain() calls (20 requests) -- both are explicitly allowed free-tier
+providers per the roadmap's Day 2 task.
 """
 
 import logging
@@ -15,6 +21,7 @@ import time
 
 from langchain_core.messages import BaseMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 
 from app.core.config import settings
 
@@ -29,7 +36,7 @@ class LLMProviderError(Exception):
     (missing/invalid API key, network failure, rate limit, empty response)."""
 
 
-_client: ChatGoogleGenerativeAI | None = None
+_client: ChatGoogleGenerativeAI | ChatGroq | None = None
 
 
 def _extract_text(content) -> str:
@@ -52,15 +59,25 @@ def _extract_text(content) -> str:
     return ""
 
 
-def get_llm_client() -> ChatGoogleGenerativeAI:
-    """Return a cached ChatGoogleGenerativeAI instance.
+def get_llm_client() -> ChatGoogleGenerativeAI | ChatGroq:
+    """Return a cached chat client for the configured provider
+    (`settings.llm_provider`: "gemini" or "groq").
 
-    Raises LLMProviderError immediately if no API key is configured, rather
-    than waiting for the SDK to fail with an ambiguous auth error deep in a
-    generate() call.
+    Raises LLMProviderError immediately if no API key is configured for the
+    selected provider, rather than waiting for the SDK to fail with an
+    ambiguous auth error deep in a generate() call.
     """
     global _client
     if _client is not None:
+        return _client
+
+    if settings.llm_provider == "groq":
+        if not settings.groq_api_key:
+            raise LLMProviderError(
+                "GROQ_API_KEY is not set -- add a free Groq API key from "
+                "https://console.groq.com/keys, or set LLM_PROVIDER=gemini"
+            )
+        _client = ChatGroq(model=settings.groq_model, api_key=settings.groq_api_key)
         return _client
 
     if not settings.llm_api_key:

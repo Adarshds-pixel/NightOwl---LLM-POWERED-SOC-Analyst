@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     # docs/decisions.md. Override via LLM_MODEL in .env to pin a version.
     llm_model: str = "gemini-flash-latest"
 
+    # Which provider llm_client.py builds: "gemini" (default) or "groq".
+    # Added for the Day 10 hallucination spot-check, where Gemini's 20
+    # req/day free-tier cap can't reliably cover 10 explain() calls (20
+    # requests). Groq is also an explicitly allowed free-tier provider per
+    # the roadmap's Day 2 task. Gemini stays the project default.
+    llm_provider: str = "gemini"
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
+
 
 @lru_cache
 def get_settings() -> Settings:
