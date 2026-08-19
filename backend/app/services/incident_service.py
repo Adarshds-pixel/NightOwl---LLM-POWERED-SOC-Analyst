@@ -6,6 +6,11 @@ create/save layering (routes -> services -> models/db).
 The `mitre_technique_ids` merge in find_or_create_incident below already
 satisfies Day 11's "roll up technique IDs from an incident's alerts" --
 no separate Day 11 change needed here, see docs/decisions.md.
+
+Day 12 adds the two read paths behind `GET /incidents` and
+`GET /incidents/{id}` (api/routes_incidents.py): `list_incidents` (filtered,
+newest first) and `get_incident_alerts_with_events` (an incident's alerts
+joined to their originating event, for the detail view).
 """
 
 import logging
@@ -15,6 +20,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.detection.engine import RuleMatch
+from app.models.alert import Alert
+from app.models.event import Event
 from app.models.incident import Incident
 from app.services import severity_service
 
@@ -58,3 +65,41 @@ def find_or_create_incident(db: Session, host: str, matched_at: datetime, match:
     db.flush()  # assign incident.id without committing the whole transaction yet
     logger.info("created incident %d for host %s", incident.id, host)
     return incident
+
+
+def list_incidents(
+    db: Session,
+    severity: str | None = None,
+    status: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> list[Incident]:
+    """Newest-first incident list for `GET /incidents`, filtered by any
+    combination of severity/status/created_at date range. Every filter is
+    optional and additive (AND'd together) -- omitting all of them returns
+    every incident.
+    """
+    stmt = select(Incident).order_by(Incident.created_at.desc())
+    if severity is not None:
+        stmt = stmt.where(Incident.severity == severity)
+    if status is not None:
+        stmt = stmt.where(Incident.status == status)
+    if start_date is not None:
+        stmt = stmt.where(Incident.created_at >= start_date)
+    if end_date is not None:
+        stmt = stmt.where(Incident.created_at <= end_date)
+    return list(db.scalars(stmt))
+
+
+def get_incident_alerts_with_events(db: Session, incident_id: int) -> list[tuple[Alert, Event]]:
+    """An incident's alerts joined to the event each one fired on, for
+    `GET /incidents/{id}`'s detail view -- avoids a separate query per alert
+    to fetch its event.
+    """
+    stmt = (
+        select(Alert, Event)
+        .join(Event, Alert.event_id == Event.id)
+        .where(Alert.incident_id == incident_id)
+        .order_by(Alert.matched_at)
+    )
+    return [(alert, event) for alert, event in db.execute(stmt)]
