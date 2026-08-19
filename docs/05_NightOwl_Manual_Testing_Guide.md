@@ -1356,6 +1356,7 @@ cd backend
 
 **Expected:** `181 passed` (up from Day 12's `169` — see §19.3 — +12 new: 4 rag-service + 5 prompt-template + 3 route).
 **Last verified:** 2026-08-19 — `181 passed in 10.77s`.
+**Re-verified 2026-08-19 (independent full-repo recheck, fresh `git fetch` confirmed `main` in sync with `origin/main`, no unpulled commits):** `181 passed in 18.33s`, zero failures — guide content confirmed current against HEAD (`2cdccd6`). Required one venv fix first: `langchain-groq` (added to `requirements.txt` by the Day 10 Groq commit, `9cf6913`) wasn't yet installed in `backend/venv` — see Troubleshooting.
 
 ### 20.3. Manual check — in-memory SQLite substitution (no Docker needed)
 
@@ -1455,6 +1456,7 @@ This environment's git-bash `curl` only path-translates a POSIX path when it *le
 | `curl -F "file=@/tmp/foo.txt"` fails with `curl: (26) Failed to open/read local data from file/application` | This environment's `curl.exe` (native mingw64 build) only path-translates a POSIX path when it leads the argument; embedded after `-F file=@`, `/tmp/...` is passed through literally and Windows can't resolve it | Use a path relative to your shell's cwd, or `cygpath -w /tmp/foo.txt` to get a Windows path first (see §9.3) |
 | `LLMProviderError: ... 429 RESOURCE_EXHAUSTED ... free_tier_requests` | Free-tier Gemini key hit its daily cap (20 requests/day for `gemini-3.7-flash`) — each `/explain` call costs 2 requests (draft + self-critique) | Wait for the daily quota reset, or use a different free-tier key; don't re-run live-LLM smoke tests (§10.4/§11.3/§12.3) back-to-back in the same session (see §12.3) |
 | `LLMProviderError: ... 503 UNAVAILABLE ... high demand` | Transient Gemini overload, unrelated to this project's code | Retry after a short wait; `llm_client.py` already retries once automatically before raising |
+| `pytest` collection-errors with `ModuleNotFoundError: No module named 'langchain_groq'` (venv otherwise already set up) | `langchain-groq` was added to `requirements.txt` by the Day 10 Groq commit (`9cf6913`) after this venv was originally created, and the venv was never re-synced | `./venv/Scripts/python.exe -m pip install -r requirements.txt` — re-run this after every pull, not just on first setup (confirmed 2026-08-19) |
 
 ---
 
