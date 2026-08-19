@@ -1,6 +1,6 @@
 # NightOwl Handbook — Volume 5: Manual Testing Guide
 
-**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §14 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps. **Pair 1 Day 8** (5 Sigma rules across process-creation/network-connection/file-creation + `alerts` table persistence, `app/services/detection_service.py`) was added and fully verified — including live persistence against real Postgres — on **2026-08-18** (§13). **Pair 1 Day 9** (5 more rules — 10 total, adding a registry category — + incident grouping, `app/services/incident_service.py`) and **Pair 1 Day 10** (severity scoring, `app/services/severity_service.py`, plus the roadmap-specified `tests/test_detection.py`) landed together and were fully verified — including live incident grouping/severity scoring against real Postgres — on **2026-08-19** (§14/§15). Pair 2's own Day 9/10 (explain endpoint, hallucination spot-check) is the teammates' responsibility and is intentionally not covered by this guide.
+**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §14 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps. **Pair 1 Day 8** (5 Sigma rules across process-creation/network-connection/file-creation + `alerts` table persistence, `app/services/detection_service.py`) was added and fully verified — including live persistence against real Postgres — on **2026-08-18** (§13). **Pair 1 Day 9** (5 more rules — 10 total, adding a registry category — + incident grouping, `app/services/incident_service.py`) and **Pair 1 Day 10** (severity scoring, `app/services/severity_service.py`, plus the roadmap-specified `tests/test_detection.py`) landed together and were fully verified — including live incident grouping/severity scoring against real Postgres — on **2026-08-19** (§14/§15). Pair 2's own Day 9/10 (explain endpoint, hallucination spot-check) is the teammates' responsibility and is intentionally not covered by this guide. **Pair 1 Day 11** (MITRE technique validation for every rule's tag, warn-only on unknown/deprecated/revoked ids, `app/mitre/validator.py`) and **Pair 1 Day 12** (`GET /incidents` + `GET /incidents/{id}`, 5 more rules — 15 total, covering credential access + lateral movement — consistent JSON error handling for unhandled exceptions, structured JSON logging, and an end-to-end integration test — **Milestone: Backend + Detection core complete**) were fully verified, including a Postman-based manual pass covering every endpoint, on **2026-08-19** (§18/§19/§20).
 
 This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on the date noted next to it — see the "Last verified" line under each step.
 
@@ -984,8 +984,8 @@ cd backend
 
 # 1. Full automated suite — everything Pair 1 + Pair 2 have built so far
 ./venv/Scripts/python.exe -m pytest -v
-# Expect: 145 passed (see §14.2/§15.2 for the authoritative running total, and their
-#         2026-08-19 notes on the same-day backend/tests/ reorg that landed this count)
+# Expect: 169 passed (see §19.3 for Day 12's confirmation; §14.2/§15.2 for the Day 9/10
+#         running total this grew from, and their notes on the same-day backend/tests/ reorg)
 
 # 2. Start the API server in one shell, then run the rest from a second shell
 ./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
@@ -1013,13 +1013,22 @@ curl -F "file=@<a-non-evtx-file>;type=text/plain" http://127.0.0.1:8000/ingest
 curl -F "file=@<a-0-byte-file>;type=application/octet-stream" http://127.0.0.1:8000/ingest
 curl -F "file=@<a-file-with-garbage-bytes>;type=application/octet-stream" http://127.0.0.1:8000/ingest
 # Expect: all three HTTP 400, with the three specific `detail` messages in §9.3
+
+# 7. Incident list + detail endpoints (Day 12)
+curl http://127.0.0.1:8000/incidents
+# Expect: HTTP 200 + {"incidents":[...],"count":N} WITH Postgres running (§19.7)
+# Expect: HTTP 500 {"detail":"internal server error"} WITHOUT Postgres — the new consistent
+#         JSON error handler (§19.6), not a raw traceback like pre-Day-12 unhandled errors
+
+curl http://127.0.0.1:8000/incidents/999999
+# Expect: HTTP 404, {"detail":"incident 999999 not found"} WITH Postgres running (§19.7)
 ```
 
 Back in the first shell, stop the server (Ctrl+C), then run the two no-server, no-key module smoke tests:
 ```
 cd backend
 ./venv/Scripts/python.exe -m app.detection.rule_loader
-# Expect: 10 lines across 4 categories (id, level, title, category)                (§14.3)
+# Expect: 15 lines across 4 categories (id, level, title, category)                (§19.4)
 
 ./venv/Scripts/python.exe -m app.rag.prompts
 # Expect: rendered system message (grounding rules) + human message (sample incident + 1 chunk)  (§10.3)
@@ -1039,6 +1048,9 @@ cd backend
 docker compose exec db psql -U nightowl -d nightowl -c "\dt"   # Expect: 6 tables
 
 # With Postgres now up, re-run step 5 of §16.2 — expect HTTP 200 this time instead of 500.
+# Also re-run step 7 (GET /incidents, GET /incidents/999999) — expect HTTP 200/404 instead
+# of the no-Postgres HTTP 500, and GET /incidents/<a real id from step 5's response> for the
+# full detail view (alerts + events + resolved MITRE techniques).                   (§19.7)
 
 # Needs LLM_API_KEY set in .env:
 ./venv/Scripts/python.exe -m app.rag.llm_client       # real Gemini call, §10.4
@@ -1049,16 +1061,24 @@ docker compose exec db psql -U nightowl -d nightowl -c "\dt"   # Expect: 6 table
 
 | Component | Section | Result | Notes |
 |---|---|---|---|
-| Full pytest suite (145 tests) | §14.2/§15.2 | ☐ Pass ☐ Fail | |
+| Full pytest suite (169 tests) | §19.3 | ☐ Pass ☐ Fail | |
 | Alert persistence on rule match | §13.1/§13.4 | ☐ Pass ☐ Fail | |
 | Incident grouping (same host+window) | §14.1/§14.4 | ☐ Pass ☐ Fail | |
 | Severity scoring (base level + tactic weight) | §15.1/§15.4 | ☐ Pass ☐ Fail | |
+| MITRE technique validation (warn-only) | §18 | ☐ Pass ☐ Fail | |
 | `/health` | §4 | ☐ Pass ☐ Fail | |
 | `GET /mitre/techniques` | §9.4 | ☐ Pass ☐ Fail | |
 | `POST /ingest` happy path | §9.3/§12.4 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | HTTP 500 without Postgres is expected, not a fail |
 | `POST /ingest` error cases (×3) | §9.3 | ☐ Pass ☐ Fail | |
-| `rule_loader` module smoke (10 rules) | §14.3 | ☐ Pass ☐ Fail | |
+| `rule_loader` module smoke (15 rules) | §19.4 | ☐ Pass ☐ Fail | |
 | `prompts` module smoke | §10.3 | ☐ Pass ☐ Fail | |
+| `GET /incidents` (+ filters) | §19.7 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | HTTP 500 without Postgres is expected (§19.6), not a fail |
+| `GET /incidents/{id}` (alerts+events+techniques) | §19.7 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | |
+| `GET /incidents/{id}` 404 case | §19.6/§19.7 | ☐ Pass ☐ Fail | |
+| Structured JSON logging | §19.5 | ☐ Pass ☐ Fail | |
+| Consistent JSON error handling (500s) | §19.6 | ☐ Pass ☐ Fail | |
+| `tests/test_ingest_flow.py` e2e (real rules, real MITRE lookup) | §19.2 | ☐ Pass ☐ Fail | |
+| Postman collection walkthrough (all endpoints) | §20 | ☐ Pass ☐ Fail | |
 | Postgres/Alembic (6 tables) | §3 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | |
 | Live Gemini call (`llm_client`) | §10.4 | ☐ Pass ☐ Fail ☐ Skipped (no API key) | |
 | Live explain_service (2 Gemini calls) | §11.3 | ☐ Pass ☐ Fail ☐ Skipped (no API key) | |
@@ -1066,7 +1086,7 @@ docker compose exec db psql -U nightowl -d nightowl -c "\dt"   # Expect: 6 table
 
 Tester: ____________  Date: ____________  Environment (Docker? API key?): ____________
 
-**Scope reminder** (matches "Out of scope" below): this runbook covers everything built through Pair 1 Day 10 (10 detection rules, incident grouping, severity scoring) and Pair 2 Day 8 (explain_service). It does **not** cover Pair 2's Day 9/10 (explain endpoint with source attribution, hallucination spot-check — teammates' own work, not covered by this session), the frontend (none built yet), the `GET /incidents` list endpoint, chat endpoints, or the formal Testing Report — those are still ahead on the roadmap.
+**Scope reminder** (matches "Out of scope" below): this runbook covers everything built through Pair 1 Day 12 (15 detection rules, incident grouping, severity scoring, MITRE technique validation, `GET /incidents`/`GET /incidents/{id}`, consistent error handling, structured JSON logging, e2e integration test — **Milestone: Backend + Detection core complete**) and Pair 2 Day 8 (explain_service). It does **not** cover Pair 2's Day 9–12 (explain endpoint with source attribution, hallucination spot-check, chat endpoints, LLM robustness — teammates' own work, not covered by this session), the frontend (none built yet), or the formal Testing Report — those are still ahead on the roadmap.
 
 **2026-08-17 run of this exact checklist:** §16.2's entire core pass executed for real — 90/90 tests passed (39.85s), `/health` 200, `/mitre/techniques` 200 (count 858), all 3 ingest error cases HTTP 400 as expected, `rule_loader` and `prompts` module smoke tests both matched their documented output exactly. Ingest happy path initially returned HTTP 500 (Docker Desktop wasn't running yet — same known gap as prior days); §16.3's Docker block was then run for real (Docker Desktop started, `docker compose up -d db`, `alembic upgrade head` → `fa0ac08ab62f (head)`, 6 tables confirmed), after which the happy path returned HTTP 200 as designed — see §3/§9.3/§12.4's "second pass" notes.
 
@@ -1075,6 +1095,8 @@ Tester: ____________  Date: ____________  Environment (Docker? API key?): ______
 **2026-08-19, later same day — `backend/tests/` reorg:** user requested cleaning up the test suite structure (24 files, all flat and `test_dayN_*`-named, didn't mirror `backend/app/`'s package layout). Reorganized into subpackages (`api/`, `detection/`, `services/`, `ingestion/`, `mitre/`, `rag/`) matching `app/`'s layout, dropped all `dayN` prefixes, added a shared `conftest.py` fixture (`api_client`) removing duplicated `TestClient`+SQLite boilerplate from 4 files, and merged/deleted a few files with confirmed-redundant or combinable coverage (see `docs/decisions.md`). Full suite re-verified after every step: **`145 passed`** (155 − 10 intentionally-removed redundant tests, zero coverage lost). See §16.2 for the current command.
 
 A real Gemini key was then added to `.env`, which surfaced one genuine bug (not environmental): `app/core/config.py`'s `Settings` resolved `.env` relative to the process's cwd, but every command here runs from `backend/`, so the key was never actually read regardless of what was in the file. Fixed in `config.py` (resolve `.env` from the module's own file location instead of cwd) — full 90-test suite re-confirmed green after the fix, then both live-Gemini checks (§10.4, §11.3) ran for real and succeeded. **As of 2026-08-17, every check in this runbook has been executed for real and passes** — no known gaps remain except Docker Desktop needing a manual start each session (it doesn't auto-launch on this machine).
+
+**2026-08-19 update — Day 11/12 landed, guide extended through Day 12, Postman collection added:** Pair 1's Day 11 (MITRE technique validation, warn-only) and Day 12 (`GET /incidents`/`GET /incidents/{id}`, 5 more rules — 15 total — consistent JSON error handling, structured JSON logging, `tests/test_ingest_flow.py`) are covered in the new §18/§19 below — **Milestone: Backend + Detection core complete**. Full suite re-verified for real this session: `169 passed in 14.58s` (up from 145 — see §19.3). The no-Postgres path was verified for real first: `GET /incidents` and `POST /ingest` both returned a clean `HTTP 500 {"detail":"internal server error"}` (§19.6), confirming the new `core/errors.py` handler works, replacing what used to be a raw, unhandled traceback. Docker Desktop was then started and §19.7's full live-Postgres flow was also completed for real the same day: `docker compose up -d db`, `alembic upgrade head` (`6b1a55c7f800 (head)`), then the real `GET /incidents`/`GET /incidents/{id}`/severity-filter/404 flow against a real incident persisted in the Docker volume from an earlier session — every read path confirmed working end to end, no gaps left open in §19. A new §20 documents a real, importable Postman collection (`docs/postman/NightOwl.postman_collection.json` + `.postman_environment.json`) covering every endpoint through Day 12 — added specifically so the multipart `/ingest` upload no longer needs this environment's git-bash `curl` workaround (see the Troubleshooting table).
 
 ---
 
@@ -1126,6 +1148,221 @@ Same known finding as §11.3 recurred here (expected — Day 9 deliberately didn
 
 ---
 
+## 18. Day 11 — MITRE technique mapping (Pair 1 deliverable)
+
+Every rule's parsed `technique_id` (Day 9's tag extraction) is now checked against the real MITRE ATT&CK dataset via `app/mitre/validator.py`. Unlike a malformed rule file, an unknown/deprecated/revoked technique tag is **warn-only** — the rule still loads and still detects, since the tag being untrustworthy doesn't make the `detection`/`condition` logic wrong. See `docs/decisions.md` for the full reasoning. `app/detection/rule_loader.py`'s new `_validate_technique()` calls this right after tag parsing, logging one `logger.warning` per rule with a bad tag (distinct messages for unknown/deprecated/revoked).
+
+### 18.1. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/mitre/test_validator.py tests/detection/test_rule_loader.py -v
+```
+
+Covers `validate_technique_id`/`validate_technique_ids` against a fake lookup table (valid/deprecated/revoked/unknown cases — 4 tests), plus `rule_loader.py`'s own technique-validation tests (a valid id loads with no warning; unknown/deprecated/revoked ids each warn but the rule still loads; every real seed rule's technique id is confirmed valid against the real dataset — these 18 tests also cover Day 7/9's rule-loading/tag-parsing basics, folded into the same file per the `backend/tests/` reorg, `docs/decisions.md`).
+
+**Expected:** `23 passed` (4 + 18).
+**Last verified:** 2026-08-19 — `23 passed in 1.08s`.
+
+### 18.2. Manual smoke — warn-only behavior on a bad technique id
+
+No real rule file needs editing to see this — call the validator/loader functions directly:
+
+```
+cd backend
+./venv/Scripts/python.exe -c "
+from app.mitre.validator import validate_technique_id
+print(validate_technique_id('T1059.001'))
+print(validate_technique_id('T9999.999'))
+"
+```
+
+**Expected:** the first line is valid (`is_valid=True`, not deprecated/revoked); the second is `is_valid=False` (no such technique in the real ATT&CK dataset).
+**Last verified:** 2026-08-19 —
+```
+TechniqueValidationResult(technique_id='T1059.001', is_valid=True, is_deprecated=False, is_revoked=False)
+TechniqueValidationResult(technique_id='T9999.999', is_valid=False, is_deprecated=False, is_revoked=False)
+```
+
+To see the actual warning log line `rule_loader.py` emits (JSON-formatted, since Day 12's `configure_logging()` — see §19.5):
+```
+cd backend
+./venv/Scripts/python.exe -c "
+from app.core.logging import configure_logging
+configure_logging()
+from app.detection.rule_loader import _validate_technique
+from pathlib import Path
+_validate_technique(Path('example_rule.yml'), 'T9999.999')
+"
+```
+**Expected:** one JSON warning line naming the bogus technique id.
+**Last verified:** 2026-08-19 —
+```json
+{"timestamp": "2026-08-19T12:06:09+0530", "level": "WARNING", "logger": "app.detection.rule_loader", "message": "example_rule.yml: tagged with unknown MITRE technique id 'T9999.999'"}
+```
+
+### 18.3. Known v1 limitations
+
+- Warn-only means a rule file with a typo'd or since-revoked technique tag stays in the running rule set indefinitely — nothing currently surfaces these warnings anywhere but the server log (no `GET /rules` health-check endpoint yet).
+- All 15 real seed rules currently in `detection/rules/` have valid, non-deprecated, non-revoked technique ids (confirmed by `test_real_seed_rules_all_have_valid_technique_ids`) — the warn-only path has only been exercised against synthetic ids in tests/this smoke, not a real bad tag in the wild.
+
+---
+
+## 19. Day 12 — Incident endpoints + hardening + sign-off (Pair 1 deliverable)
+
+**Milestone: Backend + Detection core complete.** Four independent pieces land together: read endpoints for the incidents Day 9's grouping has been producing all along, the rule set's final push to 15 (credential access + lateral movement), a consistent JSON shape for unhandled-exception 500s across every route, and structured JSON logging — plus an end-to-end integration test tying the whole pipeline together.
+
+### 19.1. What changed
+
+- **`GET /incidents`** (filters: `severity`, `status`, `start_date`, `end_date`, newest first) and **`GET /incidents/{id}`** (alerts + each alert's originating event + resolved MITRE technique name/tactics) — `app/api/routes_incidents.py`, backed by two new `app/services/incident_service.py` functions (`list_incidents`, `get_incident_alerts_with_events`).
+- **5 more rules → 15 total** (`app/detection/rules/*.yml`): `lsass_memory_dump.yml` (T1003.001), `sam_registry_hive_dump.yml` (T1003.002), `rdp_lateral_movement.yml` (T1021.001), `admin_share_lateral_movement.yml` (T1021.002), `winrm_lateral_movement.yml` (T1021.006) — the first rules tagged `credential_access`/`lateral_movement`. See `docs/decisions.md` for why each fits the engine's existing categories with no engine change needed.
+- **`app/core/errors.py`** — `install_exception_handlers()` registers a JSON 500 handler for any unhandled exception (Starlette's default was plain text), plus a shared `not_found()` 404 helper now used by both `GET /incidents/{id}` and the existing `explain_incident` route.
+- **`app/core/logging.py`** — stdlib-only `JsonFormatter` + `configure_logging()`, wired into `app/main.py` before the app is constructed. No new dependency.
+- **`tests/test_ingest_flow.py`** — the one test in the suite that runs the *real* 15-rule set (not a `FAKE_RULE`) end to end: ingest → detect → severity-score → group into an incident → `GET /incidents` → `GET /incidents/{id}` → real MITRE technique resolution from the locally cached dataset.
+
+### 19.2. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/detection/test_rule_loader.py tests/detection/test_rules_matrix.py tests/api/test_incidents_route.py tests/test_ingest_flow.py -v
+```
+
+Covers: `detection/test_rule_loader.py`'s rule-loading + Day 11 technique-validation tests (18 — see §18.1, which also pulls in `mitre/test_validator.py`'s own 4 for a combined 23), the full 15-rule fire/no-fire matrix (31 — 1 coverage-count check + 15 fire + 15 no-fire), the existing `explain` route tests (4, now using the shared `not_found()` helper), and the new e2e test (2 — happy path + 404 case).
+
+**Expected:** `55 passed`.
+**Last verified:** 2026-08-19 — `55 passed in 2.15s`.
+
+### 19.3. Full regression pass
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest -v
+```
+
+**Expected:** `169 passed` (up from Day 10's `145` — see §16.2).
+**Last verified:** 2026-08-19 — `169 passed in 14.58s`.
+
+### 19.4. Manual smoke — rule loading (no DB needed)
+
+```
+cd backend
+./venv/Scripts/python.exe -m app.detection.rule_loader
+```
+
+**Expected:** 15 lines across 4 categories (`process_creation` ×9, `registry_event` ×2, `network_connection` ×3, `file_event` ×1).
+**Last verified:** 2026-08-19 — all 15 rules printed (including the 5 new ones: `Lateral Movement via Windows Admin Share`, `LSASS Memory Dump`, `RDP Lateral Movement`, `SAM/SYSTEM/SECURITY Registry Hive Dump`, `WinRM Lateral Movement`), categories as expected.
+
+### 19.5. Manual smoke — structured JSON logging
+
+```
+cd backend
+./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+```
+In another shell:
+```
+curl http://127.0.0.1:8000/health
+```
+
+Uvicorn's own request-access line (`INFO: 127.0.0.1:... "GET /health HTTP/1.1" 200 OK`) is *not* JSON — that's uvicorn's own `uvicorn.access` logger, which has its own handler and doesn't route through `configure_logging()`'s root handler (expected, not a bug — `configure_logging()` targets this project's own `app.*` loggers). To see a real JSON line from an `app.*` logger, trigger one that actually calls `logger.warning`/`.info`/`.exception` — §19.6 below does exactly that via the new error handler.
+**Last verified:** 2026-08-19 — confirmed `/health` still returns `{"status":"ok"}` under the new logging setup with no regression; the JSON-formatted line is captured in §19.6.
+
+### 19.6. Manual smoke — consistent error handling (no Docker needed)
+
+The clearest way to see the Day 12 fix is to hit a DB-touching route **without Postgres running** — before Day 12 this surfaced as a raw, unhandled traceback; now `core/errors.py`'s handler catches it and returns clean JSON.
+
+With the server from §19.5 still running (Docker/Postgres left off on purpose for this check):
+```
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:8000/incidents
+curl -s http://127.0.0.1:8000/incidents
+```
+
+**Expected:** `HTTP 500`, body `{"detail":"internal server error"}` — not a raw psycopg2/SQLAlchemy traceback.
+**Last verified:** 2026-08-19 — exactly as expected, for both `GET /incidents` and `POST /ingest` (same underlying DB-connection failure). The server log shows the JSON-formatted error line this produced (traceback truncated here):
+```json
+{"timestamp": "2026-08-19T12:07:12+0530", "level": "ERROR", "logger": "app.core.errors", "message": "unhandled error on GET /incidents", "exc_info": "Traceback (most recent call last):\n ... sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at \"localhost\" ... port 5433 failed: Connection refused ..."}
+```
+This confirms both halves of the Day 12 fix at once: the *response* the client sees is clean/consistent JSON, and the *server-side log* of the same failure is structured JSON (§19.5), not an unformatted stack trace dumped to stderr.
+
+Stop the server afterward the same way as §4 (Ctrl+C, or `netstat -ano | findstr :8000` + `taskkill /F /PID <pid>` on Windows).
+
+### 19.7. Live server + Postgres verification — full incident flow
+
+```
+cd <repo root>
+docker compose up -d db
+docker compose exec db pg_isready -U nightowl
+cd backend
+./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+```
+In another shell:
+```
+curl -F "file=@../data/sample_logs/sysmon_demo.evtx;type=application/octet-stream" http://127.0.0.1:8000/ingest
+curl http://127.0.0.1:8000/incidents
+curl http://127.0.0.1:8000/incidents?severity=high
+curl http://127.0.0.1:8000/incidents/<id-from-the-list-response>
+curl http://127.0.0.1:8000/incidents/999999
+```
+
+**Expected:** the ingest happy path now also returns `incident_ids`; `GET /incidents` returns `{"incidents":[...],"count":N}`; the severity filter narrows the list; the detail call returns the incident with its `alerts` (each nesting its `event`) and resolved `techniques`; the unknown id returns `HTTP 404 {"detail":"incident 999999 not found"}`.
+
+**Last verified:** 2026-08-19, later same day — Docker Desktop was started (`docker ps` had failed earlier in this session, same "dockerDesktopLinuxEngine" gap noted below), `docker compose up -d db` + `pg_isready` succeeded, `alembic upgrade head` applied cleanly (`alembic current` → `6b1a55c7f800 (head)`), and `\dt` confirmed all 6 tables. `sysmon_demo.evtx` still doesn't contain a matching event for any of the 15 rules (same non-defect as §9.3/§12.4/§13.4 — `rule_matches: 0`), but the named Docker volume had persisted one real incident from an earlier session's live demo (§14.4's `DEMO-HOST-D9` incident), which was enough to exercise every read path for real:
+
+```json
+GET /incidents
+{"incidents":[{"id":1,"title":"Suspicious Encoded PowerShell Command on DEMO-HOST-D9","status":"open","severity":"critical","host":"DEMO-HOST-D9","mitre_technique_ids":["T1059.001","T1053.005"],"created_at":"2026-08-17T05:13:16.311996Z"}],"count":1}
+
+GET /incidents?severity=critical   -> same 1 incident, count:1
+GET /incidents?severity=low        -> {"incidents":[],"count":0}   (filter correctly excludes it)
+
+GET /incidents/1
+{"id":1,"title":"Suspicious Encoded PowerShell Command on DEMO-HOST-D9","status":"open","severity":"critical","host":"DEMO-HOST-D9","created_at":"2026-08-17T05:13:16.311996Z","mitre_technique_ids":["T1059.001","T1053.005"],"techniques":[{"id":"T1059.001","name":"PowerShell","tactics":["execution"]},{"id":"T1053.005","name":"Scheduled Task","tactics":["execution","persistence","privilege-escalation"]}],"alerts":[{"id":2,"rule_id":"5b1f3a2e-6c1e-4f6a-9b8e-2f8b1a9d6e11","matched_at":"2026-08-17T05:13:16.311996Z","severity":"critical","event":{"id":19,"host":"DEMO-HOST-D9","timestamp":"2026-08-19T12:00:00Z","event_id":1,"process":"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe","command_line":"powershell.exe -EncodedCommand aQBlAHgA","user":null}},{"id":3,"rule_id":"3c7b9e42-6d1a-4f8c-b2e5-9a4d7c1f6b38","matched_at":"2026-08-17T05:13:16.311996Z","severity":"high","event":{"id":20,"host":"DEMO-HOST-D9","timestamp":"2026-08-19T12:00:00Z","event_id":1,"process":"C:\\Windows\\System32\\schtasks.exe","command_line":"schtasks.exe /create /tn Updater /tr payload.exe /sc onlogon","user":null}}]}
+
+GET /incidents/999999
+HTTP 404  {"detail":"incident 999999 not found"}
+```
+
+Confirms, for real: filters correctly include/exclude by severity; the detail response nests both alerts with their originating events (correct `process`/`command_line`/`host` per event, correct `rule_id` per alert); both MITRE technique ids resolved to real names/tactics from the locally cached dataset (`T1053.005`'s 3-tactic list included), not just the raw ids already visible in `mitre_technique_ids`; and the 404 path works identically to the no-Postgres case (§19.6) except with the correct status code now that the DB is actually reachable. Server stopped afterward (found the listening PID via `Get-NetTCPConnection -LocalPort 8000`, `Stop-Process -Force`) — Postgres container left running (data persists in the named volume for the next session, same as every prior Docker-gated check in this guide).
+
+### 19.8. Known v1 limitations
+
+- `GET /incidents` filters are exact-match/range only — no free-text search, no pagination (fine at current data volumes, revisit if a demo dataset grows large).
+- The unhandled-exception JSON handler returns a single generic `"internal server error"` message for every unhandled exception type — deliberately generic so internal details (stack traces, DB connection strings) never leak to a client; full detail is only in the structured server-side log (§19.6).
+- `core/logging.py`'s JSON formatter covers this project's own loggers; uvicorn's built-in access/error loggers keep their own default (non-JSON) format, since overriding those isn't part of what "structured JSON logging" was asking for here (see §19.5).
+
+---
+
+## 20. Postman Collection — All Endpoints (Day 3–12)
+
+A real, importable Postman collection now lives at `docs/postman/NightOwl.postman_collection.json`, with a matching environment at `docs/postman/NightOwl.postman_environment.json`. It covers every endpoint that exists through Day 12 — this is the answer to "test it in Postman" without retyping each request by hand.
+
+### 20.1. Import
+
+1. Postman → **Import** → select both `docs/postman/NightOwl.postman_collection.json` and `docs/postman/NightOwl.postman_environment.json` (drag-and-drop both, or import one at a time).
+2. Top-right environment dropdown → select **NightOwl Local**.
+3. If your server runs on a different host/port, edit the environment's `base_url` variable (default `http://127.0.0.1:8000`).
+
+### 20.2. Suggested run order
+
+The collection is grouped into 5 folders (**Health**, **Ingest**, **MITRE**, **Incidents**, **Explain**); each request's Postman description states its own DB/API-key requirement, but the practical run order is:
+
+1. **Health → Health Check** — no setup beyond `uvicorn` running. Expect `200 {"status":"ok"}`.
+2. **Ingest → Ingest - Happy Path (sysmon_demo.evtx)** — needs live Postgres (§3/§19.7). Click the request's `file` field's **Select File** button and choose `data/sample_logs/sysmon_demo.evtx` from the repo. Expect `200` with `records_read`/`events_ingested`/`rule_matches`/`alerts_created`/`incident_ids`. **Without Postgres**, expect the new clean `500 {"detail":"internal server error"}` instead (§19.6) — this is itself a valid, useful check.
+3. **Ingest → the 3 error-case requests** — no DB needed (they fail validation/parsing before any DB call). Each request's description says exactly what file to pick (a non-`.evtx` file / a 0-byte file / a `.evtx`-named file with garbage bytes). Expect `400` with the specific `detail` message noted in each request's description (matches §9.3).
+4. **MITRE → List MITRE Techniques** — no DB needed. Expect `200 {"techniques":[...],"count":858}`.
+5. **Incidents → List Incidents - All** — needs live Postgres. Expect `200 {"incidents":[...],"count":N}`.
+6. **Incidents → the 3 filtered variants** (severity/status/date range) — edit the query param values to match real data from step 5 if you want a non-empty result; the defaults are placeholders.
+7. **Incidents → Get Incident Detail** — first update the `incident_id` environment variable to a real id from step 2's or step 5's response, then send. Expect `200` with `alerts[]` (each nesting its `event`) and resolved `techniques[]`.
+8. **Incidents → Get Incident Detail - 404** — needs live Postgres (to determine the id truly doesn't exist). Expect `404 {"detail":"incident 999999 not found"}`.
+9. **Explain → Explain Incident** — needs live Postgres, a real `incident_id`, and a real `LLM_API_KEY` in `backend`'s `.env` (2 live Gemini calls per request — mind the free-tier daily quota, §17.3/Troubleshooting). Expect `200` with `explanation`/`recommended_response`/`sources[]`.
+
+### 20.3. Why Postman for `/ingest` specifically
+
+This environment's git-bash `curl` only path-translates a POSIX path when it *leads* the argument — embedded after `-F file=@`, a path starting with `/` fails to resolve (see the Troubleshooting table). Postman's native file picker has no such quirk: click **Select File**, browse to the repo, done. This is the main practical reason to prefer Postman over `curl` for the multipart upload steps, on top of it just being a friendlier way to work through the full endpoint list interactively.
+
+**Last verified:** 2026-08-19 — collection/environment JSON validated as well-formed (Postman v2.1 collection schema, standard environment export shape); the underlying HTTP behavior each request documents was verified via the equivalent `curl` calls in §16/§19 (same server, same routes) rather than a live Postman GUI session in this environment. If you run the actual import-and-click-through afterward, that's the final end-to-end confirmation.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -1149,6 +1386,6 @@ Same known finding as §11.3 recurred here (expected — Day 9 deliberately didn
 ## Out of scope for this guide
 
 - Frontend testing (nothing built yet — Days 13+).
-- `GET /incidents` list endpoint, MITRE-mapping validation against `mitre/validator.py`, rules-manager UI (Pair 1 Days 11–12 — not yet built; the ingest API, Sigma detection engine, 10 detection rules, alert persistence, incident grouping, and severity scoring are done, see §9/§12/§13/§14/§15).
-- Hallucination spot-check, chat endpoints (Pair 2 Days 10–12 — not yet built; retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, the explain_service retrieve→draft→self-critique pipeline, and the explain endpoint with source attribution + recommended response are done, see §8/§9/§10/§11/§17). The Day 9 explain endpoint (§17) works against manually-inserted `Incident` rows in this guide's checks — Pair 1's incident grouping (§14) exists as of the same rebase, but this session didn't re-verify the explain endpoint against a real grouped incident (Docker/Postgres unavailable in this environment either way).
+- Rules-manager UI / `api/routes_rules.py` enable-disable endpoint (Pair 2 Day 16 — not yet built). Everything else through Pair 1 Day 12 — the ingest API, Sigma detection engine, 15 detection rules, alert persistence, incident grouping, severity scoring, MITRE technique validation, and `GET /incidents`/`GET /incidents/{id}` — is done and covered, see §9/§12/§13/§14/§15/§18/§19/§20.
+- Hallucination spot-check, chat endpoints, LLM call robustness (Pair 2 Days 10–12 — not yet built; retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, the explain_service retrieve→draft→self-critique pipeline, and the explain endpoint with source attribution + recommended response are done, see §8/§9/§10/§11/§17). The Day 9 explain endpoint (§17) works against manually-inserted `Incident` rows in this guide's checks — Pair 1's incident grouping (§14) and read endpoints (§19) exist, but this guide hasn't re-verified the explain endpoint against a real grouped incident end-to-end (Docker/Postgres unavailable in this environment as of the last session that touched §17/§19.7 either way).
 - The formal Testing Report (Volume 3 §9.5) — that's produced during Days 20–21 Integration & Testing, covering unit/integration/E2E coverage and RAG accuracy scoring across the whole system.
