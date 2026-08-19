@@ -1,4 +1,6 @@
 """Day 7 verification (Pair 2): rag/prompts.py's explanation prompt template.
+Day 11 adds cases for the chat prompt template (format_chat_history,
+build_chat_prompt).
 
 Pure string/template tests -- no network, no API key needed.
 """
@@ -6,8 +8,10 @@ Pure string/template tests -- no network, no API key needed.
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.rag.prompts import (
+    build_chat_prompt,
     build_explanation_prompt,
     extract_recommended_response,
+    format_chat_history,
     format_chunks,
     format_incident_context,
 )
@@ -107,3 +111,46 @@ def test_extract_recommended_response_missing_heading_returns_empty_string():
 
 def test_extract_recommended_response_empty_string():
     assert extract_recommended_response("") == ""
+
+
+def test_format_chat_history_empty_list():
+    assert format_chat_history([]) == "(no prior messages -- this is the first question)"
+
+
+def test_format_chat_history_renders_role_and_content_lines():
+    history = [
+        {"role": "user", "content": "What happened?"},
+        {"role": "assistant", "content": "PowerShell was used for execution."},
+    ]
+
+    rendered = format_chat_history(history)
+
+    assert "user: What happened?" in rendered
+    assert "assistant: PowerShell was used for execution." in rendered
+
+
+def test_build_chat_prompt_returns_system_and_human_messages():
+    messages = build_chat_prompt(SAMPLE_INCIDENT, SAMPLE_CHUNKS, [], "Why was this flagged?")
+
+    assert len(messages) == 2
+    assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], HumanMessage)
+
+
+def test_build_chat_prompt_human_message_embeds_incident_history_and_question():
+    history = [{"role": "user", "content": "What happened?"}, {"role": "assistant", "content": "PowerShell ran."}]
+
+    messages = build_chat_prompt(SAMPLE_INCIDENT, SAMPLE_CHUNKS, history, "What about the host?")
+
+    human_text = messages[1].content
+    assert "WIN10-ANALYST" in human_text
+    assert "PowerShell ran." in human_text
+    assert "What about the host?" in human_text
+
+
+def test_build_chat_prompt_handles_no_history_or_chunks():
+    messages = build_chat_prompt(SAMPLE_INCIDENT, [], [], "Why was this flagged?")
+
+    human_text = messages[1].content
+    assert "no prior messages" in human_text
+    assert "no relevant knowledge base context retrieved" in human_text

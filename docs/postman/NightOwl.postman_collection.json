@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "NightOwl -- Day 3-12 API",
-    "description": "Every NightOwl backend endpoint that exists through Pair 1's Day 12 milestone (Backend + Detection core complete). Import this alongside NightOwl.postman_environment.json and select the \"NightOwl Local\" environment. See docs/05_NightOwl_Manual_Testing_Guide.md Section 20 for the full step-by-step walkthrough, required setup per request, and expected responses.",
+    "description": "Every NightOwl backend endpoint that exists through Pair 1's Day 12 milestone (Backend + Detection core complete), plus Pair 2's Day 11 incident chat endpoint. Import this alongside NightOwl.postman_environment.json and select the \"NightOwl Local\" environment. See docs/05_NightOwl_Manual_Testing_Guide.md Section 21 for the full step-by-step walkthrough, required setup per request, and expected responses.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -245,6 +245,53 @@
               "path": ["incidents", "{{incident_id}}", "explain"]
             },
             "description": "Needs live Postgres, a real incident_id, and a real LLM_API_KEY in backend .env (2 live Gemini calls per request -- mind the free-tier daily quota, see guide Section 17.3/Troubleshooting). Expected: HTTP 200 with explanation/recommended_response/sources[]."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Chat With Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Why was this flagged?\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/incidents/{{incident_id}}/chat",
+              "host": ["{{base_url}}"],
+              "path": ["incidents", "{{incident_id}}", "chat"]
+            },
+            "description": "Needs live Postgres, a real incident_id, and a real LLM_API_KEY (or GROQ_API_KEY) in backend .env (1 live LLM call per request -- mind the free-tier daily quota, see guide Section 21). Each call persists both the user message and the assistant reply as chat_messages rows, so retrieval scoped to this incident's context sees prior turns on the next call. Expected: HTTP 200 with incident_id/role (\"assistant\")/content/sources[]."
+          },
+          "response": []
+        },
+        {
+          "name": "Chat With Incident - 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"hello\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/incidents/999999/chat",
+              "host": ["{{base_url}}"],
+              "path": ["incidents", "999999", "chat"]
+            },
+            "description": "Needs live Postgres (a reachable DB is required to determine the id doesn't exist). Expected: HTTP 404, {\"detail\":\"incident 999999 not found\"}."
           },
           "response": []
         }

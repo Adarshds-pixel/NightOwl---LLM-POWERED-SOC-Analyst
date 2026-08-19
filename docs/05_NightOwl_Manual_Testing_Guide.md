@@ -1,6 +1,6 @@
 # NightOwl Handbook — Volume 5: Manual Testing Guide
 
-**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §14 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps. **Pair 1 Day 8** (5 Sigma rules across process-creation/network-connection/file-creation + `alerts` table persistence, `app/services/detection_service.py`) was added and fully verified — including live persistence against real Postgres — on **2026-08-18** (§13). **Pair 1 Day 9** (5 more rules — 10 total, adding a registry category — + incident grouping, `app/services/incident_service.py`) and **Pair 1 Day 10** (severity scoring, `app/services/severity_service.py`, plus the roadmap-specified `tests/test_detection.py`) landed together and were fully verified — including live incident grouping/severity scoring against real Postgres — on **2026-08-19** (§14/§15). Pair 2's own Day 9/10 (explain endpoint, hallucination spot-check) is the teammates' responsibility and is intentionally not covered by this guide. **Pair 1 Day 11** (MITRE technique validation for every rule's tag, warn-only on unknown/deprecated/revoked ids, `app/mitre/validator.py`) and **Pair 1 Day 12** (`GET /incidents` + `GET /incidents/{id}`, 5 more rules — 15 total, covering credential access + lateral movement — consistent JSON error handling for unhandled exceptions, structured JSON logging, and an end-to-end integration test — **Milestone: Backend + Detection core complete**) were fully verified, including a Postman-based manual pass covering every endpoint, on **2026-08-19** (§18/§19/§20).
+**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §14 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps. **Pair 1 Day 8** (5 Sigma rules across process-creation/network-connection/file-creation + `alerts` table persistence, `app/services/detection_service.py`) was added and fully verified — including live persistence against real Postgres — on **2026-08-18** (§13). **Pair 1 Day 9** (5 more rules — 10 total, adding a registry category — + incident grouping, `app/services/incident_service.py`) and **Pair 1 Day 10** (severity scoring, `app/services/severity_service.py`, plus the roadmap-specified `tests/test_detection.py`) landed together and were fully verified — including live incident grouping/severity scoring against real Postgres — on **2026-08-19** (§14/§15). Pair 2's own Day 9/10 (explain endpoint, hallucination spot-check) is the teammates' responsibility and is intentionally not covered by this guide. **Pair 1 Day 11** (MITRE technique validation for every rule's tag, warn-only on unknown/deprecated/revoked ids, `app/mitre/validator.py`) and **Pair 1 Day 12** (`GET /incidents` + `GET /incidents/{id}`, 5 more rules — 15 total, covering credential access + lateral movement — consistent JSON error handling for unhandled exceptions, structured JSON logging, and an end-to-end integration test — **Milestone: Backend + Detection core complete**) were fully verified, including a Postman-based manual pass covering every endpoint, on **2026-08-19** (§18/§19/§21). **Pair 2 Day 11** (`chat_messages` service + `POST /incidents/{id}/chat` with retrieval scoped to incident context, `app/services/chat_service.py` + `app/rag/chat_service.py` + `app/api/routes_chat.py`) was added and verified via the full offline test suite (181 passed) on **2026-08-19** (§20); a live-LLM end-to-end check is still pending a Gemini free-tier quota reset (§20.3).
 
 This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on the date noted next to it — see the "Last verified" line under each step.
 
@@ -1078,7 +1078,7 @@ docker compose exec db psql -U nightowl -d nightowl -c "\dt"   # Expect: 6 table
 | Structured JSON logging | §19.5 | ☐ Pass ☐ Fail | |
 | Consistent JSON error handling (500s) | §19.6 | ☐ Pass ☐ Fail | |
 | `tests/test_ingest_flow.py` e2e (real rules, real MITRE lookup) | §19.2 | ☐ Pass ☐ Fail | |
-| Postman collection walkthrough (all endpoints) | §20 | ☐ Pass ☐ Fail | |
+| Postman collection walkthrough (all endpoints) | §21 | ☐ Pass ☐ Fail | |
 | Postgres/Alembic (6 tables) | §3 | ☐ Pass ☐ Fail ☐ Skipped (no Docker) | |
 | Live Gemini call (`llm_client`) | §10.4 | ☐ Pass ☐ Fail ☐ Skipped (no API key) | |
 | Live explain_service (2 Gemini calls) | §11.3 | ☐ Pass ☐ Fail ☐ Skipped (no API key) | |
@@ -1331,19 +1331,92 @@ Confirms, for real: filters correctly include/exclude by severity; the detail re
 
 ---
 
-## 20. Postman Collection — All Endpoints (Day 3–12)
+## 20. Day 11 — Incident chat endpoint (Pair 2 deliverable)
 
-A real, importable Postman collection now lives at `docs/postman/NightOwl.postman_collection.json`, with a matching environment at `docs/postman/NightOwl.postman_environment.json`. It covers every endpoint that exists through Day 12 — this is the answer to "test it in Postman" without retyping each request by hand.
+`chat_messages` gets a real service (`app/services/chat_service.py`, persistence only) and a RAG-orchestration counterpart (`app/rag/chat_service.py`, mirrors `rag/explain_service.py`'s retrieve→prompt→LLM composition but for a free-form follow-up question, no self-critique pass), wired up behind `POST /incidents/{id}/chat` (`app/api/routes_chat.py`). Each call persists the user's message, retrieves KB context scoped to the incident (same `technique_id`-filtered retrieval as `/explain`) plus prior turns, generates a grounded reply, persists it, and returns it with source attribution. `GET /incidents/{id}/chat` (history) and prompt-robustness hardening are Day 12 scope — not built here.
 
-### 20.1. Import
+### 20.1. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/rag/test_chat_service.py tests/rag/test_prompts.py tests/api/test_chat_route.py -v
+```
+
+Covers: `rag/chat_service.py`'s retrieve→answer pipeline (4 — reply/chunks returned, the new message folds into the retrieval query, history+message reach the prompt, an `LLMProviderError` from `generate()` propagates uncaught), the new chat-prompt template additions to `rag/prompts.py` (5 — `format_chat_history` empty/populated, `build_chat_prompt` message shape/content/no-history-or-chunks fallback, alongside the existing 10 explain-prompt cases), and `routes_chat.py`'s `POST /incidents/{id}/chat` (3 — happy path persists both the user and assistant `ChatMessage` rows and returns the assistant turn + sources, a second call's `history` includes the first turn, 404 when the incident doesn't exist). Fully offline — `generate_chat_reply` is mocked in the route tests, and `retrieve`/`generate` are mocked in the rag-service tests; no network call, no real API key used.
+
+**Expected:** `24 passed` (4 + 15 in `test_prompts.py`, which grew from 10 to 15 + 3).
+**Last verified:** 2026-08-19 — `24 passed in 0.20s`.
+
+### 20.2. Full regression pass
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest -v
+```
+
+**Expected:** `181 passed` (up from Day 12's `169` — see §19.3 — +12 new: 4 rag-service + 5 prompt-template + 3 route).
+**Last verified:** 2026-08-19 — `181 passed in 10.77s`.
+
+### 20.3. Manual check — in-memory SQLite substitution (no Docker needed)
+
+Docker isn't installed in this environment (see Troubleshooting), so this exercises the real route code (`routes_chat.py`'s incident lookup, `_incident_to_dict`, history snapshot, response building) against a real `Incident` row via the same `dependency_overrides[get_db]` substitution the automated route tests use. A live-LLM smoke test (deliberately calling the real Gemini/Groq API) was intentionally **not** planned this round to conserve the free-tier daily quota (§17.3 already flagged how tight 20 requests/day is) — the fully-mocked automated suite above is the primary test evidence for this feature.
+
+```python
+# from backend/, PYTHONPATH=. ./venv/Scripts/python.exe, ad hoc:
+from datetime import datetime, timezone
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from app.db.base import Base
+from app.db.session import get_db
+from app.main import app
+from app.models.incident import Incident
+
+engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+Base.metadata.create_all(engine)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+def _override_get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+app.dependency_overrides[get_db] = _override_get_db
+client = TestClient(app)
+
+with SessionLocal() as db:
+    incident = Incident(title="Suspicious PowerShell execution on WIN10-ANALYST", status="open",
+                         severity="high", mitre_technique_ids=["T1059.001"],
+                         created_at=datetime.now(timezone.utc), host="WIN10-ANALYST")
+    db.add(incident); db.commit(); db.refresh(incident)
+    incident_id = incident.id
+
+print(client.post(f"/incidents/{incident_id}/chat", json={"message": "hi"}).status_code)
+print(client.post("/incidents/999999/chat", json={"message": "hi"}).json())
+```
+
+**Expected:** the 404 case returns `{"detail": "incident 999999 not found"}`; the real-incident case reaches `generate_chat_reply` (not mocked here) and depends on whether a working `LLM_API_KEY`/`GROQ_API_KEY` with remaining free-tier quota is configured.
+
+**Last verified:** 2026-08-19 — the 404 case ran clean: `404 {'detail': 'incident 999999 not found'}`. The real-incident case surfaced an unplanned finding: `backend`'s root `.env` (gitignored, resolved from the module's own file location per the Day 3 `config.py` fix noted in §16.4) already has a real `LLM_API_KEY` configured from earlier sessions, so this "no LLM call" check unintentionally made one — and hit the free-tier quota (`429 RESOURCE_EXHAUSTED ... GenerateRequestsPerDayPerProjectPerModel-FreeTier, limit: 20, model: gemini-3.7-flash`), already exhausted from Day 9/10's live-LLM testing (§17.3/hallucination spot-check). `llm_client.generate()`'s retry-then-`LLMProviderError` behavior worked exactly as designed (confirmed the same way §17.3 confirmed it under real quota exhaustion) — but `TestClient`'s default `raise_server_exceptions=True` re-raises the exception into the calling script rather than showing what a real HTTP client would see (a clean `500 {"detail":"internal server error"}` from `core/errors.py`'s handler, per §19.6's same finding for `/incidents`). No further live-LLM calls were made after this to avoid burning more of the shared daily quota — **flagging for the user:** the configured Gemini key's free-tier quota is currently exhausted; a live end-to-end chat verification (real retrieval + real LLM reply) needs either a quota reset or a different key, and should be run deliberately (budgeted, one call) rather than incidentally.
+
+---
+
+## 21. Postman Collection — All Endpoints (Day 3–12 + Pair 2 Day 11 Chat)
+
+A real, importable Postman collection now lives at `docs/postman/NightOwl.postman_collection.json`, with a matching environment at `docs/postman/NightOwl.postman_environment.json`. It covers every endpoint that exists through Day 12, plus Pair 2's Day 11 chat endpoint — this is the answer to "test it in Postman" without retyping each request by hand.
+
+### 21.1. Import
 
 1. Postman → **Import** → select both `docs/postman/NightOwl.postman_collection.json` and `docs/postman/NightOwl.postman_environment.json` (drag-and-drop both, or import one at a time).
 2. Top-right environment dropdown → select **NightOwl Local**.
 3. If your server runs on a different host/port, edit the environment's `base_url` variable (default `http://127.0.0.1:8000`).
 
-### 20.2. Suggested run order
+### 21.2. Suggested run order
 
-The collection is grouped into 5 folders (**Health**, **Ingest**, **MITRE**, **Incidents**, **Explain**); each request's Postman description states its own DB/API-key requirement, but the practical run order is:
+The collection is grouped into 6 folders (**Health**, **Ingest**, **MITRE**, **Incidents**, **Explain**, **Chat**); each request's Postman description states its own DB/API-key requirement, but the practical run order is:
 
 1. **Health → Health Check** — no setup beyond `uvicorn` running. Expect `200 {"status":"ok"}`.
 2. **Ingest → Ingest - Happy Path (sysmon_demo.evtx)** — needs live Postgres (§3/§19.7). Click the request's `file` field's **Select File** button and choose `data/sample_logs/sysmon_demo.evtx` from the repo. Expect `200` with `records_read`/`events_ingested`/`rule_matches`/`alerts_created`/`incident_ids`. **Without Postgres**, expect the new clean `500 {"detail":"internal server error"}` instead (§19.6) — this is itself a valid, useful check.
@@ -1354,12 +1427,14 @@ The collection is grouped into 5 folders (**Health**, **Ingest**, **MITRE**, **I
 7. **Incidents → Get Incident Detail** — first update the `incident_id` environment variable to a real id from step 2's or step 5's response, then send. Expect `200` with `alerts[]` (each nesting its `event`) and resolved `techniques[]`.
 8. **Incidents → Get Incident Detail - 404** — needs live Postgres (to determine the id truly doesn't exist). Expect `404 {"detail":"incident 999999 not found"}`.
 9. **Explain → Explain Incident** — needs live Postgres, a real `incident_id`, and a real `LLM_API_KEY` in `backend`'s `.env` (2 live Gemini calls per request — mind the free-tier daily quota, §17.3/Troubleshooting). Expect `200` with `explanation`/`recommended_response`/`sources[]`.
+10. **Chat → Chat With Incident** — needs live Postgres, a real `incident_id`, and a real `LLM_API_KEY`/`GROQ_API_KEY` (1 live LLM call per request). Each call persists both the user message and the assistant reply, so a second call against the same `incident_id` has real conversation history to draw on. Expect `200` with `incident_id`/`role` (`"assistant"`)/`content`/`sources[]`.
+11. **Chat → Chat With Incident - 404** — needs live Postgres. Expect `404 {"detail":"incident 999999 not found"}`.
 
-### 20.3. Why Postman for `/ingest` specifically
+### 21.3. Why Postman for `/ingest` specifically
 
 This environment's git-bash `curl` only path-translates a POSIX path when it *leads* the argument — embedded after `-F file=@`, a path starting with `/` fails to resolve (see the Troubleshooting table). Postman's native file picker has no such quirk: click **Select File**, browse to the repo, done. This is the main practical reason to prefer Postman over `curl` for the multipart upload steps, on top of it just being a friendlier way to work through the full endpoint list interactively.
 
-**Last verified:** 2026-08-19 — collection/environment JSON validated as well-formed (Postman v2.1 collection schema, standard environment export shape); the underlying HTTP behavior each request documents was verified via the equivalent `curl` calls in §16/§19 (same server, same routes) rather than a live Postman GUI session in this environment. If you run the actual import-and-click-through afterward, that's the final end-to-end confirmation.
+**Last verified:** 2026-08-19 — collection/environment JSON validated as well-formed (Postman v2.1 collection schema, standard environment export shape); the underlying HTTP behavior each request documents was verified via the equivalent `curl`/automated-test calls in §16/§19/§20 (same server, same routes) rather than a live Postman GUI session in this environment. If you run the actual import-and-click-through afterward, that's the final end-to-end confirmation.
 
 ---
 
@@ -1386,6 +1461,6 @@ This environment's git-bash `curl` only path-translates a POSIX path when it *le
 ## Out of scope for this guide
 
 - Frontend testing (nothing built yet — Days 13+).
-- Rules-manager UI / `api/routes_rules.py` enable-disable endpoint (Pair 2 Day 16 — not yet built). Everything else through Pair 1 Day 12 — the ingest API, Sigma detection engine, 15 detection rules, alert persistence, incident grouping, severity scoring, MITRE technique validation, and `GET /incidents`/`GET /incidents/{id}` — is done and covered, see §9/§12/§13/§14/§15/§18/§19/§20.
-- Hallucination spot-check, chat endpoints, LLM call robustness (Pair 2 Days 10–12 — not yet built; retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, the explain_service retrieve→draft→self-critique pipeline, and the explain endpoint with source attribution + recommended response are done, see §8/§9/§10/§11/§17). The Day 9 explain endpoint (§17) works against manually-inserted `Incident` rows in this guide's checks — Pair 1's incident grouping (§14) and read endpoints (§19) exist, but this guide hasn't re-verified the explain endpoint against a real grouped incident end-to-end (Docker/Postgres unavailable in this environment as of the last session that touched §17/§19.7 either way).
+- Rules-manager UI / `api/routes_rules.py` enable-disable endpoint (Pair 2 Day 16 — not yet built). Everything else through Pair 1 Day 12 — the ingest API, Sigma detection engine, 15 detection rules, alert persistence, incident grouping, severity scoring, MITRE technique validation, and `GET /incidents`/`GET /incidents/{id}` — is done and covered, see §9/§12/§13/§14/§15/§18/§19/§21.
+- Chat history endpoint (`GET /incidents/{id}/chat`) and LLM call robustness/prompt refinement (Pair 2 Day 12 — not yet built). Hallucination spot-check (Day 10, `docs/research/hallucination-eval.md`) and the incident chat endpoint with source attribution (Day 11, §20) are done, alongside retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, the explain_service retrieve→draft→self-critique pipeline, and the explain endpoint with source attribution + recommended response — see §8/§9/§10/§11/§17/§20. The Day 9 explain endpoint (§17) works against manually-inserted `Incident` rows in this guide's checks — Pair 1's incident grouping (§14) and read endpoints (§19) exist, but this guide hasn't re-verified the explain endpoint against a real grouped incident end-to-end (Docker/Postgres unavailable in this environment as of the last session that touched §17/§19.7 either way).
 - The formal Testing Report (Volume 3 §9.5) — that's produced during Days 20–21 Integration & Testing, covering unit/integration/E2E coverage and RAG accuracy scoring across the whole system.
