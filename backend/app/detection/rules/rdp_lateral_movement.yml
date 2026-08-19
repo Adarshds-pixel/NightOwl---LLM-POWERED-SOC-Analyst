@@ -1,0 +1,21 @@
+title: RDP Lateral Movement
+id: 1e18c97a-cee3-4c6d-bb28-1e25473735ba
+status: experimental
+description: >
+  Detects an outbound network connection to the standard RDP port (3389),
+  which can indicate an attacker moving laterally to another host via
+  Remote Desktop.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-19
+references:
+  - https://attack.mitre.org/techniques/T1021/001/
+tags:
+  - attack.lateral_movement
+  - attack.t1021.001
+logsource:
+  category: network_connection
+detection:
+  selection:
+    DestinationPort: 3389
+  condition: selection
+level: medium

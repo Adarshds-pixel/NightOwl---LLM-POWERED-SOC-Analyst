@@ -1,0 +1,29 @@
+title: Lateral Movement via Windows Admin Share
+id: 2a809450-11dc-4713-b174-a6a7fb0592da
+status: experimental
+description: >
+  Detects net.exe/net1.exe being used to connect to a remote host's
+  administrative share (ADMIN$/IPC$), a common step for lateral movement
+  and remote tool deployment (e.g. PsExec-style tooling).
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-19
+references:
+  - https://attack.mitre.org/techniques/T1021/002/
+tags:
+  - attack.lateral_movement
+  - attack.t1021.002
+logsource:
+  category: process_creation
+detection:
+  selection_image:
+    Image|contains:
+      - net.exe
+      - net1.exe
+  selection_share:
+    CommandLine|contains: '\\'
+  selection_admin_share:
+    CommandLine|contains:
+      - 'admin$'
+      - 'ipc$'
+  condition: selection_image and selection_share and selection_admin_share
+level: medium

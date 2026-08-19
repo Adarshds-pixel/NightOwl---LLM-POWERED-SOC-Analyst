@@ -1,0 +1,26 @@
+title: SAM/SYSTEM/SECURITY Registry Hive Dump
+id: 325fa5ce-53ab-4ad5-b12d-fd2043fb786b
+status: experimental
+description: >
+  Detects reg.exe being used to save the SAM, SYSTEM, or SECURITY registry
+  hives to a file, a common precursor to offline credential extraction.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-19
+references:
+  - https://attack.mitre.org/techniques/T1003/002/
+tags:
+  - attack.credential_access
+  - attack.t1003.002
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|contains: reg.exe
+    CommandLine|contains: save
+  targets:
+    CommandLine|contains:
+      - 'hklm\sam'
+      - 'hklm\system'
+      - 'hklm\security'
+  condition: selection and targets
+level: high

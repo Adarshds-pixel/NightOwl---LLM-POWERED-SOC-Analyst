@@ -1,0 +1,23 @@
+title: WinRM Lateral Movement
+id: 15342130-72ce-49a3-b73e-67be5531b54d
+status: experimental
+description: >
+  Detects an outbound network connection to the standard Windows Remote
+  Management ports (5985 HTTP / 5986 HTTPS), which can indicate an
+  attacker moving laterally via WinRM/PowerShell remoting.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-19
+references:
+  - https://attack.mitre.org/techniques/T1021/006/
+tags:
+  - attack.lateral_movement
+  - attack.t1021.006
+logsource:
+  category: network_connection
+detection:
+  selection:
+    DestinationPort:
+      - 5985
+      - 5986
+  condition: selection
+level: medium

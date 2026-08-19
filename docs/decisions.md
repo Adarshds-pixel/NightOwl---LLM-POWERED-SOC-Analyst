@@ -77,3 +77,25 @@ One entry per significant decision, per Volume 3 §8.6.
 - **Incident-level rollup already done:** the roadmap's other Day 11 ask — "roll up technique IDs from an incident's alerts" — was already satisfied by Day 9's `services/incident_service.py` (`find_or_create_incident` merges each match's `technique_id` into `Incident.mitre_technique_ids`); no additional Day 11 change was needed there.
 - **Not done as part of Day 11 (deliberately deferred, not an oversight):** `models/rule.py`'s `mitre_technique_id` column still has nothing writing to it — no `Rule` row is ever persisted anywhere in the codebase today. The Day 11 roadmap row's own Files column only lists `detection/rules/*.yml`, `mitre/validator.py`, `services/incident_service.py` (not `models/rule.py`), and no roadmap day currently reads from the `rules` table either — the closest consumer is Pair 2's Day 16 rules-manager UI (`api/routes_rules.py`, enable/disable), which is a future day for the other pair. Persisting `Rule` rows now would be building ahead of an actual consumer; left as a gap for whichever day adds `routes_rules.py`.
 - **Reversible?** Yes — `_validate_technique()` only logs; it doesn't change `LoadedRule`'s shape or any caller's behavior. Switching to a rejecting policy later is a one-function change.
+
+---
+
+**2026-08-19 — Final 5 rules (10 → 15) target credential access and lateral movement, reusing the existing 4 logsource categories (Day 12).**
+- **What we needed:** the roadmap's Day 12 row asks for "5 more rules (lateral movement / credential access → 15 total)" — the only two tactics the existing 10 rules didn't tag yet.
+- **Rules added:** `lsass_memory_dump.yml` (T1003.001 — procdump against lsass.exe, or rundll32/comsvcs.dll MiniDump), `sam_registry_hive_dump.yml` (T1003.002 — reg.exe save of the SAM/SYSTEM/SECURITY hives), `rdp_lateral_movement.yml` (T1021.001 — outbound port 3389), `admin_share_lateral_movement.yml` (T1021.002 — net.exe/net1.exe connecting to `ADMIN$`/`IPC$`), `winrm_lateral_movement.yml` (T1021.006 — outbound port 5985/5986).
+- **Why no new logsource category:** all 5 fit the engine's existing `CATEGORY_TO_EVENT_ID` mapping (`process_creation` → event 1, `network_connection` → event 3) from Day 7 — no engine change needed, same as every rule added since.
+- **Reversible?** Yes — purely additive rule files; nothing else changed.
+
+---
+
+**2026-08-19 — Structured logging is a small stdlib-only JSON formatter, not a third-party logging library (Day 12).**
+- **Alternatives considered:** `python-json-logger` or `structlog` — both give structured logging with less code.
+- **Why stdlib instead:** the ask is "structured JSON logging," not a full observability stack, and the project's LLM policy already commits to $0 dependencies where avoidable (see the Gemini free-tier entry above) — a ~30-line `logging.Formatter` subclass (`core/logging.py`) covers the requirement without adding a dependency. `configure_logging()` swaps the root logger's handler/formatter once at app startup; every existing `logger = logging.getLogger(__name__)` call site across the codebase is unaffected and now emits one JSON object per line for free.
+- **Reversible?** Yes — confined to `core/logging.py` and the one `configure_logging()` call in `main.py`; swapping in a third-party formatter later wouldn't touch any call site.
+
+---
+
+**2026-08-19 — Unhandled exceptions get one shared JSON 500 handler instead of per-route try/except (Day 12).**
+- **What we needed:** "consistent API error handling across routes." The existing routes already raise `HTTPException` consistently (FastAPI's default handler turns that into `{"detail": ...}` JSON already) — the actual gap was the *unhandled* case: Starlette's built-in fallback for an uncaught exception returns plain text, not JSON, breaking every route's response contract the one time it matters most (a real bug).
+- **Decision:** `core/errors.py`'s `install_exception_handlers()` registers one `Exception` handler on the FastAPI app (logs via `logger.exception`, returns a JSON 500) — it only catches what nothing more specific already handles, since FastAPI's own `HTTPException`/validation handlers are matched first by exact type. Also added `not_found()`, a one-line helper for the 404 case, so `explain_incident` and the new `GET /incidents/{id}` phrase "not found" identically instead of each route hand-rolling its own message.
+- **Reversible?** Yes — one handler registration in `main.py`; removing it just reverts to Starlette's default (plain-text) 500 behavior.
