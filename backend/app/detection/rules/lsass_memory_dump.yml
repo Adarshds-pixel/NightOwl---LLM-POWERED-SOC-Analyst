@@ -1,0 +1,26 @@
+title: LSASS Memory Dump
+id: 267ca9a6-bc8a-4ff6-8a19-1039c976ecab
+status: experimental
+description: >
+  Detects tooling commonly used to dump LSASS process memory to disk to
+  later extract credentials offline (procdump against lsass.exe, or
+  rundll32.exe invoking comsvcs.dll's MiniDump export).
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-08-19
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+tags:
+  - attack.credential_access
+  - attack.t1003.001
+logsource:
+  category: process_creation
+detection:
+  selection_procdump:
+    Image|contains: procdump.exe
+    CommandLine|contains: lsass
+  selection_comsvcs:
+    CommandLine|contains:
+      - comsvcs.dll
+      - MiniDump
+  condition: selection_procdump or selection_comsvcs
+level: high

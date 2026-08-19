@@ -38,7 +38,7 @@ logsource:
   category: process_creation
 """
 
-EXPECTED_RULE_COUNT = 10
+EXPECTED_RULE_COUNT = 15
 EXPECTED_CATEGORIES = {"process_creation", "network_connection", "file_event", "registry_event"}
 
 
@@ -110,9 +110,9 @@ def test_seed_rule_directory_loads_at_least_one_real_rule():
     assert any(r.title == "Suspicious Encoded PowerShell Command" for r in rules)
 
 
-# -- Day 9: rule count/category growth + tag-parsing ----------------------
+# -- Day 9/12: rule count/category growth + tag-parsing --------------------
 
-def test_load_rules_returns_ten_rules():
+def test_load_rules_returns_fifteen_rules():
     rules = rule_loader.load_rules()
     assert len(rules) == EXPECTED_RULE_COUNT
 
