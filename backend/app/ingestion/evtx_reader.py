@@ -27,9 +27,13 @@ def read_raw_records(path: Path) -> Iterator[str]:
     """Yields each record's raw XML string, in file order."""
     try:
         with evtx.Evtx(str(path)) as log:
+            if not log.get_file_header().check_magic():
+                raise EvtxReadError(f"not a valid EVTX file (bad magic/signature): {path}")
             for record in log.records():
                 yield record.xml()
     except FileNotFoundError:
+        raise
+    except EvtxReadError:
         raise
     except Exception as e:
         raise EvtxReadError(f"failed to read evtx file {path}: {e}") from e

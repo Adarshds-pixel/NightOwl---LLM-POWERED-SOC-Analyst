@@ -70,13 +70,26 @@ def test_ingest_rejects_empty_file(api_client):
 def test_ingest_rejects_corrupted_evtx_bytes(api_client):
     client, _ = api_client
     # Under ~40 bytes, python-evtx fails to even read the file header and
-    # raises EvtxReadError; larger garbage blobs are read as a
-    # zero-chunk/zero-record file instead of raising (see evtx_reader.py) --
-    # this size is chosen specifically to exercise the EvtxReadError path.
+    # raises EvtxReadError; larger garbage blobs used to be read as a
+    # zero-chunk/zero-record "success" instead of raising, since python-evtx
+    # never validates the magic bytes on its own (see evtx_reader.py, which
+    # now checks FileHeader.check_magic() explicitly to close that gap).
     garbage = b"not a real evtx file, too short"
     response = client.post(
         "/ingest",
         files={"file": ("corrupt.evtx", garbage, "application/octet-stream")},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("failed to parse EVTX file")
+
+    # Realistic-size garbage (e.g. a renamed .txt file, like fake.evtx in the
+    # Postman collection) is long enough that python-evtx's chunk-bounds
+    # arithmetic alone never raises -- this is the case that previously
+    # slipped through as a false 200.
+    larger_garbage = b"This is intentionally corrupted EVTX test data. " * 3
+    response = client.post(
+        "/ingest",
+        files={"file": ("fake.evtx", larger_garbage, "application/octet-stream")},
     )
     assert response.status_code == 400
     assert response.json()["detail"].startswith("failed to parse EVTX file")
