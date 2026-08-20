@@ -6,8 +6,12 @@ incident, same source-attribution shape as Day 9's explain endpoint),
 persists the assistant's reply, and returns the assistant turn plus the
 retrieved source chunks.
 
-`GET /incidents/{id}/chat` (history) is Day 12 scope, not built here.
+`GET /incidents/{id}/chat` (history, Day 12) is a thin read wrapping the
+same `list_messages` the POST handler already uses to build conversation
+history.
 """
+
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -38,6 +42,19 @@ class ChatMessageResponse(BaseModel):
     role: str
     content: str
     sources: list[SourceChunk]
+
+
+class ChatHistoryMessage(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: datetime
+
+
+class ChatHistoryResponse(BaseModel):
+    incident_id: int
+    messages: list[ChatHistoryMessage]
+    count: int
 
 
 def _incident_to_dict(incident: Incident) -> dict:
@@ -80,4 +97,22 @@ def chat_with_incident(
         role=reply.role,
         content=reply.content,
         sources=[SourceChunk(**chunk) for chunk in result.chunks],
+    )
+
+
+@router.get("/incidents/{incident_id}/chat", response_model=ChatHistoryResponse)
+def get_chat_history(incident_id: int, db: Session = Depends(get_db)) -> ChatHistoryResponse:
+    incident = db.get(Incident, incident_id)
+    if incident is None:
+        raise not_found("incident", incident_id)
+
+    messages = list_messages(db, incident_id)
+
+    return ChatHistoryResponse(
+        incident_id=incident_id,
+        messages=[
+            ChatHistoryMessage(id=m.id, role=m.role, content=m.content, created_at=m.created_at)
+            for m in messages
+        ],
+        count=len(messages),
     )

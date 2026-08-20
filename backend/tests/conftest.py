@@ -5,6 +5,10 @@ app without needing a live Postgres -- extracted from what was previously
 near-identical boilerplate duplicated across the ingest route test files.
 """
 
+import getpass
+import tempfile
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -14,6 +18,32 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+
+
+def pytest_configure(config):
+    """Windows dev-machine workaround: on some machines,
+    %LOCALAPPDATA%\\Temp\\pytest-of-<user> ends up with an ACL that even its
+    own owning account can't read (confirmed via icacls/Get-Acl, both fail
+    with "Access is denied" -- needs admin elevation to fix at the OS
+    level). pytest's tmp_path/tmp_path_factory fixtures then fail at setup
+    with PermissionError, before any test code runs, on every test that
+    uses them.
+
+    Detect that specific failure mode and redirect --basetemp to a fresh
+    sibling directory instead of requiring elevation. No-op if the default
+    already works, or if --basetemp was already passed explicitly.
+    """
+    if config.option.basetemp is not None:
+        return
+
+    default_base = Path(tempfile.gettempdir()) / f"pytest-of-{getpass.getuser()}"
+    try:
+        default_base.mkdir(parents=True, exist_ok=True)
+        next(default_base.iterdir(), None)
+    except OSError:
+        fallback = Path(tempfile.gettempdir()) / "nightowl-pytest-tmp"
+        fallback.mkdir(parents=True, exist_ok=True)
+        config.option.basetemp = fallback
 
 
 @pytest.fixture

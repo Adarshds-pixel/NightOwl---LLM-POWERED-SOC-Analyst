@@ -3,6 +3,9 @@ user message, generates a grounded reply (mocked), persists the assistant
 reply, and returns both plus source attribution. `api_client` fixture
 (conftest.py) provides the TestClient + in-memory SQLite session.
 
+Day 12 adds: GET /incidents/{id}/chat (history) and a 503-on-LLMProviderError
+case for the POST route (core/errors.py's dedicated handler).
+
 Runs fully offline -- rag.chat_service.generate_chat_reply is mocked, no
 network call and no real LLM_API_KEY is needed or used.
 """
@@ -12,6 +15,7 @@ from datetime import datetime, timezone
 from app.models.chat_message import ChatMessage
 from app.models.incident import Incident
 from app.rag.chat_service import ChatReplyResult
+from app.rag.llm_client import LLMProviderError
 
 SAMPLE_CHUNKS = [
     {
@@ -113,6 +117,65 @@ def test_chat_404_when_incident_not_found(api_client):
     client, _ = api_client
 
     response = client.post("/incidents/999/chat", json={"message": "hi"})
+
+    assert response.status_code == 404
+    assert "999" in response.json()["detail"]
+
+
+def test_chat_returns_503_on_llm_provider_error(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    def raise_error(incident, history, message):
+        raise LLMProviderError("LLM call failed after 2 attempts: boom")
+
+    monkeypatch.setattr("app.api.routes_chat.generate_chat_reply", raise_error)
+
+    response = client.post(f"/incidents/{incident_id}/chat", json={"message": "hi"})
+
+    assert response.status_code == 503
+    assert "boom" in response.json()["detail"]
+
+
+def test_get_chat_history_empty_for_new_incident(api_client):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    response = client.get(f"/incidents/{incident_id}/chat")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["incident_id"] == incident_id
+    assert body["messages"] == []
+    assert body["count"] == 0
+
+
+def test_get_chat_history_returns_messages_in_order(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    monkeypatch.setattr(
+        "app.api.routes_chat.generate_chat_reply",
+        lambda incident, history, message: ChatReplyResult(reply="First answer.", chunks=SAMPLE_CHUNKS),
+    )
+    client.post(f"/incidents/{incident_id}/chat", json={"message": "First question?"})
+
+    response = client.get(f"/incidents/{incident_id}/chat")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["incident_id"] == incident_id
+    assert body["count"] == 2
+    assert [m["role"] for m in body["messages"]] == ["user", "assistant"]
+    assert body["messages"][0]["content"] == "First question?"
+    assert body["messages"][1]["content"] == "First answer."
+    assert all("id" in m and "created_at" in m for m in body["messages"])
+
+
+def test_get_chat_history_404_when_incident_not_found(api_client):
+    client, _ = api_client
+
+    response = client.get("/incidents/999/chat")
 
     assert response.status_code == 404
     assert "999" in response.json()["detail"]

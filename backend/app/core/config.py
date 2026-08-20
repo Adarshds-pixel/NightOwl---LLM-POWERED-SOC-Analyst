@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
 
+    # Day 12 robustness: an explicit per-request timeout so a hung provider
+    # call surfaces as a timeout (caught by llm_client.generate's existing
+    # retry/LLMProviderError handling) instead of blocking indefinitely.
+    llm_timeout_seconds: float = 30.0
+
+    # Day 12: opt-in in-memory cache for llm_client.generate(), keyed on
+    # exact prompt content -- off by default (it's a testing aid for
+    # repeated manual runs against a tight free-tier quota, not production
+    # behavior). Enable via LLM_CACHE_ENABLED=true in .env.
+    llm_cache_enabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

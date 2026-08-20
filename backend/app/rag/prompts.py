@@ -10,6 +10,18 @@ can pipe retrieval straight into this with no glue code.
 Day 11 adds a second template, `build_chat_prompt`, for incident chat -- same
 `format_incident_context`/`format_chunks` helpers, plus prior turns rendered
 via `format_chat_history` so the LLM can resolve conversational follow-ups.
+
+Day 12 moves the self-critique prompt (`build_critique_prompt`) here from
+explain_service.py, so all three templates live behind the same
+`build_*_prompt` convention, and rewrites both it and the two generation
+system prompts to fix two Day 10 hallucination-spot-check findings
+(docs/research/hallucination-eval.md): critique used to flag the incident's
+own context fields (e.g. `host`) as unsupported simply because it never saw
+incident context, only retrieved chunks (finding #1); and a retrieved
+chunk's *general* technique background (e.g. a playbook's example flag) was
+stated by the generator as an *observed fact about this specific incident*
+without the self-critique pass catching it (finding #2, spot-check #2's
+`-enc` flag that the crafted incident never had).
 """
 
 from langchain_core.messages import BaseMessage
@@ -23,19 +35,26 @@ what likely happened and why it was flagged.
 Rules you must follow:
 1. Base your explanation ONLY on the incident details and the retrieved context chunks provided \
 below. Do not invent facts, hosts, users, IPs, or techniques that are not present in the input.
-2. If the retrieved context does not clearly support a claim, say so explicitly instead of \
+2. The retrieved context chunks describe the technique in GENERAL (typical flags, tools, commands, \
+file paths a threat actor might use) -- this is background, not evidence about this specific \
+incident. Only state that a specific flag, parameter, encoded value, tool, or file was used IN \
+THIS INCIDENT if it literally appears in the incident details above. If a chunk mentions a detail \
+the incident details don't confirm, phrase it as what the technique commonly involves in general \
+(e.g. "this technique commonly uses an encoded `-enc` flag"), never as something this incident's \
+command line showed.
+3. If the retrieved context does not clearly support a claim, say so explicitly instead of \
 guessing (e.g. "the retrieved context does not specify ...").
-3. Reference MITRE ATT&CK technique IDs (e.g. T1059.001) when the retrieved context supplies \
+4. Reference MITRE ATT&CK technique IDs (e.g. T1059.001) when the retrieved context supplies \
 them, and briefly explain what that technique means in this context.
-4. Write for a junior analyst: define jargon briefly, keep sentences short, and prefer concrete \
+5. Write for a junior analyst: define jargon briefly, keep sentences short, and prefer concrete \
 detail (process names, command lines, hosts) over vague generalities.
-5. Structure your answer in three short sections, each with a markdown heading using EXACTLY \
+6. Structure your answer in three short sections, each with a markdown heading using EXACTLY \
 this text (needed so callers can split the response programmatically):
    - "## What happened": a 2-4 sentence plain-English summary of the observed activity.
    - "## Why it matters": the ATT&CK technique(s) involved and the attacker goal they usually serve.
    - "## Recommended next steps": 2-4 concrete triage/response actions, grounded in the retrieved \
 playbook context if present, or general SOC best practice if not.
-6. Keep the whole response under ~300 words. Do not repeat the raw input back verbatim."""
+7. Keep the whole response under ~300 words. Do not repeat the raw input back verbatim."""
 
 HUMAN_PROMPT = """## Incident context
 {incident_context}
@@ -93,14 +112,19 @@ Rules you must follow:
 1. Base your answer ONLY on the incident details, the retrieved context chunks, and the prior \
 conversation turns provided below. Do not invent facts, hosts, users, IPs, or techniques that are \
 not present in the input.
-2. If the retrieved context does not clearly support a claim, say so explicitly instead of \
+2. The retrieved context chunks describe the technique in GENERAL (typical flags, tools, commands, \
+file paths a threat actor might use) -- this is background, not evidence about this specific \
+incident. Only state that a specific flag, parameter, encoded value, tool, or file was used IN \
+THIS INCIDENT if it literally appears in the incident details above; otherwise phrase it as what \
+the technique commonly involves in general, never as something this incident showed.
+3. If the retrieved context does not clearly support a claim, say so explicitly instead of \
 guessing (e.g. "the retrieved context does not specify ...").
-3. Reference MITRE ATT&CK technique IDs (e.g. T1059.001) when the retrieved context supplies \
+4. Reference MITRE ATT&CK technique IDs (e.g. T1059.001) when the retrieved context supplies \
 them.
-4. Write for a junior analyst: define jargon briefly, keep sentences short.
-5. Use the prior conversation turns to resolve follow-up references (e.g. "what about the second \
+5. Write for a junior analyst: define jargon briefly, keep sentences short.
+6. Use the prior conversation turns to resolve follow-up references (e.g. "what about the second \
 one?" refers back to something mentioned earlier in the chat).
-6. Answer conversationally -- a few sentences is usually enough. Only use a list or headings if \
+7. Answer conversationally -- a few sentences is usually enough. Only use a list or headings if \
 the question specifically calls for step-by-step instructions. Keep the response under ~200 words \
 unless the question specifically asks for more detail."""
 
@@ -142,6 +166,61 @@ def build_chat_prompt(incident: dict, chunks: list[dict], history: list[dict], m
         retrieved_context=format_chunks(chunks),
         chat_history=format_chat_history(history),
         message=message,
+    )
+
+
+CRITIQUE_SYSTEM_PROMPT = """You are a fact-checking reviewer for SOC incident explanations. You \
+will be given the incident's known facts, a draft explanation, and the exact source chunks the \
+draft was supposed to be grounded in.
+
+Check every factual claim in the draft against the incident context and the sources:
+- A claim is SUPPORTED if it restates a fact from the incident context, or the sources directly \
+state it or clearly imply it.
+- A claim is NOT SUPPORTED if neither the incident context nor the sources back it up, or the \
+draft goes further than what they actually say.
+- Do NOT flag a claim just because it repeats a field from the incident context (e.g. the host, \
+user, or process name) instead of a retrieved chunk -- incident context is first-party, known-true \
+data, not something that needs a source citation.
+- Pay special attention to claims that state a specific technical detail -- a command-line flag, \
+parameter, encoded value, tool name, file path, or IP -- as something that happened IN THIS \
+INCIDENT. Such a claim is only SUPPORTED if that exact detail appears in the incident context. A \
+source chunk describing that detail as typical of the *general* technique is NOT enough to support \
+it as an observed fact about this incident -- if the draft presents general technique background as \
+if it were specific to this incident, flag it as NOT SUPPORTED and say the sources describe it as \
+general technique behavior, not something confirmed for this incident.
+
+If every claim is supported, respond with exactly: No issues found.
+Otherwise, respond with one line per unsupported or low-confidence claim, each starting with \
+"- ", briefly stating the claim and why it isn't supported. Do not repeat claims that are fine. \
+Do not add any other commentary."""
+
+CRITIQUE_HUMAN_PROMPT = """## Incident context (known true facts about this specific incident)
+{incident_context}
+
+## Draft explanation
+{draft}
+
+## Source chunks it should be grounded in
+{retrieved_context}
+
+## Task
+List any claims in the draft that are not supported by either the incident context or the source \
+chunks above, following the system instructions."""
+
+CRITIQUE_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        ("system", CRITIQUE_SYSTEM_PROMPT),
+        ("human", CRITIQUE_HUMAN_PROMPT),
+    ]
+)
+
+
+def build_critique_prompt(draft: str, chunks: list[dict], incident: dict) -> list[BaseMessage]:
+    """Render the full system+human message pair ready for llm_client.generate()."""
+    return CRITIQUE_PROMPT.format_messages(
+        incident_context=format_incident_context(incident),
+        draft=draft,
+        retrieved_context=format_chunks(chunks),
     )
 
 

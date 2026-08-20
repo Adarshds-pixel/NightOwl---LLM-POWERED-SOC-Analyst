@@ -3,6 +3,9 @@ attribution + recommended response, built on Day 8's explain_service.
 `api_client` fixture (conftest.py) provides the TestClient + in-memory
 SQLite session.
 
+Day 12 adds a 503-on-LLMProviderError case (core/errors.py's dedicated
+handler).
+
 Runs fully offline -- explain_service.generate_explanation is mocked, no
 network call and no real LLM_API_KEY is needed or used.
 """
@@ -11,6 +14,7 @@ from datetime import datetime, timezone
 
 from app.models.incident import Incident
 from app.rag.explain_service import ExplanationResult
+from app.rag.llm_client import LLMProviderError
 
 SAMPLE_CHUNKS = [
     {
@@ -133,3 +137,18 @@ def test_explain_incident_404_when_not_found(api_client):
 
     assert response.status_code == 404
     assert "999" in response.json()["detail"]
+
+
+def test_explain_incident_returns_503_on_llm_provider_error(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    def raise_error(incident):
+        raise LLMProviderError("LLM call failed after 2 attempts: boom")
+
+    monkeypatch.setattr("app.api.routes_incidents.generate_explanation", raise_error)
+
+    response = client.post(f"/incidents/{incident_id}/explain")
+
+    assert response.status_code == 503
+    assert "boom" in response.json()["detail"]
