@@ -77,7 +77,12 @@ def get_llm_client() -> ChatGoogleGenerativeAI | ChatGroq:
                 "GROQ_API_KEY is not set -- add a free Groq API key from "
                 "https://console.groq.com/keys, or set LLM_PROVIDER=gemini"
             )
-        _client = ChatGroq(model=settings.groq_model, api_key=settings.groq_api_key)
+        _client = ChatGroq(
+            model=settings.groq_model,
+            api_key=settings.groq_api_key,
+            timeout=settings.llm_timeout_seconds,
+            max_retries=0,  # generate() already retries once itself -- see note below
+        )
         return _client
 
     if not settings.llm_api_key:
@@ -89,6 +94,16 @@ def get_llm_client() -> ChatGoogleGenerativeAI | ChatGroq:
     _client = ChatGoogleGenerativeAI(
         model=settings.llm_model,
         google_api_key=settings.llm_api_key,
+        timeout=settings.llm_timeout_seconds,
+        # 1, not 0 -- a langchain-google-genai quirk: max_retries=0 is read as
+        # "use the Google SDK's own default (6)", not "no retries". 1 means
+        # exactly one attempt, no SDK-internal retry. Without this, a 429
+        # RESOURCE_EXHAUSTED response triggers up to 6 SDK-internal retries
+        # honoring the server's suggested backoff (observed ~14s each) inside
+        # a *single* generate() attempt -- confirmed live: one /explain call
+        # took 100s to fail even after adding the timeout above, because the
+        # SDK's own retry loop and generate()'s outer retry-once both fired.
+        max_retries=1,
     )
     return _client
 

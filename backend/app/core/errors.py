@@ -1,6 +1,6 @@
 """Consistent API error handling across routes (Day 12).
 
-Two pieces:
+Three pieces:
   - `not_found()` -- one shared 404 helper so every route's "not found"
     response is worded identically (previously only explain_incident had
     one, phrased ad hoc).
@@ -9,12 +9,21 @@ Two pieces:
     other route's contract of always responding with `{"detail": ...}`.
     This registers a handler so an unexpected bug still returns valid JSON
     (and gets logged) instead of a stack trace or a plain-text 500.
+  - A dedicated `LLMProviderError` handler, registered before the generic
+    catch-all -- FastAPI dispatches to the most specific matching handler,
+    so this doesn't need special ordering. Without it, a well-formed,
+    actionable message (missing key, quota exhausted, timed out after
+    retries) was being flattened into the same opaque "internal server
+    error" as an actual unhandled bug, making the real failure invisible
+    to callers of POST /incidents/{id}/explain.
 """
 
 import logging
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+
+from app.rag.llm_client import LLMProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +33,11 @@ def not_found(entity: str, id_: object) -> HTTPException:
 
 
 def install_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(LLMProviderError)
+    async def _llm_provider_error_handler(request: Request, exc: LLMProviderError) -> JSONResponse:
+        logger.warning("LLM provider error on %s %s: %s", request.method, request.url.path, exc)
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
+
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("unhandled error on %s %s", request.method, request.url.path)

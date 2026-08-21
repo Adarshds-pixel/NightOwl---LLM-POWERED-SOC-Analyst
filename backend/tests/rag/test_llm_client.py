@@ -56,6 +56,7 @@ def test_get_llm_client_raises_when_api_key_missing(monkeypatch):
 def test_get_llm_client_constructs_with_configured_model_and_key(monkeypatch):
     monkeypatch.setattr(settings, "llm_api_key", "fake-key")
     monkeypatch.setattr(settings, "llm_model", "gemini-flash-latest")
+    monkeypatch.setattr(settings, "llm_timeout_seconds", 30)
 
     client = get_llm_client()
 
@@ -63,6 +64,39 @@ def test_get_llm_client_constructs_with_configured_model_and_key(monkeypatch):
     assert FakeChatGoogleGenerativeAI.last_kwargs == {
         "model": "gemini-flash-latest",
         "google_api_key": "fake-key",
+        "timeout": 30,
+        "max_retries": 1,
+    }
+
+
+def test_get_llm_client_passes_timeout_for_groq(monkeypatch):
+    """A stalled network call must fail within llm_timeout_seconds instead of
+    blocking the request thread forever -- confirmed by tracing langchain's
+    client -> httpx, which defaults to Timeout(None) (no timeout at any
+    layer) when none is passed. Covers the Groq branch; the Gemini branch is
+    covered by test_get_llm_client_constructs_with_configured_model_and_key.
+    """
+
+    class FakeChatGroq:
+        last_kwargs = None
+
+        def __init__(self, **kwargs):
+            FakeChatGroq.last_kwargs = kwargs
+
+    monkeypatch.setattr(llm_client, "ChatGroq", FakeChatGroq)
+    monkeypatch.setattr(settings, "llm_provider", "groq")
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
+    monkeypatch.setattr(settings, "groq_model", "openai/gpt-oss-120b")
+    monkeypatch.setattr(settings, "llm_timeout_seconds", 45)
+
+    client = get_llm_client()
+
+    assert isinstance(client, FakeChatGroq)
+    assert FakeChatGroq.last_kwargs == {
+        "model": "openai/gpt-oss-120b",
+        "api_key": "fake-groq-key",
+        "timeout": 45,
+        "max_retries": 0,
     }
 
 

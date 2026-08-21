@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from app.models.incident import Incident
 from app.rag.explain_service import ExplanationResult
+from app.rag.llm_client import LLMProviderError
 
 SAMPLE_CHUNKS = [
     {
@@ -133,3 +134,22 @@ def test_explain_incident_404_when_not_found(api_client):
 
     assert response.status_code == 404
     assert "999" in response.json()["detail"]
+
+
+def test_explain_incident_llm_provider_error_returns_503_with_real_message(api_client, monkeypatch):
+    """A missing key/quota-exhausted/timed-out-after-retries LLM failure must
+    surface as a distinct, actionable 503 -- not fall through to the generic
+    catch-all handler's opaque "internal server error" (which previously hid
+    the real reason from callers of this endpoint)."""
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    def raise_llm_provider_error(incident):
+        raise LLMProviderError("LLM call failed after 2 attempts: timed out")
+
+    monkeypatch.setattr("app.api.routes_incidents.generate_explanation", raise_llm_provider_error)
+
+    response = client.post(f"/incidents/{incident_id}/explain")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "LLM call failed after 2 attempts: timed out"

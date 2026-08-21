@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
 
+    # Per-call network timeout (seconds) for the LLM provider (Gemini/Groq).
+    # Without this, a stalled network call blocks the request thread
+    # indefinitely (confirmed: langchain's client -> httpx defaults to
+    # Timeout(None), i.e. no timeout at any layer, when none is passed).
+    llm_timeout_seconds: int = 30
+
     # Shared-secret header auth (Day 13). Empty (default) = auth disabled --
     # same "empty string = not configured" convention as llm_api_key/groq_api_key
     # above, so local dev, Postman, and the existing test suite keep working
