@@ -3,15 +3,24 @@ user message, generates a grounded reply (mocked), persists the assistant
 reply, and returns both plus source attribution. `api_client` fixture
 (conftest.py) provides the TestClient + in-memory SQLite session.
 
+Day 12 adds: GET /incidents/{id}/chat (history) and a 503-on-LLMProviderError
+case for the POST route (core/errors.py's dedicated handler).
+
+Day 13 (production hardening) adds: the response cache in front of the POST
+route (a repeat identical message must not re-invoke generate_chat_reply)
+and the audit log entry recorded on every chat call.
+
 Runs fully offline -- rag.chat_service.generate_chat_reply is mocked, no
 network call and no real LLM_API_KEY is needed or used.
 """
 
 from datetime import datetime, timezone
 
+from app.models.audit_log import AuditLog
 from app.models.chat_message import ChatMessage
 from app.models.incident import Incident
 from app.rag.chat_service import ChatReplyResult
+from app.rag.llm_client import LLMProviderError
 
 SAMPLE_CHUNKS = [
     {
@@ -116,3 +125,129 @@ def test_chat_404_when_incident_not_found(api_client):
 
     assert response.status_code == 404
     assert "999" in response.json()["detail"]
+
+
+def test_chat_returns_503_on_llm_provider_error(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    def raise_error(incident, history, message):
+        raise LLMProviderError("LLM call failed after 2 attempts: boom")
+
+    monkeypatch.setattr("app.api.routes_chat.generate_chat_reply", raise_error)
+
+    response = client.post(f"/incidents/{incident_id}/chat", json={"message": "hi"})
+
+    assert response.status_code == 503
+    assert "boom" in response.json()["detail"]
+
+
+def test_get_chat_history_empty_for_new_incident(api_client):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    response = client.get(f"/incidents/{incident_id}/chat")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["incident_id"] == incident_id
+    assert body["messages"] == []
+    assert body["count"] == 0
+
+
+def test_get_chat_history_returns_messages_in_order(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    monkeypatch.setattr(
+        "app.api.routes_chat.generate_chat_reply",
+        lambda incident, history, message: ChatReplyResult(reply="First answer.", chunks=SAMPLE_CHUNKS),
+    )
+    client.post(f"/incidents/{incident_id}/chat", json={"message": "First question?"})
+
+    response = client.get(f"/incidents/{incident_id}/chat")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["incident_id"] == incident_id
+    assert body["count"] == 2
+    assert [m["role"] for m in body["messages"]] == ["user", "assistant"]
+    assert body["messages"][0]["content"] == "First question?"
+    assert body["messages"][1]["content"] == "First answer."
+    assert all("id" in m and "created_at" in m for m in body["messages"])
+
+
+def test_get_chat_history_404_when_incident_not_found(api_client):
+    client, _ = api_client
+
+    response = client.get("/incidents/999/chat")
+
+    assert response.status_code == 404
+    assert "999" in response.json()["detail"]
+
+
+def test_chat_repeated_message_served_from_cache(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    call_count = {"n": 0}
+
+    def fake_generate_chat_reply(incident, history, message):
+        call_count["n"] += 1
+        return ChatReplyResult(reply="It was a PowerShell execution.", chunks=SAMPLE_CHUNKS)
+
+    monkeypatch.setattr("app.api.routes_chat.generate_chat_reply", fake_generate_chat_reply)
+
+    first = client.post(f"/incidents/{incident_id}/chat", json={"message": "What happened?"})
+    second = client.post(f"/incidents/{incident_id}/chat", json={"message": "What happened?"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["content"] == second.json()["content"] == "It was a PowerShell execution."
+    assert call_count["n"] == 1
+
+    # Both turns still get persisted even though the second reply was cached.
+    with SessionLocal() as db:
+        rows = db.query(ChatMessage).filter_by(incident_id=incident_id).order_by(ChatMessage.created_at).all()
+    assert [r.role for r in rows] == ["user", "assistant", "user", "assistant"]
+
+
+def test_chat_cache_disabled_always_recomputes(api_client, monkeypatch):
+    """settings.response_cache_enabled=False must bypass the cache entirely
+    -- an identical repeat message still re-invokes generate_chat_reply."""
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+    monkeypatch.setattr("app.api.routes_chat.settings.response_cache_enabled", False)
+
+    call_count = {"n": 0}
+
+    def fake_generate_chat_reply(incident, history, message):
+        call_count["n"] += 1
+        return ChatReplyResult(reply="It was a PowerShell execution.", chunks=SAMPLE_CHUNKS)
+
+    monkeypatch.setattr("app.api.routes_chat.generate_chat_reply", fake_generate_chat_reply)
+
+    client.post(f"/incidents/{incident_id}/chat", json={"message": "What happened?"})
+    client.post(f"/incidents/{incident_id}/chat", json={"message": "What happened?"})
+
+    assert call_count["n"] == 2
+
+
+def test_chat_records_audit_event(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    monkeypatch.setattr(
+        "app.api.routes_chat.generate_chat_reply",
+        lambda incident, history, message: ChatReplyResult(reply="Answer.", chunks=[]),
+    )
+
+    response = client.post(f"/incidents/{incident_id}/chat", json={"message": "Why?"})
+    assert response.status_code == 200
+
+    with SessionLocal() as db:
+        events = db.query(AuditLog).filter_by(entity_id=incident_id, entity_type="incident").all()
+
+    assert len(events) == 1
+    assert events[0].action == "chat"
+    assert events[0].actor == "system"

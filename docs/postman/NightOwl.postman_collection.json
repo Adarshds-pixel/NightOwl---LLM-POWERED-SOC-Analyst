@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "NightOwl -- Day 3-13 API",
-    "description": "Every NightOwl backend endpoint that exists through Pair 1's Day 13 milestone (Backend + Detection core + production hardening), plus Pair 2's Day 11 incident chat endpoint. Day 13 added shared-secret X-API-Key auth (every folder below except Health) and limit/offset pagination on GET /incidents -- set the api_key variable if your server has API_KEY configured, otherwise leave it blank. Import this alongside NightOwl.postman_environment.json and select the \"NightOwl Local\" environment. See docs/05_NightOwl_Manual_Testing_Guide.md Section 21 for the full step-by-step walkthrough, required setup per request, and expected responses, and Section 22.7 for the Day 13 auth/pagination/rate-limit walkthrough.",
+    "description": "Every NightOwl backend endpoint that exists through both pairs' Day 13 milestones -- Pair 1's Backend + Detection core complete plus production hardening (X-API-Key auth, GET /incidents pagination, rate limiting), and Pair 2's AI/RAG core complete plus LLM robustness/caching, audit log, and the incident chat endpoint. Set the api_key variable if your server has API_KEY configured, otherwise leave it blank. Import this alongside NightOwl.postman_environment.json and select the \"NightOwl Local\" environment. See docs/05_NightOwl_Manual_Testing_Guide.md Section 21 for the full step-by-step walkthrough, required setup per request, and expected responses, and Section 22.7 for the Day 13 auth/pagination/rate-limit walkthrough.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -541,6 +541,34 @@
               ]
             },
             "description": "Needs live Postgres (a reachable DB is required to determine the id doesn't exist). Expected: HTTP 404, {\"detail\":\"incident 999999 not found\"}."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Chat History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/incidents/{{incident_id}}/chat",
+              "host": ["{{base_url}}"],
+              "path": ["incidents", "{{incident_id}}", "chat"]
+            },
+            "description": "Day 12. Needs live Postgres and a real incident_id. No LLM call -- pure read of persisted chat_messages rows. Expected: HTTP 200 with incident_id/messages[] (each {id, role, content, created_at}, oldest first)/count. A brand-new incident with no chat turns yet returns HTTP 200 with messages: [] and count: 0, not a 404."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Chat History - 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/incidents/999999/chat",
+              "host": ["{{base_url}}"],
+              "path": ["incidents", "999999", "chat"]
+            },
+            "description": "Day 12. Needs live Postgres (a reachable DB is required to determine the id doesn't exist). Expected: HTTP 404, {\"detail\":\"incident 999999 not found\"}."
           },
           "response": []
         }

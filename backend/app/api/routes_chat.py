@@ -6,17 +6,29 @@ incident, same source-attribution shape as Day 9's explain endpoint),
 persists the assistant's reply, and returns the assistant turn plus the
 retrieved source chunks.
 
-`GET /incidents/{id}/chat` (history) is Day 12 scope, not built here.
+`GET /incidents/{id}/chat` (history, Day 12) is a thin read wrapping the
+same `list_messages` the POST handler already uses to build conversation
+history.
+
+Day 13 (Pair 2, production hardening) adds a response cache in front of the
+POST handler (`rag/cache.py`), keyed on incident id + message, so a repeat
+question skips retrieval + the LLM call, and records an audit log event
+(`services/audit_service.py`) for every chat call.
 """
+
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.errors import not_found
 from app.db.session import get_db
 from app.models.incident import Incident
+from app.rag import cache
 from app.rag.chat_service import generate_chat_reply
+from app.services import audit_service
 from app.services.chat_service import add_message, list_messages
 
 router = APIRouter()
@@ -38,6 +50,19 @@ class ChatMessageResponse(BaseModel):
     role: str
     content: str
     sources: list[SourceChunk]
+
+
+class ChatHistoryMessage(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: datetime
+
+
+class ChatHistoryResponse(BaseModel):
+    incident_id: int
+    messages: list[ChatHistoryMessage]
+    count: int
 
 
 def _incident_to_dict(incident: Incident) -> dict:
@@ -71,13 +96,37 @@ def chat_with_incident(
 
     add_message(db, incident_id, role="user", content=payload.message)
 
-    result = generate_chat_reply(_incident_to_dict(incident), history, payload.message)
+    result = cache.get_chat_reply(incident_id, payload.message) if settings.response_cache_enabled else None
+    if result is None:
+        result = generate_chat_reply(_incident_to_dict(incident), history, payload.message)
+        if settings.response_cache_enabled:
+            cache.set_chat_reply(incident_id, payload.message, result)
 
     reply = add_message(db, incident_id, role="assistant", content=result.reply)
+
+    audit_service.record_event(db, entity_type="incident", entity_id=incident_id, action="chat")
 
     return ChatMessageResponse(
         incident_id=incident_id,
         role=reply.role,
         content=reply.content,
         sources=[SourceChunk(**chunk) for chunk in result.chunks],
+    )
+
+
+@router.get("/incidents/{incident_id}/chat", response_model=ChatHistoryResponse)
+def get_chat_history(incident_id: int, db: Session = Depends(get_db)) -> ChatHistoryResponse:
+    incident = db.get(Incident, incident_id)
+    if incident is None:
+        raise not_found("incident", incident_id)
+
+    messages = list_messages(db, incident_id)
+
+    return ChatHistoryResponse(
+        incident_id=incident_id,
+        messages=[
+            ChatHistoryMessage(id=m.id, role=m.role, content=m.content, created_at=m.created_at)
+            for m in messages
+        ],
+        count=len(messages),
     )

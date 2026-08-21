@@ -4,8 +4,10 @@ Combines rag/retriever.py + rag/prompts.py + rag/llm_client.py into one
 service function, per the roadmap's layering discipline (routes/callers use
 this, not the individual rag/* modules directly). The self-critique pass is
 a second LLM call that checks the draft against its own retrieved sources
-and flags any claim the sources don't actually support, so callers get an
-explanation that's already been checked rather than a raw ungrounded draft.
+(and, since Day 12, the incident context itself -- see
+rag/prompts.py's build_critique_prompt docstring for why) and flags any
+claim they don't actually support, so callers get an explanation that's
+already been checked rather than a raw ungrounded draft.
 
 Takes a loose `incident: dict` (see rag/prompts.py's docstring for why) --
 test against Pair 1's early alerts once available, or mocked incident data
@@ -15,45 +17,13 @@ until then (per roadmap Day 8 note).
 import logging
 from dataclasses import dataclass
 
-from langchain_core.prompts import ChatPromptTemplate
-
 from app.rag.llm_client import generate
-from app.rag.prompts import build_explanation_prompt
+from app.rag.prompts import build_critique_prompt, build_explanation_prompt
 from app.rag.retriever import retrieve
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_K = 5
-
-CRITIQUE_SYSTEM_PROMPT = """You are a fact-checking reviewer for SOC incident explanations. You \
-will be given a draft explanation and the exact source chunks it was supposed to be grounded in.
-
-Check every factual claim in the draft against the sources:
-- A claim is SUPPORTED if the sources directly state it or clearly imply it.
-- A claim is NOT SUPPORTED if the sources don't mention it, or the draft goes further than what \
-the sources actually say.
-
-If every claim is supported, respond with exactly: No issues found.
-Otherwise, respond with one line per unsupported or low-confidence claim, each starting with \
-"- ", briefly stating the claim and why the sources don't support it. Do not repeat claims that \
-are fine. Do not add any other commentary."""
-
-CRITIQUE_HUMAN_PROMPT = """## Draft explanation
-{draft}
-
-## Source chunks it should be grounded in
-{retrieved_context}
-
-## Task
-List any claims in the draft that are not supported by the source chunks above, following the \
-system instructions."""
-
-CRITIQUE_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        ("system", CRITIQUE_SYSTEM_PROMPT),
-        ("human", CRITIQUE_HUMAN_PROMPT),
-    ]
-)
 
 _NO_ISSUES = "no issues found"
 
@@ -87,19 +57,14 @@ def _build_retrieval_query(incident: dict) -> str:
     return query or "security incident"
 
 
-def _self_critique(draft: str, chunks: list[dict]) -> str | None:
-    """Ask the LLM to check its own draft against the retrieved chunks.
+def _self_critique(draft: str, chunks: list[dict], incident: dict) -> str | None:
+    """Ask the LLM to check its own draft against the incident context and
+    the retrieved chunks.
 
     Returns None if the draft's claims are all supported, otherwise the
     critique text listing the unsupported/low-confidence claims.
     """
-    from app.rag.prompts import format_chunks
-
-    messages = CRITIQUE_PROMPT.format_messages(
-        draft=draft,
-        retrieved_context=format_chunks(chunks),
-    )
-    critique = generate(messages).strip()
+    critique = generate(build_critique_prompt(draft, chunks, incident)).strip()
 
     if critique.lower().startswith(_NO_ISSUES):
         return None
@@ -117,7 +82,7 @@ def generate_explanation(incident: dict, k: int = DEFAULT_K) -> ExplanationResul
 
     draft = generate(build_explanation_prompt(incident, chunks))
 
-    critique = _self_critique(draft, chunks)
+    critique = _self_critique(draft, chunks, incident)
     if critique:
         logger.info("self-critique flagged low-confidence claims: %s", critique)
         explanation = f"{draft}\n\n**Confidence check:**\n{critique}"

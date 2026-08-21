@@ -14,10 +14,35 @@ default, or "groq"). Groq was added for the Day 10 hallucination
 spot-check, where Gemini's 20 req/day free-tier cap can't reliably cover
 10 explain() calls (20 requests) -- both are explicitly allowed free-tier
 providers per the roadmap's Day 2 task.
+
+Day 12 robustness additions:
+  - An explicit `timeout` on client construction, so a hung provider call
+    surfaces as a timeout exception (caught by generate()'s existing
+    retry/LLMProviderError wrapping) instead of blocking indefinitely --
+    "handle LLM API timeouts" per the roadmap.
+  - An opt-in in-memory response cache (`settings.llm_cache_enabled`,
+    default off) keyed on exact prompt content, to avoid burning through a
+    tight free-tier daily quota (e.g. Gemini's 20 req/day) on repeated
+    identical calls during manual testing.
+  - `generate_with_metrics()`, alongside the existing `generate()`, for the
+    Day 12 token-usage/latency measurement script -- kept separate so
+    `generate()`'s `-> str` contract (and every existing caller/test) is
+    unchanged.
+
+Also pins each client's own internal retry count to 1 attempt (0 for Groq's
+differently-named field -- see get_llm_client()): both SDKs otherwise retry
+several times internally with their own backoff before an exception ever
+reaches generate()'s retry-once, which stacks under it. Confirmed live: a
+429 RESOURCE_EXHAUSTED took 100s+ to surface (Gemini's SDK default is 6
+internal retries honoring the server's suggested ~14-29s backoff) even with
+the timeout above in place, because that timeout bounds a single HTTP call,
+not the SDK's own retry loop around it.
 """
 
+import hashlib
 import logging
 import time
+from dataclasses import dataclass
 
 from langchain_core.messages import BaseMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -37,6 +62,31 @@ class LLMProviderError(Exception):
 
 
 _client: ChatGoogleGenerativeAI | ChatGroq | None = None
+
+# Day 12: opt-in response cache, keyed on a hash of the exact rendered
+# prompt content. Only ever populated on a *successful* call -- a failed
+# call is never cached, so a transient provider error doesn't get "stuck".
+_response_cache: dict[str, str] = {}
+
+
+@dataclass
+class GenerationMetrics:
+    """Everything scripts/llm_cost_latency_check.py needs to report token
+    usage and latency per call -- not used on the hot request path
+    (explain_service.py/chat_service.py keep calling plain generate())."""
+
+    text: str
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    latency_seconds: float
+    provider: str
+    model: str
+
+
+def _cache_key(messages: list[BaseMessage]) -> str:
+    rendered = "|".join(f"{m.type}:{m.content}" for m in messages)
+    return hashlib.sha256(rendered.encode("utf-8")).hexdigest()
 
 
 def _extract_text(content) -> str:
@@ -77,11 +127,14 @@ def get_llm_client() -> ChatGoogleGenerativeAI | ChatGroq:
                 "GROQ_API_KEY is not set -- add a free Groq API key from "
                 "https://console.groq.com/keys, or set LLM_PROVIDER=gemini"
             )
+        # ChatGroq's timeout field is named `request_timeout`, not `timeout`
+        # (unlike ChatGoogleGenerativeAI below) -- confirmed against the
+        # installed langchain-groq version's Pydantic fields.
         _client = ChatGroq(
             model=settings.groq_model,
             api_key=settings.groq_api_key,
-            timeout=settings.llm_timeout_seconds,
-            max_retries=0,  # generate() already retries once itself -- see note below
+            request_timeout=settings.llm_timeout_seconds,
+            max_retries=0,  # generate() already retries once itself -- see module docstring
         )
         return _client
 
@@ -97,20 +150,17 @@ def get_llm_client() -> ChatGoogleGenerativeAI | ChatGroq:
         timeout=settings.llm_timeout_seconds,
         # 1, not 0 -- a langchain-google-genai quirk: max_retries=0 is read as
         # "use the Google SDK's own default (6)", not "no retries". 1 means
-        # exactly one attempt, no SDK-internal retry. Without this, a 429
-        # RESOURCE_EXHAUSTED response triggers up to 6 SDK-internal retries
-        # honoring the server's suggested backoff (observed ~14s each) inside
-        # a *single* generate() attempt -- confirmed live: one /explain call
-        # took 100s to fail even after adding the timeout above, because the
-        # SDK's own retry loop and generate()'s outer retry-once both fired.
+        # exactly one attempt, no SDK-internal retry -- see module docstring.
         max_retries=1,
     )
     return _client
 
 
-def generate(messages: list[BaseMessage]) -> str:
-    """Send `messages` (as produced by rag/prompts.py) to the LLM and return
-    its text response, retrying once on transient failure."""
+def _generate_raw(messages: list[BaseMessage]) -> tuple[object, str]:
+    """Send `messages` to the LLM, retrying once on transient failure.
+    Returns the raw provider response alongside the extracted text, so
+    callers that need more than text (generate_with_metrics) don't have to
+    re-invoke the client."""
     client = get_llm_client()
 
     last_error: Exception | None = None
@@ -120,7 +170,7 @@ def generate(messages: list[BaseMessage]) -> str:
             text = _extract_text(getattr(response, "content", None))
             if not text:
                 raise LLMProviderError("LLM returned an empty response")
-            return text
+            return response, text
         except Exception as exc:  # noqa: BLE001 -- deliberately broad: SDK can raise many types
             last_error = exc
             logger.warning("LLM call failed (attempt %d/%d): %s", attempt, _MAX_ATTEMPTS, exc)
@@ -128,6 +178,55 @@ def generate(messages: list[BaseMessage]) -> str:
                 time.sleep(_RETRY_DELAY_SECONDS)
 
     raise LLMProviderError(f"LLM call failed after {_MAX_ATTEMPTS} attempts: {last_error}") from last_error
+
+
+def generate(messages: list[BaseMessage]) -> str:
+    """Send `messages` (as produced by rag/prompts.py) to the LLM and return
+    its text response, retrying once on transient failure.
+
+    If `settings.llm_cache_enabled` is set, an exact repeat of `messages`
+    returns the previously cached response instead of calling the provider
+    again -- opt-in, off by default, meant for repeated manual testing
+    against a tight free-tier quota, not production behavior."""
+    if settings.llm_cache_enabled:
+        key = _cache_key(messages)
+        cached = _response_cache.get(key)
+        if cached is not None:
+            logger.debug("llm_client cache hit")
+            return cached
+
+        text = _generate_raw(messages)[1]
+        _response_cache[key] = text
+        return text
+
+    return _generate_raw(messages)[1]
+
+
+def generate_with_metrics(messages: list[BaseMessage]) -> GenerationMetrics:
+    """Like generate(), but also captures token usage and wall-clock
+    latency -- used by scripts/llm_cost_latency_check.py, not the hot
+    request path. Does not use the response cache, since measuring a cache
+    hit's near-zero latency/tokens would defeat the point.
+
+    Token usage comes from the raw response's `usage_metadata` (present on
+    real langchain-google-genai/langchain-groq responses); falls back to
+    None fields if absent, e.g. against a mocked response in tests."""
+    start = time.monotonic()
+    response, text = _generate_raw(messages)
+    elapsed = time.monotonic() - start
+
+    usage = getattr(response, "usage_metadata", None) or {}
+    model = settings.groq_model if settings.llm_provider == "groq" else settings.llm_model
+
+    return GenerationMetrics(
+        text=text,
+        input_tokens=usage.get("input_tokens"),
+        output_tokens=usage.get("output_tokens"),
+        total_tokens=usage.get("total_tokens"),
+        latency_seconds=elapsed,
+        provider=settings.llm_provider,
+        model=model,
+    )
 
 
 if __name__ == "__main__":

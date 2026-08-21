@@ -7,7 +7,7 @@ from alembic import context
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models import Alert, ChatMessage, Event, Incident, Rule  # noqa: F401 (registers tables on Base.metadata)
+from app.models import Alert, AuditLog, ChatMessage, Event, Incident, Rule  # noqa: F401 (registers tables on Base.metadata)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

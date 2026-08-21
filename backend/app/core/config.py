@@ -43,20 +43,34 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
 
-    # Per-call network timeout (seconds) for the LLM provider (Gemini/Groq).
-    # Without this, a stalled network call blocks the request thread
-    # indefinitely (confirmed: langchain's client -> httpx defaults to
-    # Timeout(None), i.e. no timeout at any layer, when none is passed).
-    llm_timeout_seconds: int = 30
+    # Day 12 robustness: an explicit per-request timeout so a hung provider
+    # call surfaces as a timeout (caught by llm_client.generate's existing
+    # retry/LLMProviderError handling) instead of blocking indefinitely.
+    llm_timeout_seconds: float = 30.0
 
-    # Shared-secret header auth (Day 13). Empty (default) = auth disabled --
-    # same "empty string = not configured" convention as llm_api_key/groq_api_key
-    # above, so local dev, Postman, and the existing test suite keep working
-    # with no header until an operator opts in by setting this in .env.
+    # Day 12: opt-in in-memory cache for llm_client.generate(), keyed on
+    # exact prompt content -- off by default (it's a testing aid for
+    # repeated manual runs against a tight free-tier quota, not production
+    # behavior). Enable via LLM_CACHE_ENABLED=true in .env.
+    llm_cache_enabled: bool = False
+
+    # Day 13: always-on response cache for explain()/chat() results, keyed
+    # on incident id (+ message, for chat) -- see rag/cache.py. Distinct
+    # from llm_cache_enabled above (that one is opt-in, keyed on exact
+    # prompt content, and stays off by default).
+    response_cache_enabled: bool = True
+    response_cache_ttl_seconds: float = 900.0
+
+    # Shared-secret header auth (Day 13, Pair 1). Empty (default) = auth
+    # disabled -- same "empty string = not configured" convention as
+    # llm_api_key/groq_api_key above, so local dev, Postman, and the
+    # existing test suite keep working with no header until an operator
+    # opts in by setting this in .env.
     api_key: str = ""
 
-    # In-memory token-bucket rate limiting (Day 13). Requests/minute per
-    # client; <= 0 disables limiting entirely (same "0/empty = off" pattern).
+    # In-memory token-bucket rate limiting (Day 13, Pair 1). Requests/minute
+    # per client; <= 0 disables limiting entirely (same "0/empty = off"
+    # pattern).
     rate_limit_per_minute: int = 60
 
 

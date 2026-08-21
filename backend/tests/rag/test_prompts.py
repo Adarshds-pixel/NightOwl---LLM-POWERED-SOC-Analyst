@@ -1,6 +1,8 @@
 """Day 7 verification (Pair 2): rag/prompts.py's explanation prompt template.
 Day 11 adds cases for the chat prompt template (format_chat_history,
-build_chat_prompt).
+build_chat_prompt). Day 12 adds cases for build_critique_prompt (moved here
+from explain_service.py) and the new "general technique background vs.
+observed fact about this incident" guard rule in both system prompts.
 
 Pure string/template tests -- no network, no API key needed.
 """
@@ -8,7 +10,10 @@ Pure string/template tests -- no network, no API key needed.
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.rag.prompts import (
+    CHAT_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
     build_chat_prompt,
+    build_critique_prompt,
     build_explanation_prompt,
     extract_recommended_response,
     format_chat_history,
@@ -79,6 +84,16 @@ def test_build_explanation_prompt_system_message_carries_grounding_rules():
     system_text = messages[0].content
     assert "junior analyst" in system_text
     assert "Do not invent facts" in system_text
+
+
+def test_system_prompt_distinguishes_general_technique_background_from_incident_fact():
+    """Day 10 hallucination-eval.md finding #2: a draft claimed an -enc
+    flag the crafted incident never had, imported from a retrieved
+    playbook's general technique description. Both generation system
+    prompts must tell the LLM not to state general technique background as
+    an observed fact about this specific incident."""
+    assert "IN THIS INCIDENT" in SYSTEM_PROMPT
+    assert "IN THIS INCIDENT" in CHAT_SYSTEM_PROMPT
 
 
 def test_build_explanation_prompt_human_message_embeds_incident_and_technique_id():
@@ -154,3 +169,39 @@ def test_build_chat_prompt_handles_no_history_or_chunks():
     human_text = messages[1].content
     assert "no prior messages" in human_text
     assert "no relevant knowledge base context retrieved" in human_text
+
+
+def test_build_critique_prompt_returns_system_and_human_messages():
+    messages = build_critique_prompt("draft text", SAMPLE_CHUNKS, SAMPLE_INCIDENT)
+
+    assert len(messages) == 2
+    assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], HumanMessage)
+
+
+def test_build_critique_prompt_system_message_treats_incident_context_as_legitimate():
+    """Day 10 hallucination-eval.md finding #1: critique used to flag the
+    incident's own context fields (e.g. host) as unsupported, because it
+    never saw incident context, only retrieved chunks."""
+    messages = build_critique_prompt("draft text", SAMPLE_CHUNKS, SAMPLE_INCIDENT)
+
+    system_text = messages[0].content
+    assert "incident context" in system_text.lower()
+    assert "first-party" in system_text.lower()
+
+
+def test_build_critique_prompt_human_message_embeds_draft_chunks_and_incident():
+    messages = build_critique_prompt("draft text goes here", SAMPLE_CHUNKS, SAMPLE_INCIDENT)
+
+    human_text = messages[1].content
+    assert "draft text goes here" in human_text
+    assert "Adversaries may abuse PowerShell" in human_text
+    assert "WIN10-ANALYST" in human_text
+
+
+def test_build_critique_prompt_handles_empty_chunks_and_incident():
+    messages = build_critique_prompt("draft text", [], {})
+
+    human_text = messages[1].content
+    assert "no relevant knowledge base context retrieved" in human_text
+    assert "no incident context provided" in human_text

@@ -1,6 +1,12 @@
 """Day 8 verification (Pair 2): rag/explain_service.py's retrieve -> draft ->
 self-critique pipeline.
 
+Day 12: the critique prompt templates moved to rag/prompts.py
+(build_critique_prompt), and _self_critique now also passes the incident
+dict through, so critique can check incident-specific claims against
+incident context, not just the retrieved chunks (see
+docs/research/hallucination-eval.md findings #1/#2).
+
 Runs fully offline -- retriever.retrieve and llm_client.generate are both
 mocked, no network call and no real LLM_API_KEY is needed or used.
 """
@@ -90,6 +96,29 @@ def test_generate_explanation_passes_technique_id_and_k_to_retrieve(monkeypatch)
 
     assert captured["technique_id"] == "T1059.001"
     assert captured["k"] == 3
+
+
+def test_generate_explanation_passes_incident_into_critique_prompt(monkeypatch):
+    monkeypatch.setattr(explain_service, "retrieve", lambda query, k, technique_id: SAMPLE_CHUNKS)
+    responses = iter(["draft explanation text", "No issues found."])
+    monkeypatch.setattr(explain_service, "generate", lambda messages: next(responses))
+
+    captured = {}
+    real_build_critique_prompt = explain_service.build_critique_prompt
+
+    def capturing_build_critique_prompt(draft, chunks, incident):
+        captured["draft"] = draft
+        captured["chunks"] = chunks
+        captured["incident"] = incident
+        return real_build_critique_prompt(draft, chunks, incident)
+
+    monkeypatch.setattr(explain_service, "build_critique_prompt", capturing_build_critique_prompt)
+
+    generate_explanation(SAMPLE_INCIDENT)
+
+    assert captured["incident"] == SAMPLE_INCIDENT
+    assert captured["draft"] == "draft explanation text"
+    assert captured["chunks"] == SAMPLE_CHUNKS
 
 
 def test_generate_explanation_propagates_llm_provider_error(monkeypatch):
