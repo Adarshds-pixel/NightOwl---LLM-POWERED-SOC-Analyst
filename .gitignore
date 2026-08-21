@@ -11,3 +11,8 @@ backend/venv/
 # Generated/cached data (regenerable from source, not curated content)
 data/chroma/
 data/mitre/*.json
+
+# Frontend (Day 14) -- frontend/.gitignore covers this locally too, but keep
+# the root aware for `git status` run from the repo root.
+frontend/node_modules/
+frontend/dist/

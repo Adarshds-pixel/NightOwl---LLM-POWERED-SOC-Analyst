@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     # pattern).
     rate_limit_per_minute: int = 60
 
+    # Day 14 (Pair 1): origins the new frontend (Vite dev server) is allowed
+    # to call the API from. Comma-separated; without this, every browser
+    # fetch from localhost:5173 to this API is blocked by CORS even though
+    # curl/Postman work fine (browsers enforce it, other tools don't).
+    cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
 
 @lru_cache
 def get_settings() -> Settings:
