@@ -1,12 +1,25 @@
 {
   "info": {
-    "name": "NightOwl -- Day 3-12 API",
-    "description": "Every NightOwl backend endpoint that exists through Pair 1's Day 12 milestone (Backend + Detection core complete), plus Pair 2's Day 11 incident chat endpoint. Import this alongside NightOwl.postman_environment.json and select the \"NightOwl Local\" environment. See docs/05_NightOwl_Manual_Testing_Guide.md Section 21 for the full step-by-step walkthrough, required setup per request, and expected responses.",
+    "name": "NightOwl -- Day 3-13 API",
+    "description": "Every NightOwl backend endpoint that exists through Pair 1's Day 13 milestone (Backend + Detection core + production hardening), plus Pair 2's Day 11 incident chat endpoint. Day 13 added shared-secret X-API-Key auth (every folder below except Health) and limit/offset pagination on GET /incidents -- set the api_key variable if your server has API_KEY configured, otherwise leave it blank. Import this alongside NightOwl.postman_environment.json and select the \"NightOwl Local\" environment. See docs/05_NightOwl_Manual_Testing_Guide.md Section 21 for the full step-by-step walkthrough, required setup per request, and expected responses, and Section 22.7 for the Day 13 auth/pagination/rate-limit walkthrough.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "http://127.0.0.1:8000", "type": "string" },
-    { "key": "incident_id", "value": "1", "type": "string" }
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "incident_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "",
+      "type": "string"
+    }
   ],
   "item": [
     {
@@ -19,8 +32,12 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/health",
-              "host": ["{{base_url}}"],
-              "path": ["health"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
             },
             "description": "No DB needed. Expected: HTTP 200, {\"status\":\"ok\"}."
           },
@@ -35,17 +52,31 @@
           "name": "Ingest - Happy Path (sysmon_demo.evtx)",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "file", "type": "file", "src": [], "description": "Select data/sample_logs/sysmon_demo.evtx from the repo." }
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select data/sample_logs/sysmon_demo.evtx from the repo."
+                }
               ]
             },
             "url": {
               "raw": "{{base_url}}/ingest",
-              "host": ["{{base_url}}"],
-              "path": ["ingest"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ingest"
+              ]
             },
             "description": "Needs live Postgres (docker compose up -d db + alembic upgrade head). Expected: HTTP 200 with records_read/events_ingested/rule_matches/alerts_created/incident_ids fields. Without Postgres running, the Day 12 error handler now returns a clean HTTP 500 {\"detail\":\"internal server error\"} instead of a raw traceback -- see guide Section 19.6."
           },
@@ -55,17 +86,31 @@
           "name": "Ingest - Wrong File Type (expect 400)",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "file", "type": "file", "src": [], "description": "Select any non-.evtx file, e.g. README.md." }
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select any non-.evtx file, e.g. README.md."
+                }
               ]
             },
             "url": {
               "raw": "{{base_url}}/ingest",
-              "host": ["{{base_url}}"],
-              "path": ["ingest"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ingest"
+              ]
             },
             "description": "No DB needed -- this is pure validation before any DB call. Expected: HTTP 400, detail starts with \"unsupported file type: expected '.evtx'\"."
           },
@@ -75,17 +120,31 @@
           "name": "Ingest - Empty File (expect 400)",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "file", "type": "file", "src": [], "description": "Select a 0-byte file named anything.evtx (create one with: New-Item empty.evtx -ItemType File)." }
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select a 0-byte file named anything.evtx (create one with: New-Item empty.evtx -ItemType File)."
+                }
               ]
             },
             "url": {
               "raw": "{{base_url}}/ingest",
-              "host": ["{{base_url}}"],
-              "path": ["ingest"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ingest"
+              ]
             },
             "description": "No DB needed. Expected: HTTP 400, detail: \"uploaded file is empty\"."
           },
@@ -95,17 +154,31 @@
           "name": "Ingest - Malformed EVTX (expect 400)",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "file", "type": "file", "src": [], "description": "Select a file with a .evtx extension but garbage content (e.g. rename a .txt with a few random bytes to garbage.evtx)." }
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select a file with a .evtx extension but garbage content (e.g. rename a .txt with a few random bytes to garbage.evtx)."
+                }
               ]
             },
             "url": {
               "raw": "{{base_url}}/ingest",
-              "host": ["{{base_url}}"],
-              "path": ["ingest"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ingest"
+              ]
             },
             "description": "No DB needed -- fails during EVTX parsing before any DB call. Expected: HTTP 400, detail starts with \"failed to parse EVTX file:\"."
           },
@@ -120,11 +193,21 @@
           "name": "List MITRE Techniques",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/mitre/techniques",
-              "host": ["{{base_url}}"],
-              "path": ["mitre", "techniques"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mitre",
+                "techniques"
+              ]
             },
             "description": "No DB needed (reads the cached local MITRE dataset). Expected: HTTP 200, {\"techniques\":[...],\"count\":858}."
           },
@@ -139,13 +222,75 @@
           "name": "List Incidents - All",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/incidents",
-              "host": ["{{base_url}}"],
-              "path": ["incidents"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents"
+              ]
             },
             "description": "Needs live Postgres. Expected: HTTP 200, {\"incidents\":[...],\"count\":N}, newest first."
+          },
+          "response": []
+        },
+        {
+          "name": "List Incidents - Paginated (limit=1, offset=0)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents?limit=1&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents"
+              ],
+              "query": [
+                { "key": "limit", "value": "1" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Day 13 pagination. Needs live Postgres with more than one incident. Expected: HTTP 200, {\"incidents\":[...1 item...],\"count\":1,\"total\":N,\"limit\":1,\"offset\":0} -- total is the grand match count across all pages, count is just this page's size. Bump offset to 1, 2, ... to page through the rest; total stays the same each time."
+          },
+          "response": []
+        },
+        {
+          "name": "List Incidents - Limit Above Cap (expect 422)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents?limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents"
+              ],
+              "query": [
+                { "key": "limit", "value": "500" }
+              ]
+            },
+            "description": "Day 13 pagination validation. No DB call reached -- FastAPI/pydantic rejects limit>200 before the route body runs. Expected: HTTP 422 with a validation error detail. Try offset=-1 instead of limit=500 for the negative-offset case -- same 422 behavior."
           },
           "response": []
         },
@@ -153,13 +298,25 @@
           "name": "List Incidents - Filter by Severity",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/incidents?severity=high",
-              "host": ["{{base_url}}"],
-              "path": ["incidents"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents"
+              ],
               "query": [
-                { "key": "severity", "value": "high" }
+                {
+                  "key": "severity",
+                  "value": "high"
+                }
               ]
             },
             "description": "Needs live Postgres. Edit the severity value to match a real incident (informational/low/medium/high/critical). Expected: HTTP 200, count reflects only matching-severity incidents."
@@ -170,13 +327,25 @@
           "name": "List Incidents - Filter by Status",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/incidents?status=open",
-              "host": ["{{base_url}}"],
-              "path": ["incidents"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents"
+              ],
               "query": [
-                { "key": "status", "value": "open" }
+                {
+                  "key": "status",
+                  "value": "open"
+                }
               ]
             },
             "description": "Needs live Postgres. Expected: HTTP 200, count reflects only matching-status incidents."
@@ -187,14 +356,29 @@
           "name": "List Incidents - Filter by Date Range",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/incidents?start_date=2026-01-01T00:00:00Z&end_date=2026-12-31T23:59:59Z",
-              "host": ["{{base_url}}"],
-              "path": ["incidents"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents"
+              ],
               "query": [
-                { "key": "start_date", "value": "2026-01-01T00:00:00Z" },
-                { "key": "end_date", "value": "2026-12-31T23:59:59Z" }
+                {
+                  "key": "start_date",
+                  "value": "2026-01-01T00:00:00Z"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2026-12-31T23:59:59Z"
+                }
               ]
             },
             "description": "Needs live Postgres. ISO-8601 datetimes, filters on Incident.created_at. Expected: HTTP 200."
@@ -205,11 +389,21 @@
           "name": "Get Incident Detail",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/incidents/{{incident_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["incidents", "{{incident_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "{{incident_id}}"
+              ]
             },
             "description": "Needs live Postgres, and incident_id must be a real id (from an earlier Ingest or List Incidents response -- update the incident_id collection/environment variable). Expected: HTTP 200 with id/title/status/severity/host/created_at/mitre_technique_ids/techniques[]/alerts[] (each alert nests its event)."
           },
@@ -219,11 +413,21 @@
           "name": "Get Incident Detail - 404",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/incidents/999999",
-              "host": ["{{base_url}}"],
-              "path": ["incidents", "999999"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "999999"
+              ]
             },
             "description": "Needs live Postgres (a reachable DB is required to determine the id doesn't exist). Expected: HTTP 404, {\"detail\":\"incident 999999 not found\"}."
           },
@@ -238,11 +442,22 @@
           "name": "Explain Incident",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/incidents/{{incident_id}}/explain",
-              "host": ["{{base_url}}"],
-              "path": ["incidents", "{{incident_id}}", "explain"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "{{incident_id}}",
+                "explain"
+              ]
             },
             "description": "Needs live Postgres, a real incident_id, and a real LLM_API_KEY in backend .env (2 live Gemini calls per request -- mind the free-tier daily quota, see guide Section 17.3/Troubleshooting). Expected: HTTP 200 with explanation/recommended_response/sources[]."
           },
@@ -258,17 +473,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"message\": \"Why was this flagged?\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/incidents/{{incident_id}}/chat",
-              "host": ["{{base_url}}"],
-              "path": ["incidents", "{{incident_id}}", "chat"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "{{incident_id}}",
+                "chat"
+              ]
             },
             "description": "Needs live Postgres, a real incident_id, and a real LLM_API_KEY (or GROQ_API_KEY) in backend .env (1 live LLM call per request -- mind the free-tier daily quota, see guide Section 21). Each call persists both the user message and the assistant reply as chat_messages rows, so retrieval scoped to this incident's context sees prior turns on the next call. Expected: HTTP 200 with incident_id/role (\"assistant\")/content/sources[]."
           },
@@ -279,17 +511,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"message\": \"hello\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/incidents/999999/chat",
-              "host": ["{{base_url}}"],
-              "path": ["incidents", "999999", "chat"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "999999",
+                "chat"
+              ]
             },
             "description": "Needs live Postgres (a reachable DB is required to determine the id doesn't exist). Expected: HTTP 404, {\"detail\":\"incident 999999 not found\"}."
           },

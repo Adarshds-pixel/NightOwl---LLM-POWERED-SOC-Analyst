@@ -1,6 +1,6 @@
 # NightOwl Handbook — Volume 5: Manual Testing Guide
 
-**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §14 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps. **Pair 1 Day 8** (5 Sigma rules across process-creation/network-connection/file-creation + `alerts` table persistence, `app/services/detection_service.py`) was added and fully verified — including live persistence against real Postgres — on **2026-08-18** (§13). **Pair 1 Day 9** (5 more rules — 10 total, adding a registry category — + incident grouping, `app/services/incident_service.py`) and **Pair 1 Day 10** (severity scoring, `app/services/severity_service.py`, plus the roadmap-specified `tests/test_detection.py`) landed together and were fully verified — including live incident grouping/severity scoring against real Postgres — on **2026-08-19** (§14/§15). Pair 2's own Day 9/10 (explain endpoint, hallucination spot-check) is the teammates' responsibility and is intentionally not covered by this guide. **Pair 1 Day 11** (MITRE technique validation for every rule's tag, warn-only on unknown/deprecated/revoked ids, `app/mitre/validator.py`) and **Pair 1 Day 12** (`GET /incidents` + `GET /incidents/{id}`, 5 more rules — 15 total, covering credential access + lateral movement — consistent JSON error handling for unhandled exceptions, structured JSON logging, and an end-to-end integration test — **Milestone: Backend + Detection core complete**) were fully verified, including a Postman-based manual pass covering every endpoint, on **2026-08-19** (§18/§19/§21). **Pair 2 Day 11** (`chat_messages` service + `POST /incidents/{id}/chat` with retrieval scoped to incident context, `app/services/chat_service.py` + `app/rag/chat_service.py` + `app/api/routes_chat.py`) was added and verified via the full offline test suite (181 passed) on **2026-08-19** (§20); a live-LLM end-to-end check is still pending a Gemini free-tier quota reset (§20.3).
+**Scope:** verifying everything built through **Pair 1 Day 6** (FastAPI skeleton, DB session dependency, DB models v1, Postgres/Alembic, EVTX reading + JSON conversion, normalized event schema + persistence, `POST /ingest` + robust error handling), **Pair 2 Day 6** (ChromaDB + embeddings setup, MITRE ATT&CK loader, real knowledge-base build, top-k retrieval, `GET /mitre/techniques` + rule-to-technique validator scaffold), as of **2026-08-15**; **Pair 2 Days 7–8** (explanation prompt template + Gemini LLM client wiring; explain_service's retrieve → draft → self-critique pipeline); and **Pair 1 Day 7** (detection engine v1 — Sigma rule loader + evaluator, wired into `POST /ingest`), as of **2026-08-16**. Whole suite + all live checks re-verified again on **2026-08-17** (see the "Re-verified 2026-08-17" notes throughout, and the new §14 consolidated runbook) with no regressions found; Docker Desktop was also started and Postgres brought up for the first time since 2026-08-12, fixing the `POST /ingest` HTTP 500 gap that prior days had noted as a known, environment-only limitation (not a code defect) — see §3/§9.3/§12.4's "second pass" notes. A real Gemini key was then added, which surfaced and led to fixing one genuine bug — `app/core/config.py` resolved `.env` relative to cwd instead of its own file location, so `LLM_API_KEY` was never actually read when running from `backend/` (see §10.4's "Bug found + fixed" note) — after which both live-Gemini checks (§10.4/§11.3) passed for real. Every check in this guide has now been executed for real at least once as of 2026-08-17, with no open gaps. **Pair 1 Day 8** (5 Sigma rules across process-creation/network-connection/file-creation + `alerts` table persistence, `app/services/detection_service.py`) was added and fully verified — including live persistence against real Postgres — on **2026-08-18** (§13). **Pair 1 Day 9** (5 more rules — 10 total, adding a registry category — + incident grouping, `app/services/incident_service.py`) and **Pair 1 Day 10** (severity scoring, `app/services/severity_service.py`, plus the roadmap-specified `tests/test_detection.py`) landed together and were fully verified — including live incident grouping/severity scoring against real Postgres — on **2026-08-19** (§14/§15). Pair 2's own Day 9/10 (explain endpoint, hallucination spot-check) is the teammates' responsibility and is intentionally not covered by this guide. **Pair 1 Day 11** (MITRE technique validation for every rule's tag, warn-only on unknown/deprecated/revoked ids, `app/mitre/validator.py`) and **Pair 1 Day 12** (`GET /incidents` + `GET /incidents/{id}`, 5 more rules — 15 total, covering credential access + lateral movement — consistent JSON error handling for unhandled exceptions, structured JSON logging, and an end-to-end integration test — **Milestone: Backend + Detection core complete**) were fully verified, including a Postman-based manual pass covering every endpoint, on **2026-08-19** (§18/§19/§21). **Pair 2 Day 11** (`chat_messages` service + `POST /incidents/{id}/chat` with retrieval scoped to incident context, `app/services/chat_service.py` + `app/rag/chat_service.py` + `app/api/routes_chat.py`) was added and verified via the full offline test suite (181 passed) on **2026-08-19** (§20); a live-LLM end-to-end check is still pending a Gemini free-tier quota reset (§20.3). **Pair 1 Day 13** (production hardening — `X-API-Key` header auth applied to every feature router via a new `require_api_key` dependency, `limit`/`offset` pagination on `GET /incidents` with a page-independent `total`, an in-memory token-bucket rate limiter applied to every route, and a multi-stage non-root `backend/Dockerfile` + `backend` service in `docker-compose.yml`) was added and verified via the full offline test suite (205 passed) on **2026-08-20** (§22); the Postman collection was updated the same day to cover the new auth header and pagination params (§21/§22.7). The Docker image build needed a fix for this environment's corporate-network TLS interception (see §22.6/Troubleshooting); getting a stable, working image also meant working through a stale WSL2 disk-mount lock and image layers physically corrupted by a full host disk (both diagnosed and fixed — see §22.6). **A full `docker compose up` end-to-end run is now confirmed working** — `/health` and `/mitre/techniques` (matching the non-Docker `count: 858`) both verified live from the running containers on 2026-08-20 — and the live auth (401/200) and rate-limit (429) checks in §22.4/§22.6 were re-run for real against that same live stack, not just the automated suite.
 
 This is a hands-on runbook, not the formal Testing Report (that template lives in Volume 3 §9.5 and is for the Day 20–21 Integration & Testing phase). Every step below was executed for real against this repo on the date noted next to it — see the "Last verified" line under each step.
 
@@ -1327,7 +1327,7 @@ Confirms, for real: filters correctly include/exclude by severity; the detail re
 
 ### 19.8. Known v1 limitations
 
-- `GET /incidents` filters are exact-match/range only — no free-text search, no pagination (fine at current data volumes, revisit if a demo dataset grows large).
+- `GET /incidents` filters are exact-match/range only — no free-text search. **Pagination added Day 13** (§22) — see there instead of here.
 - The unhandled-exception JSON handler returns a single generic `"internal server error"` message for every unhandled exception type — deliberately generic so internal details (stack traces, DB connection strings) never leak to a client; full detail is only in the structured server-side log (§19.6).
 - `core/logging.py`'s JSON formatter covers this project's own loggers; uvicorn's built-in access/error loggers keep their own default (non-JSON) format, since overriding those isn't part of what "structured JSON logging" was asking for here (see §19.5).
 
@@ -1411,6 +1411,8 @@ print(client.post("/incidents/999999/chat", json={"message": "hi"}).json())
 
 A real, importable Postman collection now lives at `docs/postman/NightOwl.postman_collection.json`, with a matching environment at `docs/postman/NightOwl.postman_environment.json`. It covers every endpoint that exists through Day 12, plus Pair 2's Day 11 chat endpoint — this is the answer to "test it in Postman" without retyping each request by hand.
 
+**Day 13 additions (see §22.7 for the full walkthrough):** every request below except Health Check now sends an `X-API-Key` header wired to a new `api_key` collection/environment variable (default empty, matching `API_KEY` being unset by default — harmless either way, since `require_api_key` only checks the header when the server has a key configured). The Incidents folder also gained two new pagination requests. And because the Day 13 rate limiter applies globally (including to every request in this collection), clicking through the full run order below in quick succession could occasionally trip a `429` — if that happens, just wait a few seconds for the token bucket to refill and retry.
+
 ### 21.1. Import
 
 1. Postman → **Import** → select both `docs/postman/NightOwl.postman_collection.json` and `docs/postman/NightOwl.postman_environment.json` (drag-and-drop both, or import one at a time).
@@ -1426,18 +1428,173 @@ The collection is grouped into 6 folders (**Health**, **Ingest**, **MITRE**, **I
 3. **Ingest → the 3 error-case requests** — no DB needed (they fail validation/parsing before any DB call). Each request's description says exactly what file to pick (a non-`.evtx` file / a 0-byte file / a `.evtx`-named file with garbage bytes). Expect `400` with the specific `detail` message noted in each request's description (matches §9.3).
 4. **MITRE → List MITRE Techniques** — no DB needed. Expect `200 {"techniques":[...],"count":858}`.
 5. **Incidents → List Incidents - All** — needs live Postgres. Expect `200 {"incidents":[...],"count":N}`.
-6. **Incidents → the 3 filtered variants** (severity/status/date range) — edit the query param values to match real data from step 5 if you want a non-empty result; the defaults are placeholders.
-7. **Incidents → Get Incident Detail** — first update the `incident_id` environment variable to a real id from step 2's or step 5's response, then send. Expect `200` with `alerts[]` (each nesting its `event`) and resolved `techniques[]`.
-8. **Incidents → Get Incident Detail - 404** — needs live Postgres (to determine the id truly doesn't exist). Expect `404 {"detail":"incident 999999 not found"}`.
-9. **Explain → Explain Incident** — needs live Postgres, a real `incident_id`, and a real `LLM_API_KEY` in `backend`'s `.env` (2 live Gemini calls per request — mind the free-tier daily quota, §17.3/Troubleshooting). Expect `200` with `explanation`/`recommended_response`/`sources[]`.
-10. **Chat → Chat With Incident** — needs live Postgres, a real `incident_id`, and a real `LLM_API_KEY`/`GROQ_API_KEY` (1 live LLM call per request). Each call persists both the user message and the assistant reply, so a second call against the same `incident_id` has real conversation history to draw on. Expect `200` with `incident_id`/`role` (`"assistant"`)/`content`/`sources[]`.
-11. **Chat → Chat With Incident - 404** — needs live Postgres. Expect `404 {"detail":"incident 999999 not found"}`.
+6. **Incidents → List Incidents - Paginated (limit=1, offset=0)** (Day 13) — needs live Postgres with more than one incident. Expect `200` with exactly 1 item in `incidents`, `count:1`, and `total` equal to the full match count (same `total` you'd get from step 5). Bump `offset` to page through the rest.
+7. **Incidents → List Incidents - Limit Above Cap (expect 422)** (Day 13) — no DB needed, pydantic rejects it first. Expect `422`.
+8. **Incidents → the 3 filtered variants** (severity/status/date range) — edit the query param values to match real data from step 5 if you want a non-empty result; the defaults are placeholders.
+9. **Incidents → Get Incident Detail** — first update the `incident_id` environment variable to a real id from step 2's or step 5's response, then send. Expect `200` with `alerts[]` (each nesting its `event`) and resolved `techniques[]`.
+10. **Incidents → Get Incident Detail - 404** — needs live Postgres (to determine the id truly doesn't exist). Expect `404 {"detail":"incident 999999 not found"}`.
+11. **Explain → Explain Incident** — needs live Postgres, a real `incident_id`, and a real `LLM_API_KEY` in `backend`'s `.env` (2 live Gemini calls per request — mind the free-tier daily quota, §17.3/Troubleshooting). Expect `200` with `explanation`/`recommended_response`/`sources[]`.
+12. **Chat → Chat With Incident** — needs live Postgres, a real `incident_id`, and a real `LLM_API_KEY`/`GROQ_API_KEY` (1 live LLM call per request). Each call persists both the user message and the assistant reply, so a second call against the same `incident_id` has real conversation history to draw on. Expect `200` with `incident_id`/`role` (`"assistant"`)/`content`/`sources[]`.
+13. **Chat → Chat With Incident - 404** — needs live Postgres. Expect `404 {"detail":"incident 999999 not found"}`.
+14. If you've set `API_KEY` in `backend`'s `.env`, also work through §22.7 for the auth/rate-limit-specific checks (401 on a missing/wrong key, 429 on a fast burst).
 
 ### 21.3. Why Postman for `/ingest` specifically
 
 This environment's git-bash `curl` only path-translates a POSIX path when it *leads* the argument — embedded after `-F file=@`, a path starting with `/` fails to resolve (see the Troubleshooting table). Postman's native file picker has no such quirk: click **Select File**, browse to the repo, done. This is the main practical reason to prefer Postman over `curl` for the multipart upload steps, on top of it just being a friendlier way to work through the full endpoint list interactively.
 
 **Last verified:** 2026-08-19 — collection/environment JSON validated as well-formed (Postman v2.1 collection schema, standard environment export shape); the underlying HTTP behavior each request documents was verified via the equivalent `curl`/automated-test calls in §16/§19/§20 (same server, same routes) rather than a live Postman GUI session in this environment. If you run the actual import-and-click-through afterward, that's the final end-to-end confirmation.
+
+---
+
+## 22. Day 13 — Production Hardening (Pair 1 deliverable)
+
+Four independent pieces, scoped to Pair 1's half of the roadmap's Day 13 "Production Hardening" phase (Pair 2's LLM caching/audit log/CI pipeline are the teammates' own work, not covered here): shared-secret header auth on every route, `limit`/`offset` pagination on `GET /incidents`, an in-memory rate limiter, and containerizing the backend.
+
+### 22.1. What changed
+
+- **`app/core/auth.py`** — new `require_api_key` FastAPI dependency, checked against `settings.api_key`. Applied via `dependencies=[Depends(require_api_key)]` on every `app.include_router(...)` call in `app/main.py` (ingest, mitre, incidents, chat) — `/health` is defined directly on `app` so it's unauthenticated by design (health checks/load balancers shouldn't need a key). **Empty `API_KEY` (the default) disables enforcement entirely** — same "empty string = not configured" convention `llm_api_key`/`groq_api_key` already use — so existing workflows (Postman, the test suite) keep working with no header until an operator opts in.
+- **`app/core/rate_limit.py`** — hand-rolled in-memory token-bucket limiter (no new dependency — `slowapi` isn't installed and the project is stdlib-first), registered as ASGI middleware in `app/main.py` and applied to every route including `/health`. Keyed by client host; `RATE_LIMIT_PER_MINUTE <= 0` disables it. `backend/tests/conftest.py` gained an `autouse=True` fixture resetting the limiter's global bucket state before/after every test — necessary because `app.main.app` is a module-level singleton and Starlette's `TestClient` reports every request's client as the same fixed `("testclient", 50000)` tuple, so without the reset, token consumption from one test would leak into later, unrelated tests as spurious `429`s.
+- **Pagination** — `app/services/incident_service.py`'s `list_incidents` gained `limit`/`offset` params, plus a new `count_incidents` (both share a `_filtered_incidents_stmt` helper so the two can't drift out of sync on filter logic). `GET /incidents` (`app/api/routes_incidents.py`) gained `limit` (default 50, max 200 → `422` above that) and `offset` (default 0, `>= 0`) query params, and `IncidentListResponse` gained `total` (grand total matching the filters, independent of the page), `limit`, `offset` fields alongside the existing `count` (which still means "items in this page," unchanged, so the Day 12 e2e test in `tests/test_ingest_flow.py` needed no changes).
+- **`backend/Dockerfile`** (new) + root **`.dockerignore`** (new) + **`docker-compose.yml`** — multi-stage (builder + runtime), non-root (`appuser`, uid 1000) image. Build context is the **repo root**, not `backend/`, and the image mirrors the same `backend/app/...` nesting rather than flattening it — `app/core/config.py`, `app/mitre/loader.py`, and `app/rag/chroma_client.py` all resolve paths via `Path(__file__).resolve().parents[3]` (repo root, 3 levels above `app/`), so this was necessary to avoid silently breaking `/mitre/techniques`, incident-detail technique resolution, and Chroma-backed retrieval inside the container with zero app-code changes. `docker-compose.yml`'s `db` service gained a `pg_isready` healthcheck; the new `backend` service depends on it (`condition: service_healthy`) and overrides `.env`'s `DATABASE_URL` (`localhost:5433`, host-machine-only) with the compose-network-relative `db:5432`.
+
+### 22.2. Automated tests
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest tests/core tests/services/test_incident_service.py tests/api/test_incidents_list_route.py -v
+```
+
+Covers: `tests/core/test_auth.py` (10 — disabled-by-default, missing/wrong/correct header, `/health` bypass, every feature router individually including `/ingest`'s multipart case), `tests/core/test_rate_limit.py` (5 — within-capacity, over-capacity `429`, refill-over-time, `<= 0` disables it, buckets start empty each test), plus the new pagination coverage in `test_incident_service.py` (4 new, alongside 7 pre-existing incident-grouping tests in the same file — limit/offset paging, unpaginated default, count matches total regardless of limit, count respects the same filters as list) and `test_incidents_list_route.py` (5 — default limit is 50, `total` beyond one page, distinct pages, `limit`/`offset` validation `422`s).
+
+**Expected:** `31 passed` — 24 new Day 13 tests (10 + 5 + 4 + 5) plus 7 pre-existing `test_incident_service.py` tests that this command's file-level scope also picks up.
+**Last verified:** 2026-08-20 — `31 passed in 2.59s`. (Note: an earlier draft of this section claimed `24 passed`, undercounting because it forgot the command runs the *whole* `test_incident_service.py` file, not just its 4 new pagination tests — corrected here after actually running it.)
+
+### 22.3. Full regression pass
+
+```
+cd backend
+./venv/Scripts/python.exe -m pytest -v
+```
+
+**Expected:** `205 passed` (up from Day 12's `181` — 24 new Day 13 tests, no existing test needed to change).
+**Last verified:** 2026-08-20 — `205 passed in 22.28s`.
+
+### 22.4. Manual smoke — API key auth
+
+```
+cd backend
+./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+```
+With `API_KEY` left unset in `.env` (the default):
+```
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:8000/incidents
+```
+**Expected:** `HTTP 200` — auth disabled by default.
+
+Then set `API_KEY=some-test-value` in `.env`, restart uvicorn, and repeat:
+```
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:8000/incidents
+curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "X-API-Key: wrong" http://127.0.0.1:8000/incidents
+curl -s -o /dev/null -w "HTTP %{http_code}\n" -H "X-API-Key: some-test-value" http://127.0.0.1:8000/incidents
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:8000/health
+```
+**Expected:** `401`, `401`, `200`, `200` (health always bypasses).
+
+**Last verified:** 2026-08-20 — ran for real against the live Docker stack (`docker compose up -d`, see §22.6 for what it took to get there) once it came up: `GET /incidents` with `API_KEY` unset → `200`; with `API_KEY=nightowl-test-key` set (container recreated to pick it up) → no header `401`, `X-API-Key: wrong` `401`, `X-API-Key: nightowl-test-key` `200`, `GET /health` with no header `200`. Exactly the expected sequence. `.env` was reverted and the container recreated again afterward, back to the default auth-disabled state. (Also covered by `tests/core/test_auth.py` — `10 passed` — see §22.2.)
+
+### 22.5. Manual smoke — pagination
+
+Needs live Postgres with more than one incident (§19.7 shows how to get one via the sample log, or insert test rows directly).
+```
+curl "http://127.0.0.1:8000/incidents?limit=1&offset=0"
+curl "http://127.0.0.1:8000/incidents?limit=500"
+curl "http://127.0.0.1:8000/incidents?offset=-1"
+```
+**Expected:** first call returns `{"incidents":[...1 item...],"count":1,"total":N,"limit":1,"offset":0}`; second and third calls both return `HTTP 422` (limit capped at 200, offset can't be negative).
+
+**Last verified:** 2026-08-20 — ran for real against the live Docker stack: `curl "http://127.0.0.1:8000/incidents?limit=1&offset=0"` returned `{"incidents":[{"id":1,"title":"Suspicious Encoded PowerShell Command on DEMO-HOST-D9",...}],"count":1,"total":1,"limit":1,"offset":0}` (only 1 incident existed in this dev DB); `limit=500` → `422`; `offset=-1` → `422`. Matches expectations exactly. (Also covered by `tests/api/test_incidents_list_route.py` — `5 passed` — see §22.2, which additionally confirms the disjoint-pages case with more than one page of data.)
+
+### 22.6. Manual smoke — rate limiting + Docker build status
+
+With `RATE_LIMIT_PER_MINUTE` left at its default (60), firing 65+ requests at any route in quick succession (well under a second, so refill during the burst is negligible) trips it:
+```
+for i in $(seq 1 65); do curl -s -o /dev/null -w "%{http_code} " http://127.0.0.1:8000/health; done; echo
+```
+**Expected:** a run of `200`s, then `429` for the remainder once the bucket empties — body `{"detail":"rate limit exceeded"}` on the `429`s. (Contrary to an earlier draft of this section, this *is* practical to hand-verify — no need to wait a minute, just fire the burst fast.)
+
+**Last verified:** 2026-08-20 — fired for real against the live Docker stack: a 70-request burst at `/health` returned 68× `200` then `429 429` (capacity 60, some tokens already consumed by earlier auth-test requests in the same minute); a second, tighter burst showed the same pattern repeatedly (`200`s until the bucket empties, then a run of `429`s, recovering to `200`s again as tokens refilled between bursts). The exact `429` body (`{"detail":"rate limit exceeded"}`) is confirmed by `tests/core/test_rate_limit.py::test_over_capacity_returns_429` (part of the `5 passed` in §22.2) rather than re-captured from a live response, since the token bucket kept refilling between the live burst and grabbing the body — the transition to `429` itself was captured live and is real.
+
+**Docker build:** `docker compose build backend` was run against this repo (this session, after fixing an unrelated full-disk condition that had broken the daemon). It hit the same corporate-network TLS interception already documented in §0 ("Windows + corporate/AV network only" `pip-system-certs` note) — except that fix is host-side (points Python at Windows' trust store) and doesn't help inside the container's bare Debian image, which has no such store. Fixed by scoping `--trusted-host pypi.org --trusted-host files.pythonhosted.org` to the builder stage's `pip install` only (build-time, doesn't weaken the runtime image's own TLS behavior).
+
+**Full `docker compose up` end-to-end: done and verified this session.** Getting there took three real, distinct problems, worth recording since they'll recur if this environment's disk fills up again:
+1. **Stale WSL2 disk-mount lock.** Force-killing Docker Desktop mid-build (to recover from the full-disk condition) left `docker_data.vhdx` attached from the killed process. Every subsequent `docker info`/`docker ps`/build call just hung, because the WSL `docker-desktop` distro's `wsl-bootstrap` failed with `WSL_E_USER_VHD_ALREADY_ATTACHED` → `mke2fs: /dev/sdd is apparently in use by the system` → the engine flipped straight to `stopping` without ever finishing startup. **Fix:** `wsl --shutdown` (clears all disk attachments) before relaunching Docker Desktop.
+2. **Corrupted image layers.** The first `docker compose build backend` reported success, but the container crash-looped on `ImportError: cannot import name 'main' from 'uvicorn.main'`. Inspecting the image showed every Python file in the installed `uvicorn` package was **0 bytes** — the layer-export step had run for ~5 minutes right as the host disk hit 0 bytes free, and the writes got silently truncated even though `pip install` itself had already reported success earlier in the same build. A same-session rebuild reproduced the exact same corruption, because the disk was still critically low (5.2GB free) at rebuild time. **Fix:** `docker rmi` the corrupted image, `docker builder prune -af` (reclaimed 14.5–24GB), confirm real free space (`df -h`), *then* rebuild — a starved rebuild just recreates the same corruption.
+3. **WSL2's vhdx doesn't auto-shrink.** Freeing space *inside* Docker's storage doesn't shrink `docker_data.vhdx` on the Windows side — it grew from ~21GB to ~32GB over these rebuilds and stays that size. `Optimize-VHD`/`diskpart compact vdisk` would reclaim the real Windows-side space, but both need admin elevation this session didn't have — worth doing from an elevated prompt if disk pressure recurs.
+
+**Verified for real** (`curl` from the host against the running containers, both `db` and `backend` up via `docker compose up -d`):
+```
+$ curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:8000/health
+HTTP 200
+$ curl -s http://127.0.0.1:8000/health
+{"status":"ok"}
+$ curl -s http://127.0.0.1:8000/mitre/techniques | python -c "import sys,json; print(json.load(sys.stdin)['count'])"
+858
+```
+`/health` responds `200`, and `/mitre/techniques` returns the same `count: 858` as the non-Docker run — confirming the `./data` volume mount (`Path(__file__).resolve().parents[3]`-relative path resolution, §22.1) works correctly inside the container. **Last verified:** 2026-08-20.
+
+### 22.7. Postman — Day 13 additions
+
+`docs/postman/NightOwl.postman_collection.json` and `NightOwl.postman_environment.json` were updated this session to cover auth and pagination (see §21 for the base collection). Re-import both if you already had the old versions loaded — Postman will update the existing collection/environment in place as long as you keep the same names.
+
+**Auth (401 → 200):**
+1. Leave `API_KEY` unset in `.env` and the `api_key` environment variable blank (its default) — every request should behave exactly as it did pre-Day 13, e.g. **Health → Health Check** and **Incidents → List Incidents - All** both `200`.
+2. Set `API_KEY=some-test-value` in `.env` and restart uvicorn. In Postman, set the **NightOwl Local** environment's `api_key` variable to something else, e.g. `wrong` — send **Incidents → List Incidents - All** → expect `401 {"detail":"invalid or missing API key"}`.
+3. Change `api_key` to blank again (missing header) and send the same request → still `401`.
+4. Change `api_key` to `some-test-value` (matching `.env`) → same request now → `200`.
+5. **Health → Health Check** → `200` regardless of `api_key` — it's exempt by design.
+6. Set `.env`'s `API_KEY` back to unset when you're done, restart uvicorn, and set the Postman `api_key` variable back to blank, so the collection matches the default (auth-disabled) dev state again.
+
+**Pagination:**
+- **Incidents → List Incidents - Paginated (limit=1, offset=0)** — expect `200` with exactly one item and a `total` matching however many incidents actually exist. Edit the `offset` query param (1, 2, ...) to page through the rest; `total` stays constant.
+- **Incidents → List Incidents - Limit Above Cap (expect 422)** — expect `422`, no DB round-trip needed. Swap `limit=500` for `offset=-1` in the request URL to see the negative-offset case, same `422` outcome.
+
+**Rate limiting (429) via Postman's Collection Runner:**
+1. Postman → open the **NightOwl -- Day 3-13 API** collection → **Run** (Collection Runner).
+2. Select just the **Health → Health Check** request, set **Iterations** to `70`, **Delay** to `0ms`, and run.
+3. **Expected:** the first ~60 iterations return `200`, then the rest return `429` with `{"detail":"rate limit exceeded"}` — the run summary's status-code breakdown shows the split directly. Wait roughly a minute (the bucket refills at 1 token/sec at the default 60/min capacity) before re-running other requests if you want a clean slate.
+
+### 22.8. Explain endpoint hang/500 fix + severity-filter data finding (found via manual Postman testing)
+
+Three requests were screenshotted during a manual Postman pass over the Day 13 work: `GET /incidents?limit=500`, `GET /incidents?severity=high`, and `POST /incidents/{id}/explain`. Root-caused and fixed/verified as follows.
+
+**`limit=500` → `422`** — by design, no change. `routes_incidents.py`'s `limit: int = Query(default=50, ge=1, le=200)` rejects it, exactly as `test_limit_above_cap_returns_422` (§22.5) already asserts.
+
+**`severity=high` → `200` with zero results** — a data finding, not a filter bug. `incident_service.py`'s severity filter is a plain, correct `Incident.severity == severity` exact match. Of the 15 seed detection rules, only 4 (`powershell_execution_policy_bypass`, `registry_run_key_persistence`, `scheduled_task_creation_schtasks`, `scheduled_task_creation_powershell`) resolve to final severity `"high"` after `severity_service.compute_severity()`'s tactic-weight scoring — the rest resolve to `"critical"`. Confirmed live: `GET /incidents?limit=5` on this machine's DB returns exactly one incident, from `suspicious_encoded_powershell`, with `"severity": "critical"` — so `severity=high` correctly returns zero rows because nothing ingested so far has tripped one of those 4 specific rules. Diagnostic query: `SELECT DISTINCT severity, count(*) FROM incidents GROUP BY severity;` (via `docker compose exec db psql -U nightowl -d nightowl`).
+
+**`POST /incidents/{id}/explain` hung ~107s then returned a masked `500 {"detail":"internal server error"}`** — a real bug, now fixed. Two issues stacked in `backend/app/rag/llm_client.py`'s `get_llm_client()`:
+1. `ChatGoogleGenerativeAI`/`ChatGroq` were constructed with no `timeout=`, which traces down through `langchain_google_genai` → `google.genai._api_client` → `httpx` as `Timeout(None)` — no timeout at any layer. Fixed by adding `timeout=settings.llm_timeout_seconds` (new setting, `config.py`, default 30s, override via `LLM_TIMEOUT_SECONDS` in `.env`).
+2. Separately, `ChatGoogleGenerativeAI` defaults to its own internal `max_retries=6` (`ChatGroq` defaults to `2`) — an SDK-level retry-with-backoff that honors the server's suggested retry delay (observed ~14-29s per round on a `429 RESOURCE_EXHAUSTED`), stacking underneath `llm_client.generate()`'s own outer retry-once logic. Fixed by passing `max_retries=1` to `ChatGoogleGenerativeAI` (per its own docstring: `0` is read as "use the SDK default," `1` means exactly one attempt, no internal retry) and `max_retries=0` to `ChatGroq`.
+3. Additionally, `core/errors.py`'s catch-all `Exception` handler was flattening a well-formed `LLMProviderError` (missing key / quota exhausted / timed out) into the same opaque `internal server error` as an actual unhandled bug. Fixed by adding a dedicated `@app.exception_handler(LLMProviderError)` returning `503` with the real message, registered ahead of the generic handler (FastAPI dispatches by most-specific type, so no reordering was needed).
+
+**Verified live** against this machine's real (quota-exhausted) Gemini key, incident id 1:
+```
+$ time curl -s -w "\nHTTP_STATUS:%{http_code} TIME:%{time_total}s\n" -X POST http://localhost:8000/incidents/1/explain
+{"detail":"LLM call failed after 2 attempts: Error calling model 'gemini-flash-latest' (RESOURCE_EXHAUSTED): 429 ... Quota exceeded ... limit: 20 ... Please retry in 29.4s"}
+HTTP_STATUS:503 TIME:27.65s
+```
+Before the `max_retries` fix, the same request (timeout fix only) took **100.15s** to return the same 503 — confirming the SDK-internal retry loop was the dominant cost, not just the missing timeout. Before *any* fix, this same failure mode returned a masked `500 {"detail":"internal server error"}` after ~107s of hanging.
+
+Also verified the **happy path** end-to-end (retrieval + draft + self-critique) via the configured Groq fallback key (temporary `LLM_PROVIDER=groq` env override for this one check only — `.env`'s committed `LLM_PROVIDER=gemini` default was not changed): `generate_explanation()` against the same incident completed in **14.5s**, returned 5 retrieved chunks, and produced a correct three-section explanation (What happened / Why it matters / Recommended next steps) plus a working self-critique confidence check. This confirms the pipeline itself is correct — the original bug was purely the missing timeout/retry-tuning/error-masking around the LLM call, not the RAG or prompt logic.
+
+**Root cause of the original quota exhaustion:** repeated live-Gemini smoke tests across sessions (§10.4, §11.3, §17.3) each cost 2 of the free tier's 20 requests/day — by the time of this pass the day's quota was already spent, which is why this bug surfaced as a *guaranteed* 429 rather than an occasional one. Not a code issue; see the Troubleshooting table's `429 RESOURCE_EXHAUSTED` row for the mitigation.
+
+**Last verified:** 2026-08-21.
+
+### 22.9. Known v1 limitations
+
+- Rate limiting is a single uniform limit across every route (including `/health`) keyed by client IP — no per-route tiering (e.g. a stricter limit specifically on the LLM-backed `/explain`/`/chat` routes), and no `X-Forwarded-For` handling if a reverse proxy is ever added in front.
+- Auth is a single shared secret, not per-user/per-team credentials — fine for a small team demo, not a real multi-tenant auth story.
+- `backend/scripts/` (e.g. `build_kb.py`) isn't copied into the Docker image — the knowledge-base build stays a host-venv workflow; the API itself never calls it at runtime.
 
 ---
 
@@ -1456,15 +1613,18 @@ This environment's git-bash `curl` only path-translates a POSIX path when it *le
 | `docker info` fails with a connection/pipe error (Docker *is* installed — `docker --version` works) | Docker Desktop is installed but its daemon isn't running/auto-started | Launch `Docker Desktop.exe` (Start Menu, or `C:\Program Files\Docker\Docker\Docker Desktop.exe`) and wait a few seconds for the daemon; confirmed fixed 2026-08-17 (see §3's resolution note) — it does not auto-start with Windows on this machine, so repeat each session |
 | `POST /ingest` returns HTTP 500 with `psycopg2.OperationalError: connection ... port 5433 failed: Connection refused` in the server log | No live Postgres (Docker not running/installed) — same root cause as the `docker` rows above | Start Postgres per §3, or treat as expected on a machine without Docker; the route's own parse/validate logic is separately confirmed via §9.1's SQLite-backed automated test |
 | `curl -F "file=@/tmp/foo.txt"` fails with `curl: (26) Failed to open/read local data from file/application` | This environment's `curl.exe` (native mingw64 build) only path-translates a POSIX path when it leads the argument; embedded after `-F file=@`, `/tmp/...` is passed through literally and Windows can't resolve it | Use a path relative to your shell's cwd, or `cygpath -w /tmp/foo.txt` to get a Windows path first (see §9.3) |
-| `LLMProviderError: ... 429 RESOURCE_EXHAUSTED ... free_tier_requests` | Free-tier Gemini key hit its daily cap (20 requests/day for `gemini-3.7-flash`) — each `/explain` call costs 2 requests (draft + self-critique) | Wait for the daily quota reset, or use a different free-tier key; don't re-run live-LLM smoke tests (§10.4/§11.3/§12.3) back-to-back in the same session (see §12.3) |
+| `POST /incidents/{id}/explain` → `503 {"detail":"LLM call failed after 2 attempts: ... 429 RESOURCE_EXHAUSTED ... free_tier_requests"}` | Free-tier Gemini key hit its daily cap (20 requests/day for `gemini-3.7-flash`) — each `/explain` call costs 2 requests (draft + self-critique) | Wait for the daily quota reset (message includes a `retryDelay` hint), switch `.env`'s `LLM_PROVIDER` to `groq` (a Groq key is a valid alternative), or use a different free-tier Gemini key; don't re-run live-LLM smoke tests (§10.4/§11.3/§12.3) back-to-back in the same session (see §12.3). Fails fast (~15-30s, bounded by `llm_client.py`'s `timeout`/`max_retries` tuning, §22.8) with the real message — it no longer hangs for ~100s+ then masks the reason as a generic `500` (fixed 2026-08-21, §22.8) |
 | `LLMProviderError: ... 503 UNAVAILABLE ... high demand` | Transient Gemini overload, unrelated to this project's code | Retry after a short wait; `llm_client.py` already retries once automatically before raising |
 | `pytest` collection-errors with `ModuleNotFoundError: No module named 'langchain_groq'` (venv otherwise already set up) | `langchain-groq` was added to `requirements.txt` by the Day 10 Groq commit (`9cf6913`) after this venv was originally created, and the venv was never re-synced | `./venv/Scripts/python.exe -m pip install -r requirements.txt` — re-run this after every pull, not just on first setup (confirmed 2026-08-19) |
+| `docker compose build backend` fails with `SSLError: CERTIFICATE_VERIFY_FAILED` fetching from `pypi.org`/`files.pythonhosted.org` | Same corporate/AV TLS interception as the `pip-system-certs` row above, but the container's bare Debian image has no access to Windows' trust store the way the host venv does | Already handled in `backend/Dockerfile` — the builder stage's `pip install` passes `--trusted-host pypi.org --trusted-host files.pythonhosted.org`. If it still fails, confirm you're on the same intercepted network (§22.6) |
+| Tests hitting the LLM client make a real network call to Groq instead of using the test file's mocks | `.env`'s `LLM_PROVIDER` was left set to `groq` from an earlier manual-testing session; `tests/rag/test_llm_client.py` only mocks the Gemini (`ChatGoogleGenerativeAI`) branch, not `ChatGroq` | Set `LLM_PROVIDER=gemini` in `.env` (the project default) once you're done testing against Groq — confirmed as the fix 2026-08-20 |
 
 ---
 
 ## Out of scope for this guide
 
-- Frontend testing (nothing built yet — Days 13+).
-- Rules-manager UI / `api/routes_rules.py` enable-disable endpoint (Pair 2 Day 16 — not yet built). Everything else through Pair 1 Day 12 — the ingest API, Sigma detection engine, 15 detection rules, alert persistence, incident grouping, severity scoring, MITRE technique validation, and `GET /incidents`/`GET /incidents/{id}` — is done and covered, see §9/§12/§13/§14/§15/§18/§19/§21.
+- Frontend testing (nothing built yet — Days 14+ per the 26-day roadmap).
+- Rules-manager UI / `api/routes_rules.py` enable-disable endpoint (Pair 2 Day 17 — not yet built). Everything else through Pair 1 Day 13 — the ingest API, Sigma detection engine, 15 detection rules, alert persistence, incident grouping, severity scoring, MITRE technique validation, `GET /incidents`/`GET /incidents/{id}` with pagination, API key auth, rate limiting, and the backend Docker image — is done and covered, see §9/§12/§13/§14/§15/§18/§19/§21/§22.
+- Pair 2's Day 13 tasks (LLM response caching, audit log, CI pipeline) — the teammates' own work, not covered by this guide.
 - Chat history endpoint (`GET /incidents/{id}/chat`) and LLM call robustness/prompt refinement (Pair 2 Day 12 — not yet built). Hallucination spot-check (Day 10, `docs/research/hallucination-eval.md`) and the incident chat endpoint with source attribution (Day 11, §20) are done, alongside retrieval, the MITRE endpoint/validator scaffold, the explanation prompt template + LLM client, the explain_service retrieve→draft→self-critique pipeline, and the explain endpoint with source attribution + recommended response — see §8/§9/§10/§11/§17/§20. The Day 9 explain endpoint (§17) works against manually-inserted `Incident` rows in this guide's checks — Pair 1's incident grouping (§14) and read endpoints (§19) exist, but this guide hasn't re-verified the explain endpoint against a real grouped incident end-to-end (Docker/Postgres unavailable in this environment as of the last session that touched §17/§19.7 either way).
 - The formal Testing Report (Volume 3 §9.5) — that's produced during Days 20–21 Integration & Testing, covering unit/integration/E2E coverage and RAG accuracy scoring across the whole system.
