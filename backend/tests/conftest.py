@@ -18,6 +18,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.rag import cache as response_cache
 
 
 def pytest_configure(config):
@@ -44,6 +45,18 @@ def pytest_configure(config):
         fallback = Path(tempfile.gettempdir()) / "nightowl-pytest-tmp"
         fallback.mkdir(parents=True, exist_ok=True)
         config.option.basetemp = fallback
+
+
+@pytest.fixture(autouse=True)
+def _clear_response_cache():
+    """Day 13: rag/cache.py's dicts live for the whole pytest process, but
+    api_client below gives every test a fresh in-memory DB whose
+    autoincrement incident ids restart at 1 -- without this, a cached
+    result from one test file would leak into an unrelated test that
+    happens to reuse the same incident id."""
+    response_cache.clear()
+    yield
+    response_cache.clear()
 
 
 @pytest.fixture

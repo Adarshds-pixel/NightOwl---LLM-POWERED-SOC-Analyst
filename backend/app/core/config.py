@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     # behavior). Enable via LLM_CACHE_ENABLED=true in .env.
     llm_cache_enabled: bool = False
 
+    # Day 13: always-on response cache for explain()/chat() results, keyed
+    # on incident id (+ message, for chat) -- see rag/cache.py. Distinct
+    # from llm_cache_enabled above (that one is opt-in, keyed on exact
+    # prompt content, and stays off by default).
+    response_cache_enabled: bool = True
+    response_cache_ttl_seconds: float = 900.0
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -9,6 +9,11 @@ retrieved source chunks.
 `GET /incidents/{id}/chat` (history, Day 12) is a thin read wrapping the
 same `list_messages` the POST handler already uses to build conversation
 history.
+
+Day 13 (Pair 2, production hardening) adds a response cache in front of the
+POST handler (`rag/cache.py`), keyed on incident id + message, so a repeat
+question skips retrieval + the LLM call, and records an audit log event
+(`services/audit_service.py`) for every chat call.
 """
 
 from datetime import datetime
@@ -17,10 +22,13 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.errors import not_found
 from app.db.session import get_db
 from app.models.incident import Incident
+from app.rag import cache
 from app.rag.chat_service import generate_chat_reply
+from app.services import audit_service
 from app.services.chat_service import add_message, list_messages
 
 router = APIRouter()
@@ -88,9 +96,15 @@ def chat_with_incident(
 
     add_message(db, incident_id, role="user", content=payload.message)
 
-    result = generate_chat_reply(_incident_to_dict(incident), history, payload.message)
+    result = cache.get_chat_reply(incident_id, payload.message) if settings.response_cache_enabled else None
+    if result is None:
+        result = generate_chat_reply(_incident_to_dict(incident), history, payload.message)
+        if settings.response_cache_enabled:
+            cache.set_chat_reply(incident_id, payload.message, result)
 
     reply = add_message(db, incident_id, role="assistant", content=result.reply)
+
+    audit_service.record_event(db, entity_type="incident", entity_id=incident_id, action="chat")
 
     return ChatMessageResponse(
         incident_id=incident_id,

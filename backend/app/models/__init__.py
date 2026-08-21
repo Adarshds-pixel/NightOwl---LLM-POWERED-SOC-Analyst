@@ -2,9 +2,10 @@
 autogenerate and for create_all() in tests)."""
 
 from app.models.alert import Alert
+from app.models.audit_log import AuditLog
 from app.models.chat_message import ChatMessage
 from app.models.event import Event
 from app.models.incident import Incident
 from app.models.rule import Rule
 
-__all__ = ["Alert", "ChatMessage", "Event", "Incident", "Rule"]
+__all__ = ["Alert", "AuditLog", "ChatMessage", "Event", "Incident", "Rule"]

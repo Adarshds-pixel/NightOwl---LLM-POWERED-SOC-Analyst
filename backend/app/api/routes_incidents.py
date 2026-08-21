@@ -13,23 +13,38 @@ posture as explain_service.py itself.
 Day 12 (Pair 1) adds the two read endpoints incident grouping was always
 meant to feed: `GET /incidents` (filtered list) and `GET /incidents/{id}`
 (full detail -- alerts, their events, and resolved MITRE technique info).
+
+Day 13 (Pair 2, production hardening) adds:
+  - a response cache in front of `explain_incident` (`rag/cache.py`), keyed
+    on incident id, so a repeat explain call skips retrieval + the LLM call;
+  - `PATCH /incidents/{id}/status` -- the only way `Incident.status` can
+    change today outside incident_service.py's grouping logic, added so
+    there's a status change for the new audit log to actually record;
+  - `GET /incidents/{id}/audit` -- read access to the audit trail
+    (`services/audit_service.py`) recorded for status changes and explain
+    calls.
 """
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.errors import not_found
 from app.db.session import get_db
 from app.mitre.loader import load_mitre_techniques
 from app.models.incident import Incident
+from app.rag import cache
 from app.rag.explain_service import generate_explanation
 from app.rag.prompts import extract_recommended_response
+from app.services import audit_service
 from app.services.incident_service import get_incident_alerts_with_events, list_incidents
 
 router = APIRouter()
+
+ALLOWED_STATUSES = {"open", "investigating", "resolved", "closed"}
 
 
 class SourceChunk(BaseModel):
@@ -97,6 +112,30 @@ class IncidentDetailResponse(BaseModel):
     alerts: list[AlertInfo]
 
 
+class IncidentStatusUpdateRequest(BaseModel):
+    status: str
+    actor: str | None = None
+
+
+class IncidentStatusUpdateResponse(BaseModel):
+    id: int
+    status: str
+
+
+class AuditLogEntry(BaseModel):
+    id: int
+    action: str
+    actor: str
+    details: dict | None
+    created_at: datetime
+
+
+class AuditLogResponse(BaseModel):
+    incident_id: int
+    events: list[AuditLogEntry]
+    count: int
+
+
 def _incident_to_dict(incident: Incident) -> dict:
     """Map the (currently sparse) Incident model to the loose dict shape
     explain_service.generate_explanation expects -- see its docstring on why
@@ -123,13 +162,68 @@ def explain_incident(incident_id: int, db: Session = Depends(get_db)) -> Explain
     if incident is None:
         raise not_found("incident", incident_id)
 
-    result = generate_explanation(_incident_to_dict(incident))
+    result = cache.get_explanation(incident_id) if settings.response_cache_enabled else None
+    if result is None:
+        result = generate_explanation(_incident_to_dict(incident))
+        if settings.response_cache_enabled:
+            cache.set_explanation(incident_id, result)
+
+    audit_service.record_event(db, entity_type="incident", entity_id=incident_id, action="explain")
 
     return ExplainResponse(
         incident_id=incident_id,
         explanation=result.explanation,
         recommended_response=extract_recommended_response(result.draft),
         sources=[SourceChunk(**chunk) for chunk in result.chunks],
+    )
+
+
+@router.patch("/incidents/{incident_id}/status", response_model=IncidentStatusUpdateResponse)
+def update_incident_status(
+    incident_id: int, payload: IncidentStatusUpdateRequest, db: Session = Depends(get_db)
+) -> IncidentStatusUpdateResponse:
+    incident = db.get(Incident, incident_id)
+    if incident is None:
+        raise not_found("incident", incident_id)
+
+    if payload.status not in ALLOWED_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid status '{payload.status}', must be one of {sorted(ALLOWED_STATUSES)}",
+        )
+
+    old_status = incident.status
+    incident.status = payload.status
+    db.commit()
+    db.refresh(incident)
+
+    audit_service.record_event(
+        db,
+        entity_type="incident",
+        entity_id=incident_id,
+        action="status_change",
+        actor=payload.actor,
+        details={"from": old_status, "to": payload.status},
+    )
+
+    return IncidentStatusUpdateResponse(id=incident.id, status=incident.status)
+
+
+@router.get("/incidents/{incident_id}/audit", response_model=AuditLogResponse)
+def get_incident_audit_log(incident_id: int, db: Session = Depends(get_db)) -> AuditLogResponse:
+    incident = db.get(Incident, incident_id)
+    if incident is None:
+        raise not_found("incident", incident_id)
+
+    events = audit_service.list_events(db, entity_type="incident", entity_id=incident_id)
+
+    return AuditLogResponse(
+        incident_id=incident_id,
+        events=[
+            AuditLogEntry(id=e.id, action=e.action, actor=e.actor, details=e.details, created_at=e.created_at)
+            for e in events
+        ],
+        count=len(events),
     )
 
 
