@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/* Design tokens (Day 14 PM). Built on Tailwind's own palette vars rather
+   than new hex values, so e.g. "critical = red-600" stays legible to
+   anyone reading this file. Severity tokens match
+   backend/app/services/severity_service.py's vocabulary verbatim, so
+   later badges/heatmap work (Day 16/17) share one source of truth. */
+@theme {
+  --color-bg: var(--color-slate-950);
+  --color-surface: var(--color-slate-900);
+  --color-border: var(--color-slate-800);
+  --color-text: var(--color-slate-100);
+  --color-text-muted: var(--color-slate-400);
+
+  --color-severity-informational: var(--color-slate-400);
+  --color-severity-low: var(--color-emerald-500);
+  --color-severity-medium: var(--color-amber-500);
+  --color-severity-high: var(--color-orange-500);
+  --color-severity-critical: var(--color-red-600);
+}
