@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
 
+    # Shared-secret header auth (Day 13). Empty (default) = auth disabled --
+    # same "empty string = not configured" convention as llm_api_key/groq_api_key
+    # above, so local dev, Postman, and the existing test suite keep working
+    # with no header until an operator opts in by setting this in .env.
+    api_key: str = ""
+
+    # In-memory token-bucket rate limiting (Day 13). Requests/minute per
+    # client; <= 0 disables limiting entirely (same "0/empty = off" pattern).
+    rate_limit_per_minute: int = 60
+
 
 @lru_cache
 def get_settings() -> Settings:

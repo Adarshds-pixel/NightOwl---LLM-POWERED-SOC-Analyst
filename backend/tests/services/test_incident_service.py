@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.db.base import Base
 from app.detection.engine import RuleMatch
 from app.models.incident import Incident
-from app.services.incident_service import find_or_create_incident
+from app.services.incident_service import count_incidents, find_or_create_incident, list_incidents
 
 BASE_TIME = datetime(2026, 8, 19, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -114,3 +114,55 @@ def test_closed_incident_is_not_reused():
         db.commit()
 
         assert second.id != first.id
+
+
+def _seed_incidents(db, count: int):
+    """Distinct hosts + widely spaced timestamps so none merge under the
+    1-hour grouping window -- yields `count` separate incidents, oldest host
+    ("HOST-0") created first / earliest timestamp."""
+    incidents = []
+    for i in range(count):
+        incident = find_or_create_incident(db, f"HOST-{i}", BASE_TIME + timedelta(hours=i * 2), _match())
+        incidents.append(incident)
+    db.commit()
+    return incidents
+
+
+def test_list_incidents_limit_and_offset_page_through_distinct_results():
+    with Session(_engine()) as db:
+        _seed_incidents(db, 5)
+
+        page1 = list_incidents(db, limit=2, offset=0)
+        page2 = list_incidents(db, limit=2, offset=2)
+
+        assert [i.id for i in page1] != [i.id for i in page2]
+        assert len(page1) == 2
+        assert len(page2) == 2
+        # newest-first: HOST-4 (latest timestamp) leads page1
+        assert page1[0].host == "HOST-4"
+        assert page2[0].host == "HOST-2"
+
+
+def test_list_incidents_without_limit_returns_everything():
+    with Session(_engine()) as db:
+        _seed_incidents(db, 5)
+
+        assert len(list_incidents(db)) == 5
+
+
+def test_count_incidents_matches_total_regardless_of_limit():
+    with Session(_engine()) as db:
+        _seed_incidents(db, 5)
+
+        assert count_incidents(db) == 5
+        assert len(list_incidents(db, limit=2)) == 2
+
+
+def test_count_incidents_respects_the_same_filters_as_list_incidents():
+    with Session(_engine()) as db:
+        incidents = _seed_incidents(db, 3)
+        incidents[0].severity = "critical"
+        db.commit()
+
+        assert count_incidents(db, severity="critical") == 1
+        assert count_incidents(db, severity="no-such-severity") == 0

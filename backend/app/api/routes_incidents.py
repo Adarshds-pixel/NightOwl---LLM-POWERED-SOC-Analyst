@@ -27,7 +27,7 @@ from app.mitre.loader import load_mitre_techniques
 from app.models.incident import Incident
 from app.rag.explain_service import generate_explanation
 from app.rag.prompts import extract_recommended_response
-from app.services.incident_service import get_incident_alerts_with_events, list_incidents
+from app.services.incident_service import count_incidents, get_incident_alerts_with_events, list_incidents
 
 router = APIRouter()
 
@@ -58,7 +58,10 @@ class IncidentSummary(BaseModel):
 
 class IncidentListResponse(BaseModel):
     incidents: list[IncidentSummary]
-    count: int
+    count: int  # items in this page (== len(incidents))
+    total: int  # Day 13: grand total matching the filters, across all pages
+    limit: int
+    offset: int
 
 
 class TechniqueInfo(BaseModel):
@@ -139,9 +142,20 @@ def get_incidents(
     status: str | None = Query(default=None),
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> IncidentListResponse:
-    incidents = list_incidents(db, severity=severity, status=status, start_date=start_date, end_date=end_date)
+    incidents = list_incidents(
+        db,
+        severity=severity,
+        status=status,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset,
+    )
+    total = count_incidents(db, severity=severity, status=status, start_date=start_date, end_date=end_date)
     return IncidentListResponse(
         incidents=[
             IncidentSummary(
@@ -156,6 +170,9 @@ def get_incidents(
             for incident in incidents
         ],
         count=len(incidents),
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 

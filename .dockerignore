@@ -1,0 +1,10 @@
+.git
+backend/venv
+backend/.pytest_cache
+**/__pycache__
+**/*.pyc
+backend/tests
+backend/scripts
+data/chroma
+data/mitre/*.json
+.env

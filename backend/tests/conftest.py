@@ -11,9 +11,23 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.rate_limit import reset_rate_limiter
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """`app.main.app` is a module-level singleton reused by every test in the
+    session, and Starlette's TestClient reports every request's client as the
+    same fixed ("testclient", 50000) tuple -- so without a reset between
+    tests, rate-limit token consumption in one test would leak into later,
+    unrelated tests as spurious 429s.
+    """
+    reset_rate_limiter()
+    yield
+    reset_rate_limiter()
 
 
 @pytest.fixture

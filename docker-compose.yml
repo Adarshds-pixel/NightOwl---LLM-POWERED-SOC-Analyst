@@ -12,6 +12,34 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nightowl}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Overrides .env's host-relative DATABASE_URL (localhost:5433) --
+      # inside the compose network, Postgres is reachable at the service
+      # name "db" on its container-internal port 5432, not localhost:5433
+      # (host-machine-only).
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-nightowl}:${POSTGRES_PASSWORD:-nightowl}@db:5432/${POSTGRES_DB:-nightowl}
+    volumes:
+      # Mirrors app/mitre/loader.py + app/rag/chroma_client.py's expected
+      # `<repo root>/data` path (resolved via Path(__file__).parents[3]).
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
 
 volumes:
   postgres_data:

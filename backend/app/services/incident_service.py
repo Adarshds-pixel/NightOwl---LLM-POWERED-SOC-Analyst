@@ -16,7 +16,7 @@ joined to their originating event, for the detail view).
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.detection.engine import RuleMatch
@@ -67,19 +67,16 @@ def find_or_create_incident(db: Session, host: str, matched_at: datetime, match:
     return incident
 
 
-def list_incidents(
-    db: Session,
-    severity: str | None = None,
-    status: str | None = None,
-    start_date: datetime | None = None,
-    end_date: datetime | None = None,
-) -> list[Incident]:
-    """Newest-first incident list for `GET /incidents`, filtered by any
-    combination of severity/status/created_at date range. Every filter is
-    optional and additive (AND'd together) -- omitting all of them returns
-    every incident.
+def _filtered_incidents_stmt(
+    severity: str | None,
+    status: str | None,
+    start_date: datetime | None,
+    end_date: datetime | None,
+):
+    """Shared by list_incidents and count_incidents so the two never drift
+    out of sync -- every filter is optional and additive (AND'd together).
     """
-    stmt = select(Incident).order_by(Incident.created_at.desc())
+    stmt = select(Incident)
     if severity is not None:
         stmt = stmt.where(Incident.severity == severity)
     if status is not None:
@@ -88,7 +85,43 @@ def list_incidents(
         stmt = stmt.where(Incident.created_at >= start_date)
     if end_date is not None:
         stmt = stmt.where(Incident.created_at <= end_date)
+    return stmt
+
+
+def list_incidents(
+    db: Session,
+    severity: str | None = None,
+    status: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Incident]:
+    """Newest-first incident list for `GET /incidents`, filtered by any
+    combination of severity/status/created_at date range, with optional
+    limit/offset pagination (Day 13). `limit=None` (the default for direct
+    callers) returns every match, unpaginated; the route always passes an
+    explicit limit.
+    """
+    stmt = _filtered_incidents_stmt(severity, status, start_date, end_date).order_by(Incident.created_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit).offset(offset)
     return list(db.scalars(stmt))
+
+
+def count_incidents(
+    db: Session,
+    severity: str | None = None,
+    status: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> int:
+    """Total incidents matching the same filters as list_incidents, ignoring
+    limit/offset -- lets `GET /incidents` report a page-independent `total`
+    (Day 13) alongside the page of results.
+    """
+    subq = _filtered_incidents_stmt(severity, status, start_date, end_date).subquery()
+    return db.scalar(select(func.count()).select_from(subq)) or 0
 
 
 def get_incident_alerts_with_events(db: Session, incident_id: int) -> list[tuple[Alert, Event]]:
