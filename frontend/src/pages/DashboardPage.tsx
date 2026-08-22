@@ -1,10 +1,13 @@
+import { AnalyticsRow } from '../components/dashboard/AnalyticsRow'
 import { KpiRow } from '../components/dashboard/KpiRow'
 import { ThreatMatrixPanel } from '../components/dashboard/ThreatMatrixPanel'
 import { EmptyState, ErrorState, LoadingState } from '../components/ui'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
+import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
 
 function DashboardPage() {
   const { incidents, meta, loading, error, refresh } = useIncidentsSnapshot()
+  const { byId } = useMitreCatalog()
 
   return (
     <div className="space-y-6 p-6">
@@ -29,6 +32,7 @@ function DashboardPage() {
             fetchedCount={meta.fetchedCount}
             totalAll={meta.totalAll}
           />
+          <AnalyticsRow incidents={incidents} techniqueById={byId} />
         </>
       )}
     </div>

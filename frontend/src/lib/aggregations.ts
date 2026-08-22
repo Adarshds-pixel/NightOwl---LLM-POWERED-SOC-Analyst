@@ -178,6 +178,30 @@ export function tacticTechniqueMatrix(
   return { cells, tacticsPresent: [...tacticsPresent], maxCount }
 }
 
+export interface TacticActivityCount {
+  tactic: Tactic
+  label: string
+  count: number
+}
+
+// Total observed tactic activity -- unlike attackVectorBreakdown's
+// single "primary vector" attribution (first technique's first tactic),
+// this sums hits across *every* technique on every incident, so an
+// incident touching 3 tactics contributes to all 3 here. Deliberately
+// different framings: donut = primary-vector share, bars = total activity.
+export function tacticActivityCounts(
+  incidents: IncidentSummary[],
+  techniqueById: Map<string, MitreTechnique>,
+): TacticActivityCount[] {
+  const { cells } = tacticTechniqueMatrix(incidents, techniqueById)
+  const totals = new Map<Tactic, number>()
+  for (const cell of cells) totals.set(cell.tactic, (totals.get(cell.tactic) ?? 0) + cell.count)
+
+  return [...totals.entries()]
+    .map(([tactic, count]) => ({ tactic, label: TACTIC_LABELS[tactic], count }))
+    .sort((a, b) => b.count - a.count)
+}
+
 export interface HostNode {
   host: string
   incidentCount: number
