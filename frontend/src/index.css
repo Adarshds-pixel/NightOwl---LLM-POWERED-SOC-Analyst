@@ -17,4 +17,30 @@
   --color-severity-medium: var(--color-amber-500);
   --color-severity-high: var(--color-orange-500);
   --color-severity-critical: var(--color-red-600);
+
+  /* Day 15: cyberpunk accent + glow tokens (additive -- severity tokens
+     above are untouched). One accent per HUD "channel": cyan is the default/
+     neutral-technical accent, red/amber/green echo severity at a glance,
+     purple marks the AI/RAG-attributed surfaces (explain, chat, assistant). */
+  --color-accent-cyan: var(--color-cyan-400);
+  --color-accent-red: var(--color-red-500);
+  --color-accent-amber: var(--color-amber-400);
+  --color-accent-green: var(--color-emerald-400);
+  --color-accent-purple: var(--color-violet-400);
+
+  --font-display: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+
+  /* Panel-glow shadows for the mockups' lit-border HUD look. Kept subtle
+     (small blur, no spread) so stacked panels don't wash into one glow. */
+  --shadow-glow-cyan: 0 0 10px -2px var(--color-accent-cyan);
+  --shadow-glow-red: 0 0 10px -2px var(--color-accent-red);
+  --shadow-glow-amber: 0 0 10px -2px var(--color-accent-amber);
+  --shadow-glow-green: 0 0 10px -2px var(--color-accent-green);
+  --shadow-glow-purple: 0 0 10px -2px var(--color-accent-purple);
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-display);
 }

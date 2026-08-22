@@ -49,6 +49,17 @@ export const SEVERITY_BORDER_CLASSES: Record<Severity, string> = {
   critical: 'border-severity-critical',
 }
 
+// Soft translucent fills (badge backgrounds) -- Tailwind v4 uses the `/10`
+// opacity modifier rather than the removed `bg-opacity-*` utilities, so this
+// needs its own literal map, same JIT-safe reasoning as the maps above.
+export const SEVERITY_BG_SOFT_CLASSES: Record<Severity, string> = {
+  informational: 'bg-severity-informational/10',
+  low: 'bg-severity-low/10',
+  medium: 'bg-severity-medium/10',
+  high: 'bg-severity-high/10',
+  critical: 'bg-severity-critical/10',
+}
+
 // Hex values duplicated from src/index.css's @theme block (Tailwind slate/emerald/amber/orange/red
 // tokens) -- recharts renders to SVG/canvas and cannot read CSS custom properties as prop values,
 // so chart series colors need real hex here, kept in lockstep with the CSS tokens by hand.
