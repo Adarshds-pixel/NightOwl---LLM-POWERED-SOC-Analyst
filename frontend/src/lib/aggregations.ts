@@ -16,6 +16,13 @@ export function statusDistribution(incidents: IncidentSummary[]): Record<Inciden
   return dist
 }
 
+// Distinct real technique IDs actually observed across incidents -- never
+// the full 858-entry MITRE catalog. Powers the dashboard's "Techniques
+// Observed" KPI.
+export function distinctTechniqueCount(incidents: IncidentSummary[]): number {
+  return new Set(incidents.flatMap((i) => i.mitre_technique_ids)).size
+}
+
 export type ThreatLevel = 'NOMINAL' | 'LOW' | 'MODERATE' | 'ELEVATED' | 'CRITICAL'
 
 // Derived purely from real open/investigating incident severities -- never
