@@ -38,9 +38,21 @@ export function RingGauge({ value, label, sublabel, accent = 'cyan', size = 128 
           className={clsx('fill-none transition-[stroke-dashoffset] duration-700', ACCENT_STROKE_CLASSES[accent])}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-lg font-bold tracking-wide text-text uppercase">{label}</span>
-        {sublabel && <span className="mt-1 text-[11px] text-text-muted uppercase">{sublabel}</span>}
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-2 text-center leading-tight">
+        <span
+          className="font-bold text-text uppercase"
+          style={{ fontSize: Math.max(size * 0.15, 11) }}
+        >
+          {label}
+        </span>
+        {sublabel && (
+          <span
+            className="mt-1 text-text-muted uppercase"
+            style={{ fontSize: Math.max(size * 0.085, 9) }}
+          >
+            {sublabel}
+          </span>
+        )}
       </div>
     </div>
   )
