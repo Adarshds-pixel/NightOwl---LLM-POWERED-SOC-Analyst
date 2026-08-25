@@ -5,6 +5,7 @@ import DemoModePage from './pages/DemoModePage'
 import HeatmapPage from './pages/HeatmapPage'
 import IncidentDetailPage from './pages/IncidentDetailPage'
 import IncidentsPage from './pages/IncidentsPage'
+import LogsPage from './pages/LogsPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/incidents" element={<IncidentsPage />} />
           <Route path="/incidents/:id" element={<IncidentDetailPage />} />
+          <Route path="/logs" element={<LogsPage />} />
           <Route path="/heatmap" element={<HeatmapPage />} />
           <Route path="/demo" element={<DemoModePage />} />
           <Route path="*" element={<NotFoundPage />} />

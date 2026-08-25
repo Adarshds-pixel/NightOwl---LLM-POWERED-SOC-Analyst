@@ -9,6 +9,24 @@ export const MAX_INCIDENT_PAGES = 5
 export const INCIDENT_PAGE_SIZE = 200
 export const MAX_INCIDENTS_FETCHED = MAX_INCIDENT_PAGES * INCIDENT_PAGE_SIZE
 
+// The Logs page (raw event timeline, GET /events) is genuinely
+// server-paginated one page at a time -- unlike Incidents' eager-fetch-up-
+// to-a-cap pattern above, which tops out at 1000 and would mean 1300+
+// requests at the ~65k-event scale a real capture reaches.
+export const EVENT_PAGE_SIZE = 50
+
+// Mirrors backend/app/detection/engine.py's CATEGORY_TO_EVENT_ID (the
+// Sysmon event IDs this project's rules actually evaluate) plus Process
+// Terminate (5), which shows up in real captures but isn't a detection
+// category. Unrecognized ids fall back to "Event <id>" in the Logs table.
+export const SYSMON_EVENT_TYPE_LABELS: Record<number, string> = {
+  1: 'Process Creation',
+  3: 'Network Connection',
+  5: 'Process Terminated',
+  11: 'File Created',
+  13: 'Registry Event',
+}
+
 export const HEALTH_POLL_INTERVAL_MS = 15_000
 
 // Day 19 Demo Mode: the fixture is a real EVTX file, committed under

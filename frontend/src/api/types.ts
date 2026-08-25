@@ -142,3 +142,25 @@ export interface IngestResponse {
   alerts_created: number
   incident_ids: number[]
 }
+
+export interface EventLogRow {
+  id: number
+  host: string
+  timestamp: string
+  event_id: number
+  process: string | null
+  command_line: string | null
+  user: string | null
+  is_alert: boolean
+  severity: Severity | null
+  rule_title: string | null
+  technique_id: string | null
+}
+
+export interface EventListResponse {
+  events: EventLogRow[]
+  count: number
+  total: number
+  limit: number
+  offset: number
+}

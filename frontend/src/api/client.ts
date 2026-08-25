@@ -2,6 +2,7 @@ import type {
   AuditLogResponse,
   ChatHistoryResponse,
   ChatMessageResponse,
+  EventListResponse,
   ExplainResponse,
   IncidentDetailResponse,
   IncidentListResponse,
@@ -103,4 +104,22 @@ export function ingestEvtxFile(file: File) {
   form.append('file', file)
   // No Content-Type set -- the browser adds the multipart boundary itself.
   return apiFetch<IngestResponse>('/ingest', { method: 'POST', body: form })
+}
+
+export interface ListEventsParams {
+  host?: string
+  start_date?: string
+  end_date?: string
+  alert_only?: boolean
+  limit?: number
+  offset?: number
+}
+
+export function getEvents(params: ListEventsParams = {}) {
+  const qs = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) qs.set(key, String(value))
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return apiFetch<EventListResponse>(`/events${suffix}`)
 }

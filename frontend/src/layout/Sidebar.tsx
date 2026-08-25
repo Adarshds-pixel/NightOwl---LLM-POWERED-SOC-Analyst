@@ -31,6 +31,17 @@ const NAV_ITEMS = [
     ),
   },
   {
+    to: '/logs',
+    label: 'Logs',
+    end: false,
+    icon: (
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5}>
+        <path d="M4.5 2.5h8L16 5.5v12a1 1 0 0 1-1 1h-9.5a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1Z" strokeLinejoin="round" />
+        <path d="M6.5 8h7M6.5 11h7M6.5 14h4.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     to: '/heatmap',
     label: 'Heatmap',
     end: false,
