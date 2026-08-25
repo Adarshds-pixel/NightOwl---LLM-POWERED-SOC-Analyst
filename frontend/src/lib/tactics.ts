@@ -1,20 +1,29 @@
-// Mirrors backend/app/services/severity_service.py's _TACTIC_WEIGHT key order
-// verbatim (standard MITRE ATT&CK Enterprise tactic vocabulary). There is no
-// endpoint that returns this list directly -- MitreTechnique.tactics is just
-// a list of these strings attached to each of the 858 technique objects.
+// Standard MITRE ATT&CK Enterprise tactic vocabulary, hyphenated to match
+// the real shortnames /mitre/techniques actually returns in each
+// MitreTechnique.tactics entry (verified live 2026-08-25). NOT the same
+// convention as backend/app/services/severity_service.py's _TACTIC_WEIGHT --
+// that dict is keyed by underscore, deliberately, because it parses a
+// *different* source (this project's own Sigma rule `tags:`, e.g.
+// "attack.command_and_control"), not the MITRE catalog. An earlier version
+// of this file mirrored that dict's underscore keys for this list too,
+// which silently broke every multi-word tactic here (isTactic() rejected
+// "credential-access", "lateral-movement", "command-and-control", etc. --
+// only single-word tactics like "execution"/"persistence" ever matched) --
+// found while wiring in a multi-technique demo incident on 2026-08-25 and
+// fixed here; single-word tactics were unaffected either way.
 export const TACTIC_ORDER = [
   'reconnaissance',
-  'resource_development',
-  'initial_access',
+  'resource-development',
+  'initial-access',
   'execution',
   'persistence',
-  'privilege_escalation',
-  'defense_evasion',
-  'credential_access',
+  'privilege-escalation',
+  'defense-evasion',
+  'credential-access',
   'discovery',
-  'lateral_movement',
+  'lateral-movement',
   'collection',
-  'command_and_control',
+  'command-and-control',
   'exfiltration',
   'impact',
 ] as const
@@ -23,17 +32,17 @@ export type Tactic = (typeof TACTIC_ORDER)[number]
 
 export const TACTIC_LABELS: Record<Tactic, string> = {
   reconnaissance: 'Reconnaissance',
-  resource_development: 'Resource Development',
-  initial_access: 'Initial Access',
+  'resource-development': 'Resource Development',
+  'initial-access': 'Initial Access',
   execution: 'Execution',
   persistence: 'Persistence',
-  privilege_escalation: 'Privilege Escalation',
-  defense_evasion: 'Defense Evasion',
-  credential_access: 'Credential Access',
+  'privilege-escalation': 'Privilege Escalation',
+  'defense-evasion': 'Defense Evasion',
+  'credential-access': 'Credential Access',
   discovery: 'Discovery',
-  lateral_movement: 'Lateral Movement',
+  'lateral-movement': 'Lateral Movement',
   collection: 'Collection',
-  command_and_control: 'Command and Control',
+  'command-and-control': 'Command and Control',
   exfiltration: 'Exfiltration',
   impact: 'Impact',
 }
