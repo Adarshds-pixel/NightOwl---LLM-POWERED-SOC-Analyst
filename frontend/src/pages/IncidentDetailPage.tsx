@@ -1,5 +1,7 @@
-import { useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { IncidentStatus } from '../api'
+import { ChatPanel } from '../components/chat/ChatPanel'
 import { AuditTrail } from '../components/incidents/AuditTrail'
 import { EvidenceSourcePanel } from '../components/incidents/EvidenceSourcePanel'
 import { ExplainButton } from '../components/incidents/ExplainButton'
@@ -23,6 +25,21 @@ function IncidentDetailPage() {
   const { incident, loading, error, refresh } = useIncidentDetail(incidentId)
   const { refresh: refreshList } = useIncidentsSnapshot()
   const explain = useExplain(incidentId)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Picked up once from AiAssistantPanel's dashboard teaser navigation, then
+  // immediately stripped from history so a refresh or back-nav doesn't
+  // re-trigger ChatPanel's auto-send.
+  const [prefillChatMessage] = useState(
+    () => (location.state as { prefillChatMessage?: string } | null)?.prefillChatMessage,
+  )
+  // Strips prefillChatMessage from history right after reading it, so a
+  // refresh or back-nav doesn't leave it in location.state to re-trigger
+  // ChatPanel's auto-send.
+  useEffect(() => {
+    if (prefillChatMessage) navigate(location.pathname, { replace: true })
+  }, [prefillChatMessage, navigate, location.pathname])
 
   function handleStatusChanged() {
     refresh()
@@ -122,6 +139,8 @@ function IncidentDetailPage() {
           selfCritiqueFlagged={explain.selfCritiqueFlagged}
         />
       </Panel>
+
+      <ChatPanel incidentId={incident.id} initialMessage={prefillChatMessage} />
     </div>
   )
 }

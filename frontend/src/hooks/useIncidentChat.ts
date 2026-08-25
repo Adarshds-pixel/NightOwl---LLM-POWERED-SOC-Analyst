@@ -1,0 +1,89 @@
+import { useCallback, useEffect, useState } from 'react'
+import { ApiError, getChatHistory, postChatMessage, type SourceChunk } from '../api'
+
+// Unifies GET /chat's ChatHistoryMessage (has id/created_at, never sources --
+// the backend doesn't persist retrieval sources) and POST /chat's
+// ChatMessageResponse (has sources, never id/created_at) into one shape.
+// `createdAt` stays null rather than fabricating a timestamp for turns sent
+// this session; `sources` stays null for history turns rather than pretending
+// they were never grounded.
+export interface ChatTurn {
+  key: string
+  role: string
+  content: string
+  createdAt: string | null
+  sources: SourceChunk[] | null
+  pending?: boolean
+}
+
+let localTurnCounter = 0
+
+export function useIncidentChat(incidentId: number) {
+  const [turns, setTurns] = useState<ChatTurn[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    getChatHistory(incidentId)
+      .then((res) => {
+        setTurns(
+          res.messages.map((m) => ({
+            key: `history-${m.id}`,
+            role: m.role,
+            content: m.content,
+            createdAt: m.created_at,
+            sources: null,
+          })),
+        )
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [incidentId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const send = useCallback(
+    async (message: string) => {
+      const trimmed = message.trim()
+      if (!trimmed || sending) return
+
+      setSending(true)
+      setSendError(null)
+      const optimisticKey = `local-${++localTurnCounter}`
+      setTurns((prev) => [
+        ...prev,
+        { key: optimisticKey, role: 'user', content: trimmed, createdAt: null, sources: null, pending: true },
+      ])
+
+      try {
+        const res = await postChatMessage(incidentId, trimmed)
+        setTurns((prev) => [
+          ...prev.map((t) => (t.key === optimisticKey ? { ...t, pending: false } : t)),
+          {
+            key: `local-${++localTurnCounter}`,
+            role: res.role,
+            content: res.content,
+            createdAt: null,
+            sources: res.sources,
+          },
+        ])
+      } catch (err) {
+        // Drop the optimistic bubble rather than leaving a stuck "sending..."
+        // message with no real reply behind it.
+        setTurns((prev) => prev.filter((t) => t.key !== optimisticKey))
+        setSendError(err instanceof ApiError ? err.detail : 'Failed to send message')
+      } finally {
+        setSending(false)
+      }
+    },
+    [incidentId, sending],
+  )
+
+  return { turns, loading, error, sending, sendError, send, refresh: load }
+}
