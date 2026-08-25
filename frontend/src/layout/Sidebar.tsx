@@ -41,7 +41,18 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-  // Day 17 (Pair 2) adds a 4th link here: Rules Manager.
+  {
+    to: '/demo',
+    label: 'Demo Mode',
+    end: false,
+    icon: (
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5}>
+        <rect x="2.5" y="3.5" width="15" height="13" rx="1.5" />
+        <path d="M5.5 8 L8.5 10 L5.5 12" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M10.5 12.5H14.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
 ]
 
 // Placeholders only -- there is no accounts/login system yet (see

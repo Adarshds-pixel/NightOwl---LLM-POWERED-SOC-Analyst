@@ -1,5 +1,5 @@
 import type { IncidentStatus, IncidentSummary, MitreTechnique, Severity } from '../api'
-import { maxSeverity, SEVERITY_ORDER } from './severity'
+import { maxSeverity, SEVERITY_ORDER, SEVERITY_RANK } from './severity'
 import { isTactic, TACTIC_LABELS, type Tactic } from './tactics'
 
 export function severityDistribution(incidents: IncidentSummary[]): Record<Severity, number> {
@@ -200,6 +200,23 @@ export function tacticActivityCounts(
   return [...totals.entries()]
     .map(([tactic, count]) => ({ tactic, label: TACTIC_LABELS[tactic], count }))
     .sort((a, b) => b.count - a.count)
+}
+
+// "Most actionable" = highest-severity open incident, ties broken by most
+// recent -- used by both QuickActionsPanel's "Run AI Analysis" and
+// AiAssistantPanel's chat teaser, so the two dashboard widgets always agree
+// on which incident they're pointing at. Only considers 'open' (not
+// 'investigating') -- an incident already being worked shouldn't be the
+// dashboard's top suggestion for where to start next.
+export function selectMostActionableIncident(incidents: IncidentSummary[]): IncidentSummary | null {
+  const open = incidents.filter((i) => i.status === 'open')
+  if (open.length === 0) return null
+
+  return open.reduce((best, current) => {
+    const bySeverity = SEVERITY_RANK[current.severity] - SEVERITY_RANK[best.severity]
+    if (bySeverity !== 0) return bySeverity > 0 ? current : best
+    return new Date(current.created_at).getTime() > new Date(best.created_at).getTime() ? current : best
+  })
 }
 
 export interface HostNode {

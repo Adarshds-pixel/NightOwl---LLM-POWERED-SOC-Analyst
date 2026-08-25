@@ -10,3 +10,15 @@ export const INCIDENT_PAGE_SIZE = 200
 export const MAX_INCIDENTS_FETCHED = MAX_INCIDENT_PAGES * INCIDENT_PAGE_SIZE
 
 export const HEALTH_POLL_INTERVAL_MS = 15_000
+
+// Day 19 Demo Mode: the fixture is a real EVTX file, committed under
+// frontend/public/ so Vite serves it at the site root and the browser can
+// fetch() it and re-upload it through the real POST /ingest pipeline --
+// no mocked ingest response.
+export const DEMO_FIXTURE_URL = '/demo/sysmon_demo.evtx'
+export const DEMO_FIXTURE_FILENAME = 'sysmon_demo.evtx'
+
+// A fixed, visibly-scripted prompt -- Demo Mode narrates that this question
+// is scripted, but the reply comes from a real POST /incidents/{id}/chat
+// call, never a canned answer.
+export const DEMO_CHAT_QUESTION = 'What should I do first to contain this incident?'
