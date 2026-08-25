@@ -629,6 +629,14 @@ The dev laptop's McAfee firewall blocks Sysmon's network-monitoring driver (§7.
 
 Not wired into pytest as a hard dependency (same rationale as §12's other real-file checks — a machine-specific real file shouldn't be a hard dependency of the automated suite); this was a manual verification pass. The Day 8 network-connection-category Sigma rule can be developed/tested against this real fixture instead of only hand-crafted ones.
 
+### 12.7. Prep task — malicious-pattern capture for Phase 4 E2E / Day 25 demo dataset (manual, not run here)
+
+`sysmon_vm_capture.evtx` (§12.6) and `sysmon_demo.evtx` (§7.2) are both confirmed benign (0 rule matches, by design) — nothing in the repo exercises `POST /ingest` end-to-end against a file that actually triggers detections. Rule *correctness* itself doesn't need this (`backend/tests/detection/test_rules_matrix.py` already proves fire/no-fire for all 15 rules against hand-crafted dict fixtures), but the Phase 4 (Days 21–22) "different sample log set" E2E run and the Day 25 curated demo dataset both benefit from a real file that lights up a spread of severities and MITRE tactics.
+
+`backend/scripts/vm_generate_malicious_demo_events.ps1` reproduces the exact `Image`/`CommandLine`/`TargetFilename`/`TargetObject`/`DestinationPort` values from `test_rules_matrix.py` as real (but non-destructive, self-cleaning) actions on the same clean VM used for §12.6 — see the script's header comment for the full safety rationale and the `wevtutil epl` export command to run afterward.
+
+**Status:** script written, not yet run — pending a VM pass. Once `data/sample_logs/sysmon_malicious_demo.evtx` exists, this section should be updated with the same three-level verification §12.6 used (raw read / normalize+detect / full `POST /ingest`), listing which of the 15 rules fired.
+
 ---
 
 ## 13. Day 8 — 5 Sigma rules + alert persistence (Pair 1 deliverable)
