@@ -89,11 +89,11 @@ export function useDemoMode() {
         targetId = ingest.incident_ids[0]
         appendLog(`Resolved incident #${targetId} for the rest of this run.`, 'success')
       } else {
-        // The bundled fixture models benign activity on purpose (whoami,
-        // a plain curl, a file write) and never trips a detection rule --
-        // rather than stop the demo short, fall back to a real existing
-        // open incident so explain/chat still run against real data.
-        appendLog('This fixture models benign activity and triggered no detection rule.')
+        // Defensive fallback, not the expected path with the current
+        // fixture (which reliably trips 12/15 rules) -- kept in case a
+        // future fixture swap or a rule change ever yields zero matches,
+        // so explain/chat still have real data to run against.
+        appendLog('This fixture triggered no detection rule this run.')
         const fallback = selectMostActionableIncident(incidents)
         if (!fallback) {
           appendLog('No existing incident to fall back to either -- stopping before explain/chat.', 'error')

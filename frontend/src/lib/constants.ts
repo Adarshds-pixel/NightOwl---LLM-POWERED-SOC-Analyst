@@ -15,8 +15,16 @@ export const HEALTH_POLL_INTERVAL_MS = 15_000
 // frontend/public/ so Vite serves it at the site root and the browser can
 // fetch() it and re-upload it through the real POST /ingest pipeline --
 // no mocked ingest response.
-export const DEMO_FIXTURE_URL = '/demo/sysmon_demo.evtx'
-export const DEMO_FIXTURE_FILENAME = 'sysmon_demo.evtx'
+//
+// As of 2026-08-25, points at a VM-generated fixture that genuinely trips
+// 12 of 15 detection rules across 10 real MITRE techniques (verified via a
+// read-only dry run through the real ingestion/detection pipeline), so a
+// fresh Demo Mode run creates real incidents live instead of falling back
+// to a pre-existing one. The earlier benign fixture (sysmon_demo.evtx) is
+// kept alongside for reference -- see docs/05_NightOwl_Manual_Testing_Guide.md
+// §7.2/§12.7.
+export const DEMO_FIXTURE_URL = '/demo/sysmon_malicious_demo.evtx'
+export const DEMO_FIXTURE_FILENAME = 'sysmon_malicious_demo.evtx'
 
 // A fixed, visibly-scripted prompt -- Demo Mode narrates that this question
 // is scripted, but the reply comes from a real POST /incidents/{id}/chat
