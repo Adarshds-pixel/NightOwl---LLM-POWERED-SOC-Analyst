@@ -65,11 +65,21 @@ class FakeChatGroq:
 def reset_llm_client_state(monkeypatch):
     """llm_client caches its client (and, since Day 12, responses) in
     module-level globals -- reset them before and after every test so
-    tests don't leak state into each other."""
+    tests don't leak state into each other.
+
+    Defaults llm_provider to "gemini" so every test below is explicit about
+    which provider it exercises, independent of whatever LLM_PROVIDER
+    happens to be set to in .env (the project default was Gemini through
+    Day 25, then switched to Groq -- see .env's comment -- and most of this
+    file's tests were written assuming the unstated default rather than
+    setting it themselves, which silently broke when that default changed).
+    The two Groq-specific tests below re-override this to "groq" in their
+    own body, which still wins for them."""
     monkeypatch.setattr(llm_client, "_client", None)
     monkeypatch.setattr(llm_client, "_response_cache", {})
     monkeypatch.setattr(llm_client, "ChatGoogleGenerativeAI", FakeChatGoogleGenerativeAI)
     monkeypatch.setattr(llm_client, "ChatGroq", FakeChatGroq)
+    monkeypatch.setattr(settings, "llm_provider", "gemini")
     monkeypatch.setattr(settings, "llm_cache_enabled", False)
     FakeChatGoogleGenerativeAI.last_kwargs = None
     FakeChatGoogleGenerativeAI.invoke_side_effect = None
