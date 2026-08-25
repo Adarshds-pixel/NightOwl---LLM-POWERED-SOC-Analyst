@@ -1,17 +1,28 @@
 """Day 5 verification (Pair 1): event_service.py persists NormalizedEvent
 rows via the Event model. Uses an in-memory SQLite engine, same pattern as
 test_health_and_models.py, so this runs offline without a live Postgres.
+
+list_events/count_events/get_alerts_for_event_ids (GET /events, the raw
+event-timeline endpoint) verified further below, same in-memory-SQLite
+pattern as tests/services/test_incident_service.py.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
+from app.models.alert import Alert
 from app.models.event import Event
 from app.schemas.event import NormalizedEvent
-from app.services.event_service import create_event, save_events
+from app.services.event_service import (
+    count_events,
+    create_event,
+    get_alerts_for_event_ids,
+    list_events,
+    save_events,
+)
 
 
 def _engine():
@@ -116,3 +127,122 @@ def test_persisted_event_roundtrips_from_db():
         assert fetched is not None
         assert fetched.raw_json["normalized"]["destination_ip"] == "8.8.8.8"
         assert fetched.raw_json["normalized"]["destination_port"] == 443
+
+
+BASE_TIME = datetime(2026, 8, 25, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def _insert_event(db, **overrides) -> Event:
+    fields = dict(host="HOST-A", timestamp=BASE_TIME, event_id=1, process="cmd.exe", command_line=None, user=None)
+    fields.update(overrides)
+    event = Event(raw_json={"raw": {}, "normalized": {}}, **fields)
+    db.add(event)
+    db.flush()
+    return event
+
+
+def _insert_alert(db, event_id: int, **overrides) -> Alert:
+    fields = dict(rule_id="rule-1", matched_at=BASE_TIME, severity="high")
+    fields.update(overrides)
+    alert = Alert(event_id=event_id, **fields)
+    db.add(alert)
+    db.flush()
+    return alert
+
+
+def test_list_events_defaults_to_newest_first():
+    with Session(_engine()) as db:
+        older = _insert_event(db, timestamp=BASE_TIME)
+        newer = _insert_event(db, timestamp=BASE_TIME + timedelta(minutes=5))
+        db.commit()
+
+        events = list_events(db)
+
+        assert [e.id for e in events] == [newer.id, older.id]
+
+
+def test_list_events_filters_by_host():
+    with Session(_engine()) as db:
+        _insert_event(db, host="HOST-A")
+        target = _insert_event(db, host="HOST-B")
+        db.commit()
+
+        events = list_events(db, host="HOST-B")
+
+        assert [e.id for e in events] == [target.id]
+
+
+def test_list_events_alert_only_true_restricts_to_alerted_events():
+    with Session(_engine()) as db:
+        alerted = _insert_event(db)
+        _insert_event(db)  # no alert
+        _insert_alert(db, alerted.id)
+        db.commit()
+
+        events = list_events(db, alert_only=True)
+
+        assert [e.id for e in events] == [alerted.id]
+
+
+def test_list_events_alert_only_false_restricts_to_normal_events():
+    with Session(_engine()) as db:
+        alerted = _insert_event(db)
+        normal = _insert_event(db)
+        _insert_alert(db, alerted.id)
+        db.commit()
+
+        events = list_events(db, alert_only=False)
+
+        assert [e.id for e in events] == [normal.id]
+
+
+def test_list_events_limit_and_offset_page_through_distinct_results():
+    with Session(_engine()) as db:
+        for i in range(5):
+            _insert_event(db, timestamp=BASE_TIME + timedelta(minutes=i))
+        db.commit()
+
+        page1 = list_events(db, limit=2, offset=0)
+        page2 = list_events(db, limit=2, offset=2)
+
+        assert len(page1) == 2
+        assert len(page2) == 2
+        assert {e.id for e in page1}.isdisjoint({e.id for e in page2})
+
+
+def test_count_events_ignores_limit_reflects_full_filtered_total():
+    with Session(_engine()) as db:
+        for i in range(5):
+            _insert_event(db, timestamp=BASE_TIME + timedelta(minutes=i))
+        db.commit()
+
+        assert count_events(db) == 5
+        assert len(list_events(db, limit=2)) == 2
+
+
+def test_get_alerts_for_event_ids_empty_list_returns_empty_dict():
+    with Session(_engine()) as db:
+        assert get_alerts_for_event_ids(db, []) == {}
+
+
+def test_get_alerts_for_event_ids_picks_highest_severity_when_event_matched_multiple_rules():
+    with Session(_engine()) as db:
+        event = _insert_event(db)
+        _insert_alert(db, event.id, rule_id="rule-low", severity="low")
+        _insert_alert(db, event.id, rule_id="rule-critical", severity="critical")
+        db.commit()
+
+        result = get_alerts_for_event_ids(db, [event.id])
+
+        assert result[event.id].severity == "critical"
+        assert result[event.id].rule_id == "rule-critical"
+
+
+def test_get_alerts_for_event_ids_omits_events_with_no_alert():
+    with Session(_engine()) as db:
+        event = _insert_event(db)
+        db.commit()
+
+        result = get_alerts_for_event_ids(db, [event.id])
+
+        assert result == {}

@@ -1,14 +1,24 @@
 """Persists NormalizedEvent schemas as Event rows (Vol1 §3.4 layering:
 routes -> services -> models/db; this is the only place that talks to the
 DB for events).
+
+list_events/count_events (GET /events, the raw event-timeline endpoint --
+alerts only ever show the small fraction of events that matched a rule,
+this shows everything ingested) follow incident_service.py's
+_filtered_*_stmt + list_*/count_* pattern exactly, so the two queries can't
+drift out of sync on their filters.
 """
 
 import logging
+from datetime import datetime
 
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
+from app.models.alert import Alert
 from app.models.event import Event
 from app.schemas.event import NormalizedEvent
+from app.services import severity_service
 
 logger = logging.getLogger(__name__)
 
@@ -41,3 +51,81 @@ def save_events(db: Session, events: list[NormalizedEvent]) -> list[Event]:
     db.commit()
     logger.info("ingested %d events", len(rows))
     return rows
+
+
+def _filtered_events_stmt(
+    host: str | None,
+    start_date: datetime | None,
+    end_date: datetime | None,
+    alert_only: bool | None,
+):
+    """Shared by list_events and count_events so the two never drift out of
+    sync -- every filter is optional and additive (AND'd together).
+    alert_only=True restricts to events with at least one Alert row,
+    alert_only=False restricts to events with none, None applies no filter.
+    """
+    stmt = select(Event)
+    if host is not None:
+        stmt = stmt.where(Event.host == host)
+    if start_date is not None:
+        stmt = stmt.where(Event.timestamp >= start_date)
+    if end_date is not None:
+        stmt = stmt.where(Event.timestamp <= end_date)
+    if alert_only is True:
+        stmt = stmt.where(exists().where(Alert.event_id == Event.id))
+    elif alert_only is False:
+        stmt = stmt.where(~exists().where(Alert.event_id == Event.id))
+    return stmt
+
+
+def list_events(
+    db: Session,
+    host: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    alert_only: bool | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Event]:
+    """Newest-first raw event list for `GET /events`, the full ingested
+    timeline -- unlike `GET /incidents`, this includes events that never
+    triggered a rule, so the frontend can show the real signal-to-noise
+    ratio (e.g. "64,558 events processed, 8 flagged").
+    """
+    stmt = _filtered_events_stmt(host, start_date, end_date, alert_only).order_by(Event.timestamp.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit).offset(offset)
+    return list(db.scalars(stmt))
+
+
+def count_events(
+    db: Session,
+    host: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    alert_only: bool | None = None,
+) -> int:
+    """Total events matching the same filters as list_events, ignoring
+    limit/offset -- lets `GET /events` report a page-independent `total`
+    alongside the page of results.
+    """
+    subq = _filtered_events_stmt(host, start_date, end_date, alert_only).subquery()
+    return db.scalar(select(func.count()).select_from(subq)) or 0
+
+
+def get_alerts_for_event_ids(db: Session, event_ids: list[int]) -> dict[int, Alert]:
+    """One query for a page of event ids -> {event_id: highest-severity
+    Alert}, so `GET /events` can enrich each row with alert status without
+    a per-row query. An event can match more than one rule (multiple Alert
+    rows sharing an event_id); ties keep whichever alert was seen first,
+    since the choice only affects which single severity/rule_id is shown.
+    """
+    if not event_ids:
+        return {}
+    alerts = list(db.scalars(select(Alert).where(Alert.event_id.in_(event_ids))))
+    best: dict[int, Alert] = {}
+    for alert in alerts:
+        existing = best.get(alert.event_id)
+        if existing is None or severity_service.higher_severity(existing.severity, alert.severity) != existing.severity:
+            best[alert.event_id] = alert
+    return best
