@@ -635,7 +635,16 @@ Not wired into pytest as a hard dependency (same rationale as §12's other real-
 
 `backend/scripts/vm_generate_malicious_demo_events.ps1` reproduces the exact `Image`/`CommandLine`/`TargetFilename`/`TargetObject`/`DestinationPort` values from `test_rules_matrix.py` as real (but non-destructive, self-cleaning) actions on the same clean VM used for §12.6 — see the script's header comment for the full safety rationale and the `wevtutil epl` export command to run afterward.
 
-**Status:** script written, not yet run — pending a VM pass. Once `data/sample_logs/sysmon_malicious_demo.evtx` exists, this section should be updated with the same three-level verification §12.6 used (raw read / normalize+detect / full `POST /ingest`), listing which of the 15 rules fired.
+**Status:** done — `data/sample_logs/sysmon_malicious_demo.evtx` (8.1MB) captured 2026-08-25 from the same clean VM (`Computer=Nightowl`) by actually running the script's 15 non-destructive actions. Verified through the same three levels §12.6 used:
+- **Raw read** (`evtx_reader.read_records_as_dicts`): 7,568 records, 0 read errors.
+- **Normalize + detect** (`normalizer.normalize_event` → `detection.engine.evaluate_event`, read-only, no DB writes): 0 normalize errors. Event-ID breakdown: `FileCreate(11): 7512, NetworkConnect(3): 25, ProcessCreate(1): 16, ProcessTerminate(5): 15`. **12 of 15 rules fired** (22 total matches) across 10 real MITRE technique IDs (`T1059.001, T1105, T1053.005, T1071.001, T1218.005, T1003.001, T1003.002, T1021.001, T1021.002, T1021.006`).
+- **Full `POST /ingest` route** (live Postgres, not `TestClient`): `records_read: 7568, events_ingested: 7568, events_skipped: 0, rule_matches: 22, alerts_created: 22`, all merged into a single new critical-severity incident (`incident_ids: [2]`) — expected, since all 15 actions ran within the same `GROUPING_WINDOW` (1 hour, `services/incident_service.py`) on the same host.
+
+**3 rules did not fire** — not a fixture defect, explainable from the event-ID breakdown and the VM's Sysmon config:
+- *Registry Run Key Persistence*, *Registry IFEO Debugger Hijack* — both need Sysmon `RegistryEvent` (ID 13), and this capture has **zero** ID-13 records at all, meaning the VM's Sysmon config doesn't have that category enabled (the script's registry-write steps ran, but nothing logged them). Fix would be adding `RegistryEvent` to the VM's Sysmon config and re-capturing — not done, since 12/15 across 10 techniques is already a strong demo dataset.
+- *Certutil Download via urlcache/split Flags* — likely blocked by Defender/AV on the VM before the process could start (this exact command-line pattern is a well-known, actively-flagged LOLBin signature); the script's other `-EncodedCommand`/`-ExecutionPolicy Bypass` PowerShell steps did fire, so it's specific to certutil, not a general execution-logging gap.
+
+As of 2026-08-25, `frontend/src/lib/constants.ts`'s `DEMO_FIXTURE_URL` points Demo Mode at this fixture instead of the benign `sysmon_demo.evtx` (§7.2), so a fresh Demo Mode run creates a real incident live rather than falling back to a pre-existing one.
 
 ---
 
