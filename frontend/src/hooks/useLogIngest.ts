@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { ApiError, ingestEvtxFile, type IngestResponse } from '../api'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
+import { invalidateRulesCache } from './useRules'
 
 export function useLogIngest() {
   const { refresh } = useIncidentsSnapshot()
@@ -16,6 +17,10 @@ export function useLogIngest() {
       try {
         const res = await ingestEvtxFile(file)
         setResult(res)
+        // An ingest changes both the incident snapshot and the per-rule match
+        // counts, so the session-cached rule set has to be dropped too --
+        // otherwise the Rules page would keep showing pre-ingest counts.
+        invalidateRulesCache()
         refresh()
         return res
       } catch (err) {

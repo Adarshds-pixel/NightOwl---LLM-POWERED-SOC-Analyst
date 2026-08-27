@@ -1,24 +1,38 @@
-import { SEVERITY_HEX } from '../../lib/severity'
+import { useId } from 'react'
 import type { HostEdge, HostNode } from '../../lib/aggregations'
-import { EmptyState } from '../ui'
+import { SEVERITY_HEX } from '../../lib/severity'
+import { EmptyState, Tooltip } from '../ui'
 
-const WIDTH = 420
-const HEIGHT = 300
+const WIDTH = 380
+const HEIGHT = 268
 const CENTER_X = WIDTH / 2
 const CENTER_Y = HEIGHT / 2
-const LAYOUT_RADIUS = 100
+const LAYOUT_RADIUS = 92
+
+/**
+ * Internal host-activity graph: one node per host that has incidents, sized
+ * by incident count, coloured by worst severity, joined where two hosts
+ * share a MITRE technique.
+ *
+ * This is the panel that occupies the slot a world "threat map" would take
+ * in a generic SOC template. NightOwl has no geolocation data of any kind
+ * (it ingests local Windows event logs), so a globe with attack arcs would
+ * be pure decoration; the real lateral relationship between hosts is both
+ * honest and more useful.
+ */
 
 function nodeRadius(incidentCount: number): number {
-  return 10 + Math.min(incidentCount, 8) * 2
+  return 9 + Math.min(incidentCount, 8) * 1.8
 }
 
 function edgeWidth(sharedTechniqueCount: number): number {
-  return 1 + Math.min(sharedTechniqueCount, 5)
+  return 1 + Math.min(sharedTechniqueCount, 4)
 }
 
-// Deterministic circular layout -- angle is purely a function of each
-// node's fixed position in the (already deterministically-sorted, see
-// lib/aggregations.ts) array, never randomized or force-simulated.
+// Deterministic circular layout -- angle is purely a function of each node's
+// fixed position in the (already deterministically sorted) array, never
+// randomised or force-simulated, so the graph does not reshuffle on every
+// refresh.
 function layoutPositions(nodes: HostNode[]): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>()
   if (nodes.length === 1) {
@@ -36,14 +50,25 @@ function layoutPositions(nodes: HostNode[]): Map<string, { x: number; y: number 
 }
 
 export function HostGraph({ nodes, edges }: { nodes: HostNode[]; edges: HostEdge[] }) {
+  const glowId = useId()
+
   if (nodes.length === 0) {
-    return <EmptyState message="No host activity yet -- ingest logs to populate the graph" />
+    return <EmptyState message="No host activity yet" hint="Ingest logs to populate the host graph." />
   }
 
   const positions = layoutPositions(nodes)
 
   return (
-    <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" style={{ maxHeight: HEIGHT }}>
+    <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" style={{ maxHeight: HEIGHT }} role="img" aria-label="Host activity graph">
+      <defs>
+        <radialGradient id={glowId}>
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx={CENTER_X} cy={CENTER_Y} r={LAYOUT_RADIUS + 40} fill={`url(#${glowId})`} />
+      <circle cx={CENTER_X} cy={CENTER_Y} r={LAYOUT_RADIUS} fill="none" stroke="rgba(120,160,255,0.10)" strokeDasharray="3 5" />
+
       {edges.map((edge) => {
         const a = positions.get(edge.a)
         const b = positions.get(edge.b)
@@ -55,34 +80,57 @@ export function HostGraph({ nodes, edges }: { nodes: HostNode[]; edges: HostEdge
             y1={a.y}
             x2={b.x}
             y2={b.y}
-            className="stroke-accent-cyan"
-            strokeOpacity={0.25}
+            stroke="#22d3ee"
+            strokeOpacity={0.22}
             strokeWidth={edgeWidth(edge.sharedTechniqueCount)}
+            strokeLinecap="round"
           />
         )
       })}
+
       {nodes.map((node) => {
         const pos = positions.get(node.host)
         if (!pos) return null
         const r = nodeRadius(node.incidentCount)
+        const color = SEVERITY_HEX[node.severity]
         return (
           <g key={node.host}>
-            <circle cx={pos.x} cy={pos.y} r={r} fill={SEVERITY_HEX[node.severity]} fillOpacity={0.85} />
-            <circle cx={pos.x} cy={pos.y} r={r} fill="none" stroke={SEVERITY_HEX[node.severity]} strokeWidth={1.5} />
-            <text
-              x={pos.x}
-              y={pos.y + r + 14}
-              textAnchor="middle"
-              className="fill-text font-display text-[10px] uppercase"
-            >
-              {node.host}
-            </text>
-            <text x={pos.x} y={pos.y + 4} textAnchor="middle" className="fill-bg text-[10px] font-bold">
+            <title>{`${node.host}: ${node.incidentCount} incident(s), worst severity ${node.severity}`}</title>
+            <circle cx={pos.x} cy={pos.y} r={r + 5} fill={color} fillOpacity={0.12} />
+            <circle cx={pos.x} cy={pos.y} r={r} fill={color} fillOpacity={0.9} stroke={color} strokeWidth={1.5} />
+            <text x={pos.x} y={pos.y + 3.5} textAnchor="middle" className="fill-bg-deep text-[10px] font-bold">
               {node.incidentCount}
+            </text>
+            <text x={pos.x} y={pos.y + r + 13} textAnchor="middle" className="fill-current text-[9px] tracking-wide text-text-muted uppercase">
+              {node.host}
             </text>
           </g>
         )
       })}
     </svg>
+  )
+}
+
+/** Legend explaining what node size, colour and edges mean -- without it
+ *  the graph is decorative rather than readable. */
+export function HostGraphLegend() {
+  return (
+    <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-text-muted">
+      <li className="flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-full bg-severity-critical" />
+        Worst severity on host
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-full border border-text-muted" />
+        Size = incident count
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span className="h-0.5 w-4 rounded-full bg-accent-cyan/60" />
+        Shared MITRE technique
+      </li>
+      <Tooltip label="Hosts are joined when the same technique appears on both, which is what lateral movement looks like in this data.">
+        <li className="cursor-help text-text-faint underline decoration-dotted">What does an edge mean?</li>
+      </Tooltip>
+    </ul>
   )
 }

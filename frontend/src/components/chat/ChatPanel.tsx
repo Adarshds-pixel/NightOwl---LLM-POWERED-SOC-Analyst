@@ -1,57 +1,58 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { MessagesSquare } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { useIncidentChat } from '../../hooks/useIncidentChat'
-import { ErrorState, Panel } from '../ui'
+import { Card, ErrorState } from '../ui'
 import { ChatHistory } from './ChatHistory'
+import { CommandInput } from './CommandInput'
 
-interface ChatPanelProps {
+/**
+ * Incident-scoped chat (GET/POST /incidents/{id}/chat). Every reply is a
+ * real RAG call against that incident, so the panel always says which
+ * incident it is talking about.
+ */
+export function ChatPanel({
+  incidentId,
+  initialMessage,
+  className,
+}: {
   incidentId: number
   initialMessage?: string
-}
-
-export function ChatPanel({ incidentId, initialMessage }: ChatPanelProps) {
+  className?: string
+}) {
   const { turns, loading, error, sending, sendError, send } = useIncidentChat(incidentId)
-  const [draft, setDraft] = useState('')
   const autoSentRef = useRef(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Auto-sends a prefilled question (from AiAssistantPanel's dashboard
-  // teaser) exactly once -- the ref guard survives StrictMode's double
-  // effect invocation in dev.
+  // Auto-sends a prefilled question (from the dashboard assistant card)
+  // exactly once -- the ref guard survives StrictMode double effects.
   useEffect(() => {
     if (!initialMessage || autoSentRef.current) return
     autoSentRef.current = true
     send(initialMessage)
   }, [initialMessage, send])
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!draft.trim()) return
-    send(draft)
-    setDraft('')
-  }
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [turns.length, sending])
 
   return (
-    <Panel title="Incident Chat" accent="green">
-      {error && <ErrorState message={error} />}
-      {!error && <ChatHistory turns={turns} loading={loading} />}
+    <Card title="Incident chat" icon={<MessagesSquare className="h-3.5 w-3.5" />} accent="violet" className={className}>
+      {error ? (
+        <ErrorState message={error} />
+      ) : (
+        <div ref={scrollRef} className="max-h-96 overflow-y-auto pr-1">
+          <ChatHistory turns={turns} loading={loading} sending={sending} />
+        </div>
+      )}
 
-      <form onSubmit={handleSubmit} className="mt-3 flex items-center gap-2">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Ask about this incident..."
+      <div className="mt-3">
+        <CommandInput
+          onSubmit={send}
           disabled={sending}
-          className="flex-1 rounded border border-border bg-surface/60 px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-accent-green focus:outline-none disabled:opacity-60"
+          placeholder="Ask about this incident..."
+          note={sendError ?? 'Answers are grounded in the MITRE knowledge base; verify before acting.'}
         />
-        <button
-          type="submit"
-          disabled={sending || !draft.trim()}
-          className="rounded border border-accent-green bg-accent-green/10 px-4 py-2 text-xs font-semibold tracking-widest text-accent-green uppercase disabled:opacity-50"
-        >
-          {sending ? 'Sending...' : 'Send'}
-        </button>
-      </form>
-      {sendError && <p className="mt-2 text-xs text-accent-red">{sendError}</p>}
-    </Panel>
+      </div>
+    </Card>
   )
 }

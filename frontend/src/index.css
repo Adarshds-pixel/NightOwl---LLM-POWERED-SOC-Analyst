@@ -1,46 +1,223 @@
 @import "tailwindcss";
 
-/* Design tokens (Day 14 PM). Built on Tailwind's own palette vars rather
-   than new hex values, so e.g. "critical = red-600" stays legible to
-   anyone reading this file. Severity tokens match
-   backend/app/services/severity_service.py's vocabulary verbatim, so
-   later badges/heatmap work (Day 16/17) share one source of truth. */
+/* ---------------------------------------------------------------------------
+   NightOwl design tokens.
+
+   One source of truth for the whole UI (Phase 3 redesign). Severity tokens
+   keep the exact vocabulary of backend/app/services/severity_service.py, so
+   a badge, a heatmap cell and a chart series can never disagree about what
+   "high" looks like. Everything else is grouped by role -- surface, border,
+   accent, glow -- rather than by hue, so a component asks for
+   `border-line-soft`, never for "blue-ish 10% white".
+
+   JS-side consumers that can't read CSS variables (recharts, inline SVG
+   fills) mirror these values in src/lib/tokens.ts -- change both together.
+--------------------------------------------------------------------------- */
 @theme {
-  --color-bg: var(--color-slate-950);
-  --color-surface: var(--color-slate-900);
-  --color-border: var(--color-slate-800);
-  --color-text: var(--color-slate-100);
-  --color-text-muted: var(--color-slate-400);
+  /* Surfaces: a deep navy base, not flat black, so translucent cards have
+     something to sit on and the ambient glows below have room to read. */
+  --color-bg: #060a14;
+  --color-bg-deep: #04070f;
+  --color-surface: #0b1220;
+  --color-surface-1: #0d1526;
+  --color-surface-2: #111b30;
+  --color-surface-3: #16223c;
+  --color-elevated: #131d33;
 
-  --color-severity-informational: var(--color-slate-400);
-  --color-severity-low: var(--color-emerald-500);
-  --color-severity-medium: var(--color-amber-500);
-  --color-severity-high: var(--color-orange-500);
-  --color-severity-critical: var(--color-red-600);
+  /* Hairlines. Thin and luminous -- never a solid grey rule. */
+  --color-line: rgba(120, 160, 255, 0.10);
+  --color-line-soft: rgba(120, 160, 255, 0.07);
+  --color-line-strong: rgba(125, 180, 255, 0.22);
+  --color-border: rgba(120, 160, 255, 0.10);
 
-  /* Day 15: cyberpunk accent + glow tokens (additive -- severity tokens
-     above are untouched). One accent per HUD "channel": cyan is the default/
-     neutral-technical accent, red/amber/green echo severity at a glance,
-     purple marks the AI/RAG-attributed surfaces (explain, chat, assistant). */
-  --color-accent-cyan: var(--color-cyan-400);
-  --color-accent-red: var(--color-red-500);
-  --color-accent-amber: var(--color-amber-400);
-  --color-accent-green: var(--color-emerald-400);
-  --color-accent-purple: var(--color-violet-400);
+  --color-text: #e8eefc;
+  --color-text-dim: #9fb0d0;
+  --color-text-muted: #6b7fa4;
+  --color-text-faint: #55658a;
 
-  --font-display: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+  /* Severity -- vocabulary locked to severity_service.py. */
+  --color-severity-informational: #7c8db3;
+  --color-severity-low: #22c55e;
+  --color-severity-medium: #eab308;
+  --color-severity-high: #f97316;
+  --color-severity-critical: #ef4444;
 
-  /* Panel-glow shadows for the mockups' lit-border HUD look. Kept subtle
-     (small blur, no spread) so stacked panels don't wash into one glow. */
-  --shadow-glow-cyan: 0 0 10px -2px var(--color-accent-cyan);
-  --shadow-glow-red: 0 0 10px -2px var(--color-accent-red);
-  --shadow-glow-amber: 0 0 10px -2px var(--color-accent-amber);
-  --shadow-glow-green: 0 0 10px -2px var(--color-accent-green);
-  --shadow-glow-purple: 0 0 10px -2px var(--color-accent-purple);
+  /* Accents. Blue is the neutral/technical default, violet marks every
+     AI/RAG surface, green/amber/red echo severity semantics. */
+  --color-accent-blue: #3b82f6;
+  --color-accent-cyan: #22d3ee;
+  --color-accent-violet: #8b5cf6;
+  --color-accent-purple: #a855f7;
+  --color-accent-green: #22c55e;
+  --color-accent-amber: #f59e0b;
+  --color-accent-red: #ef4444;
+  --color-accent-neutral: #64748b;
+
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+  --font-display: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Type scale -- dense enterprise SOC, so nothing here is large. */
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 0.875rem;
+  --text-meta: 0.6875rem;
+  --text-meta--line-height: 1rem;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1.125rem;
+  --text-body: 0.8125rem;
+  --text-body--line-height: 1.25rem;
+  --text-title: 0.9375rem;
+  --text-title--line-height: 1.375rem;
+  --text-metric: 2rem;
+  --text-metric--line-height: 2.25rem;
+  --text-page: 1.625rem;
+  --text-page--line-height: 2rem;
+
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --radius-chip: 8px;
+
+  /* Card lift: ambient shadow + a hairline top highlight, no big blur. */
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8);
+  --shadow-elevated: 0 24px 60px -24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(125, 180, 255, 0.10);
+  --shadow-glow-blue: 0 0 18px -6px var(--color-accent-blue);
+  --shadow-glow-cyan: 0 0 18px -6px var(--color-accent-cyan);
+  --shadow-glow-violet: 0 0 18px -6px var(--color-accent-violet);
+  --shadow-glow-green: 0 0 18px -6px var(--color-accent-green);
+  --shadow-glow-amber: 0 0 18px -6px var(--color-accent-amber);
+  --shadow-glow-red: 0 0 18px -6px var(--color-accent-red);
+  --shadow-glow-neutral: none;
+
+  --animate-pulse-dot: pulse-dot 2.4s ease-in-out infinite;
+  --animate-sweep: sweep 2.6s linear infinite;
+  --animate-rise: rise 0.22s ease-out;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.86); }
+}
+
+@keyframes sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Global atmosphere. Two fixed radial glows (blue top-left, violet
+   bottom-right) plus a faint technical grid, all behind the content and all
+   dark enough that card text keeps full contrast.
+--------------------------------------------------------------------------- */
+html, body, #root {
+  height: 100%;
 }
 
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 520px at 12% -6%, rgba(37, 99, 235, 0.18), transparent 62%),
+    radial-gradient(760px 520px at 92% 108%, rgba(139, 92, 246, 0.15), transparent 60%),
+    radial-gradient(620px 420px at 78% 8%, rgba(34, 211, 238, 0.07), transparent 65%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image:
+    linear-gradient(to right, rgba(120, 160, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(120, 160, 255, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at 50% 0%, black, transparent 78%);
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.35);
+}
+
+/* Scrollbars styled to disappear into the surface rather than punching a
+   bright grey channel through every panel. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(125, 180, 255, 0.18) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(125, 180, 255, 0.18);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(125, 180, 255, 0.32);
+}
+
+/* Keyboard focus is always visible; pointer focus never draws a ring. */
+:focus-visible {
+  outline: 2px solid var(--color-accent-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  body::before, body::after { display: none; }
+  body { background: white; color: black; }
+  .print-hide { display: none !important; }
+}
+
+/* Preference-driven chrome (see context/preferences/PreferencesProvider).
+   Kept in CSS rather than threaded through every component's props. */
+html[data-ambient='off'] body::before,
+html[data-ambient='off'] body::after {
+  display: none;
+}
+
+html[data-motion='reduced'] *,
+html[data-motion='reduced'] *::before,
+html[data-motion='reduced'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
 }

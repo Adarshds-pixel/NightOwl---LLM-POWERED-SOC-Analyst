@@ -26,7 +26,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build knowledge base
-        run: python scripts/build_kb.py
+        working-directory: .
+        run: python ai/tools/build_kb.py
 
       - name: Run pytest
         run: python -m pytest -v

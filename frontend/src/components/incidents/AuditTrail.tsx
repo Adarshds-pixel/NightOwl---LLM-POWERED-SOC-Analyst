@@ -1,38 +1,51 @@
+import { History } from 'lucide-react'
 import { useIncidentAudit } from '../../hooks/useIncidentAudit'
-import { formatRelativeTime } from '../../lib/format'
-import { EmptyState, ErrorState, LoadingState, Panel } from '../ui'
+import { formatDateTime, formatRelativeTime } from '../../lib/format'
+import { Card, EmptyState, ErrorState, LoadingState, Timeline, TimelineItem } from '../ui'
 
+/**
+ * The backend audit log for one incident (GET /incidents/{id}/audit): who
+ * changed the status, when, and every explain/chat call recorded against
+ * it. This is the real trail, not a UI-side activity guess.
+ */
 export function AuditTrail({ incidentId }: { incidentId: number }) {
   const { audit, loading, error, refresh } = useIncidentAudit(incidentId)
 
   return (
-    <Panel title="Audit Trail" accent="neutral">
+    <Card title="Audit trail" icon={<History className="h-3.5 w-3.5" />} accent="neutral">
       {loading && <LoadingState label="Loading audit trail" />}
       {error && !loading && <ErrorState message={error} onRetry={refresh} />}
-      {!loading && !error && audit && audit.count === 0 && <EmptyState message="No audit events yet" />}
-      {!loading && !error && audit && audit.count > 0 && (
-        <ul className="space-y-2 text-sm">
-          {audit.events.map((event) => (
-            <li
-              key={event.id}
-              className="flex items-start justify-between gap-3 border-b border-border pb-2 last:border-0"
-            >
-              <div>
-                <span className="font-medium text-text">{event.action}</span>
-                <span className="ml-2 text-text-muted">by {event.actor}</span>
-                {event.details && (
-                  <div className="mt-0.5 text-xs text-text-muted">
-                    {Object.entries(event.details)
-                      .map(([key, value]) => `${key}: ${String(value)}`)
-                      .join(' · ')}
-                  </div>
-                )}
-              </div>
-              <span className="shrink-0 text-xs text-text-muted">{formatRelativeTime(event.created_at)}</span>
-            </li>
-          ))}
-        </ul>
+      {!loading && !error && audit && audit.count === 0 && (
+        <EmptyState message="No audit events yet" hint="Status changes and AI calls are recorded here." />
       )}
-    </Panel>
+      {!loading && !error && audit && audit.count > 0 && (
+        <Timeline>
+          {audit.events.map((event) => (
+            <TimelineItem
+              key={event.id}
+              title={
+                <>
+                  <span className="font-medium text-text">{event.action.replace(/_/g, ' ')}</span>
+                  <span className="ml-1.5 text-text-muted">by {event.actor}</span>
+                </>
+              }
+              timestamp={formatRelativeTime(event.created_at)}
+              detail={
+                <span className="flex flex-wrap gap-x-3 gap-y-0.5">
+                  {event.details &&
+                    Object.entries(event.details).map(([key, value]) => (
+                      <span key={key} className="font-mono text-micro">
+                        {key}: <span className="text-text-dim">{String(value)}</span>
+                      </span>
+                    ))}
+                  <span className="font-mono text-micro text-text-faint">{formatDateTime(event.created_at)}</span>
+                </span>
+              }
+              accentColor="#3b82f6"
+            />
+          ))}
+        </Timeline>
+      )}
+    </Card>
   )
 }

@@ -16,7 +16,7 @@ joined to their originating event, for the detail view).
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.detection.engine import RuleMatch
@@ -72,11 +72,18 @@ def _filtered_incidents_stmt(
     status: str | None,
     start_date: datetime | None,
     end_date: datetime | None,
+    q: str | None = None,
 ):
     """Shared by list_incidents and count_incidents so the two never drift
     out of sync -- every filter is optional and additive (AND'd together).
+    `q` is a case-insensitive substring match on title/host, backing the
+    frontend's global search; same LIKE-not-full-text reasoning as
+    event_service._filtered_events_stmt.
     """
     stmt = select(Incident)
+    if q:
+        pattern = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Incident.title.ilike(pattern), Incident.host.ilike(pattern)))
     if severity is not None:
         stmt = stmt.where(Incident.severity == severity)
     if status is not None:
@@ -94,6 +101,7 @@ def list_incidents(
     status: str | None = None,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
+    q: str | None = None,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[Incident]:
@@ -103,7 +111,7 @@ def list_incidents(
     callers) returns every match, unpaginated; the route always passes an
     explicit limit.
     """
-    stmt = _filtered_incidents_stmt(severity, status, start_date, end_date).order_by(Incident.created_at.desc())
+    stmt = _filtered_incidents_stmt(severity, status, start_date, end_date, q).order_by(Incident.created_at.desc())
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
     return list(db.scalars(stmt))
@@ -115,12 +123,13 @@ def count_incidents(
     status: str | None = None,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
+    q: str | None = None,
 ) -> int:
     """Total incidents matching the same filters as list_incidents, ignoring
     limit/offset -- lets `GET /incidents` report a page-independent `total`
     (Day 13) alongside the page of results.
     """
-    subq = _filtered_incidents_stmt(severity, status, start_date, end_date).subquery()
+    subq = _filtered_incidents_stmt(severity, status, start_date, end_date, q).subquery()
     return db.scalar(select(func.count()).select_from(subq)) or 0
 
 

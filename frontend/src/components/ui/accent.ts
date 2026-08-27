@@ -1,72 +1,83 @@
-export type Accent = 'cyan' | 'red' | 'amber' | 'green' | 'purple' | 'neutral'
+/**
+ * Accent = the "channel" a surface belongs to: blue for neutral/technical,
+ * violet for every AI/RAG surface, green/amber/red echoing severity, cyan
+ * for telemetry. Components take an `accent` prop and look their classes up
+ * here rather than composing class names.
+ *
+ * These are full literal class strings on purpose: Tailwind's scanner only
+ * sees complete class names in source, so `bg-accent-${x}` would silently
+ * produce no CSS. Every new accent-varying utility must be added as a
+ * complete string to one of these maps (same rule as lib/severity.ts).
+ */
 
-// Full class strings, not template-literal interpolation -- Tailwind's JIT
-// scanner only detects complete literal class names in source (see
-// src/lib/severity.ts for the same pattern already established there).
-export const ACCENT_BORDER_CLASSES: Record<Accent, string> = {
-  cyan: 'border-accent-cyan',
-  red: 'border-accent-red',
-  amber: 'border-accent-amber',
-  green: 'border-accent-green',
-  purple: 'border-accent-purple',
-  neutral: 'border-border',
-}
+export type Accent = 'blue' | 'cyan' | 'violet' | 'green' | 'amber' | 'red' | 'neutral'
 
-// Dimmer frame for Panel's own border, so HudCorners' full-opacity brackets
-// read as a distinct "lit corner" accent rather than just a thicker border.
-export const ACCENT_BORDER_SOFT_CLASSES: Record<Accent, string> = {
-  cyan: 'border-accent-cyan/30',
-  red: 'border-accent-red/30',
-  amber: 'border-accent-amber/30',
-  green: 'border-accent-green/30',
-  purple: 'border-accent-purple/30',
-  neutral: 'border-border',
-}
-
-export const ACCENT_TEXT_CLASSES: Record<Accent, string> = {
+export const ACCENT_TEXT: Record<Accent, string> = {
+  blue: 'text-accent-blue',
   cyan: 'text-accent-cyan',
-  red: 'text-accent-red',
-  amber: 'text-accent-amber',
+  violet: 'text-accent-violet',
   green: 'text-accent-green',
-  purple: 'text-accent-purple',
-  neutral: 'text-text-muted',
+  amber: 'text-accent-amber',
+  red: 'text-accent-red',
+  neutral: 'text-text-dim',
 }
 
-export const ACCENT_STROKE_CLASSES: Record<Accent, string> = {
-  cyan: 'stroke-accent-cyan',
-  red: 'stroke-accent-red',
-  amber: 'stroke-accent-amber',
-  green: 'stroke-accent-green',
-  purple: 'stroke-accent-purple',
-  neutral: 'stroke-text-muted',
+export const ACCENT_BG_SOFT: Record<Accent, string> = {
+  blue: 'bg-accent-blue/12',
+  cyan: 'bg-accent-cyan/12',
+  violet: 'bg-accent-violet/12',
+  green: 'bg-accent-green/12',
+  amber: 'bg-accent-amber/12',
+  red: 'bg-accent-red/12',
+  neutral: 'bg-white/5',
 }
 
-export const ACCENT_GLOW_CLASSES: Record<Accent, string> = {
+export const ACCENT_BG_SOLID: Record<Accent, string> = {
+  blue: 'bg-accent-blue',
+  cyan: 'bg-accent-cyan',
+  violet: 'bg-accent-violet',
+  green: 'bg-accent-green',
+  amber: 'bg-accent-amber',
+  red: 'bg-accent-red',
+  neutral: 'bg-text-muted',
+}
+
+export const ACCENT_BORDER: Record<Accent, string> = {
+  blue: 'border-accent-blue/30',
+  cyan: 'border-accent-cyan/30',
+  violet: 'border-accent-violet/30',
+  green: 'border-accent-green/30',
+  amber: 'border-accent-amber/30',
+  red: 'border-accent-red/30',
+  neutral: 'border-line',
+}
+
+export const ACCENT_RING: Record<Accent, string> = {
+  blue: 'ring-accent-blue/25',
+  cyan: 'ring-accent-cyan/25',
+  violet: 'ring-accent-violet/25',
+  green: 'ring-accent-green/25',
+  amber: 'ring-accent-amber/25',
+  red: 'ring-accent-red/25',
+  neutral: 'ring-white/10',
+}
+
+export const ACCENT_GLOW: Record<Accent, string> = {
+  blue: 'shadow-glow-blue',
   cyan: 'shadow-glow-cyan',
-  red: 'shadow-glow-red',
-  amber: 'shadow-glow-amber',
+  violet: 'shadow-glow-violet',
   green: 'shadow-glow-green',
-  purple: 'shadow-glow-purple',
+  amber: 'shadow-glow-amber',
+  red: 'shadow-glow-red',
   neutral: '',
 }
 
-// Soft translucent fills for icon boxes/badge backgrounds -- Tailwind v4's
-// `/10` opacity modifier works on any color utility, so this needs its own
-// literal map rather than string-concatenating onto ACCENT_BG_CLASSES.
-export const ACCENT_BG_SOFT_CLASSES: Record<Accent, string> = {
-  cyan: 'bg-accent-cyan/10',
-  red: 'bg-accent-red/10',
-  amber: 'bg-accent-amber/10',
-  green: 'bg-accent-green/10',
-  purple: 'bg-accent-purple/10',
-  neutral: 'bg-border/40',
-}
-
-export const ACCENT_DOT_CLASSES: Record<Accent, string> = {
-  cyan: 'bg-accent-cyan',
-  red: 'bg-accent-red',
-  amber: 'bg-accent-amber',
-  green: 'bg-accent-green',
-  purple: 'bg-accent-purple',
-  neutral: 'bg-text-muted',
+export const ACCENT_HEX: Record<Accent, string> = {
+  blue: '#3b82f6',
+  cyan: '#22d3ee',
+  violet: '#8b5cf6',
+  green: '#22c55e',
+  amber: '#f59e0b',
+  red: '#ef4444',
+  neutral: '#64748b',
 }

@@ -65,6 +65,15 @@ class LoadedRule:
     # that stays Day 11's job (mitre/validator.py).
     technique_id: str | None = None
     tactics: list[str] = field(default_factory=list)
+    # Descriptive metadata straight off the YAML front matter. Defaulted
+    # like technique_id/tactics above so existing LoadedRule(...) calls in
+    # tests stay valid; carried purely so `GET /rules` can show an analyst
+    # what a rule is for without shipping the whole file to the browser.
+    description: str = ""
+    author: str = ""
+    date: str = ""
+    references: list[str] = field(default_factory=list)
+    status: str = ""
 
 
 def _validate_technique(path: Path, technique_id: str | None) -> None:
@@ -153,6 +162,11 @@ def _load_one(path: Path) -> LoadedRule:
         yaml_path=str(path),
         technique_id=technique_id,
         tactics=tactics,
+        description=str(raw.get("description") or "").strip(),
+        author=str(raw.get("author") or "").strip(),
+        date=str(raw.get("date") or "").strip(),
+        references=[str(r) for r in (raw.get("references") or []) if isinstance(r, (str, int))],
+        status=str(raw.get("status") or "").strip(),
     )
 
 

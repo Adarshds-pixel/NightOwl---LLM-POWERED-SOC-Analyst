@@ -6,7 +6,9 @@ Day 9 adds `api/routes_incidents.py`; Day 11 adds `api/routes_chat.py`; later
 routers get added the same way. Day 12 wires structured logging + a
 consistent unhandled-error handler. Day 14 adds CORS so the new Vite
 frontend (`frontend/`) can call this API from the browser. `api/routes_events.py`
-adds the raw event-timeline endpoint behind the new Logs page.
+adds the raw event-timeline endpoint behind the new Logs page, and
+`api/routes_rules.py` exposes the loaded detection rule set (read-only)
+behind the Rules Engine page.
 """
 
 from fastapi import Depends, FastAPI
@@ -16,6 +18,7 @@ from app.api.routes_chat import router as chat_router
 from app.api.routes_events import router as events_router
 from app.api.routes_incidents import router as incidents_router
 from app.api.routes_ingest import router as ingest_router
+from app.api.routes_rules import router as rules_router
 from app.api.routes_mitre import router as mitre_router
 from app.core.auth import require_api_key
 from app.core.config import settings
@@ -43,6 +46,7 @@ app.include_router(mitre_router, dependencies=[Depends(require_api_key)])
 app.include_router(incidents_router, dependencies=[Depends(require_api_key)])
 app.include_router(chat_router, dependencies=[Depends(require_api_key)])
 app.include_router(events_router, dependencies=[Depends(require_api_key)])
+app.include_router(rules_router, dependencies=[Depends(require_api_key)])
 
 
 @app.get("/health")

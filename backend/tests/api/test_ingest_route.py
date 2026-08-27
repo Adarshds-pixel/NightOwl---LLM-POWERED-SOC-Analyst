@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.models.event import Event
 
-SYSMON_DEMO_PATH = Path(__file__).resolve().parents[3] / "data" / "sample_logs" / "sysmon_demo.evtx"
+SYSMON_DEMO_PATH = Path(__file__).resolve().parents[2] / "sample_logs" / "sysmon_demo.evtx"
 
 
 def _system(event_id, computer="WORKSTATION01", system_time="2026-05-24T15:25:16.809914+00:00"):

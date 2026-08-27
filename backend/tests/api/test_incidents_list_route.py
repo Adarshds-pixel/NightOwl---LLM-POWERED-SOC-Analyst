@@ -85,3 +85,54 @@ def test_negative_offset_returns_422(api_client):
     response = client.get("/incidents", params={"offset": -1})
 
     assert response.status_code == 422
+
+
+def _insert_incident(db, **overrides) -> int:
+    """Single-incident variant of _insert_incidents above, for the search
+    tests where each row needs its own title/host/severity."""
+    fields = dict(
+        title="Incident",
+        status="open",
+        severity="high",
+        mitre_technique_ids=["T1059.001"],
+        created_at=BASE_TIME,
+        host="HOST-A",
+    )
+    fields.update(overrides)
+    incident = Incident(**fields)
+    db.add(incident)
+    db.flush()
+    db.commit()
+    return incident.id
+
+
+def test_q_matches_incident_title_case_insensitively(api_client):
+    client, SessionLocal = api_client
+    with SessionLocal() as db:
+        _insert_incident(db, title="Suspicious PowerShell on HOST-A")
+        _insert_incident(db, title="Registry persistence on HOST-B", host="HOST-B")
+
+    body = client.get("/incidents", params={"q": "powershell"}).json()
+
+    assert body["total"] == 1
+    assert body["incidents"][0]["title"] == "Suspicious PowerShell on HOST-A"
+
+
+def test_q_matches_incident_host(api_client):
+    client, SessionLocal = api_client
+    with SessionLocal() as db:
+        _insert_incident(db, host="WKS-42")
+        _insert_incident(db, host="HOST-B")
+
+    assert client.get("/incidents", params={"q": "wks"}).json()["total"] == 1
+
+
+def test_q_combines_with_severity_filter(api_client):
+    client, SessionLocal = api_client
+    with SessionLocal() as db:
+        _insert_incident(db, title="PowerShell abuse", severity="critical")
+        _insert_incident(db, title="PowerShell abuse", severity="low")
+
+    body = client.get("/incidents", params={"q": "powershell", "severity": "critical"}).json()
+
+    assert body["total"] == 1

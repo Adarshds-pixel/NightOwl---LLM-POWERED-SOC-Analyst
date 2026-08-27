@@ -16,7 +16,7 @@ from typing import Iterator
 import Evtx.Evtx as evtx
 import xmltodict
 
-SAMPLE_LOG_PATH = Path(__file__).resolve().parents[3] / "data" / "sample_logs" / "sample.evtx"
+SAMPLE_LOG_PATH = Path(__file__).resolve().parents[2] / "sample_logs" / "sample.evtx"
 
 
 class EvtxReadError(Exception):

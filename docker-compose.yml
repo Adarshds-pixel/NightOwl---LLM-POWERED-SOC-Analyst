@@ -36,8 +36,8 @@ services:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-nightowl}:${POSTGRES_PASSWORD:-nightowl}@db:5432/${POSTGRES_DB:-nightowl}
     volumes:
       # Mirrors app/mitre/loader.py + app/rag/chroma_client.py's expected
-      # `<repo root>/data` path (resolved via Path(__file__).parents[3]).
-      - ./data:/app/data
+      # `<repo root>/ai` path (resolved via Path(__file__).parents[3]).
+      - ./ai:/app/ai
     ports:
       - "8000:8000"
 

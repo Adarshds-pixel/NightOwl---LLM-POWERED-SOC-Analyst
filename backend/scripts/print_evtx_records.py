@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app.ingestion.evtx_reader import read_records_as_dicts  # noqa: E402
 from app.ingestion.normalizer import normalize_event  # noqa: E402
 
-EVTX_PATH = Path(__file__).resolve().parents[2] / "data" / "sample_logs" / "sysmon_demo.evtx"
+EVTX_PATH = Path(__file__).resolve().parents[1] / "sample_logs" / "sysmon_demo.evtx"
 
 records = list(read_records_as_dicts(EVTX_PATH))
 

@@ -10,6 +10,7 @@ handler/formatter.
 
 import json
 import logging
+import sys
 
 _CONFIGURED = False
 
@@ -24,7 +25,11 @@ class JsonFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
-        return json.dumps(payload)
+        # ensure_ascii escapes anything outside ASCII rather than emitting it
+        # raw. Log lines stay machine-readable on any stream encoding, and a
+        # model response containing, say, a non-breaking hyphen cannot make
+        # the log record itself unwritable.
+        return json.dumps(payload, ensure_ascii=True)
 
 
 def configure_logging(level: int = logging.INFO) -> None:
@@ -35,7 +40,25 @@ def configure_logging(level: int = logging.INFO) -> None:
     if _CONFIGURED:
         return
 
-    handler = logging.StreamHandler()
+    # Windows consoles default to a legacy code page (cp1252), and a
+    # StreamHandler bound to that stdout raises UnicodeEncodeError on any
+    # character outside it. LLM responses routinely contain typographic
+    # dashes and quotes, so an un-reconfigured stream turned a perfectly
+    # good /explain response into a 500. Force UTF-8 on the stream where the
+    # runtime allows it, and drop anything still unencodable rather than
+    # letting logging break a request.
+    stream = sys.stdout
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is not None:
+        try:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (ValueError, OSError):
+            # Stream does not support reconfiguration (already detached, or
+            # replaced by a non-text wrapper) -- ensure_ascii above still
+            # keeps the payload writable.
+            pass
+
+    handler = logging.StreamHandler(stream)
     handler.setFormatter(JsonFormatter())
 
     root = logging.getLogger()

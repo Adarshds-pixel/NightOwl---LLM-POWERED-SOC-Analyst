@@ -21,7 +21,7 @@ MITRE_ATTACK_URL = (
     "https://raw.githubusercontent.com/mitre/cti/ATT%26CK-v19.2/"
     "enterprise-attack/enterprise-attack.json"
 )
-MITRE_CACHE_PATH = Path(__file__).resolve().parents[3] / "data" / "mitre" / "enterprise-attack.json"
+MITRE_CACHE_PATH = Path(__file__).resolve().parents[3] / "ai" / "mitre" / "enterprise-attack.json"
 
 
 class MitreDatasetDownloadError(Exception):

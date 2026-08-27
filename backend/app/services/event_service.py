@@ -12,7 +12,7 @@ drift out of sync on their filters.
 import logging
 from datetime import datetime
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.alert import Alert
@@ -58,15 +58,32 @@ def _filtered_events_stmt(
     start_date: datetime | None,
     end_date: datetime | None,
     alert_only: bool | None,
+    q: str | None = None,
 ):
     """Shared by list_events and count_events so the two never drift out of
     sync -- every filter is optional and additive (AND'd together).
     alert_only=True restricts to events with at least one Alert row,
     alert_only=False restricts to events with none, None applies no filter.
+    `q` is a case-insensitive substring match across the fields an analyst
+    would actually search by hand (process, command line, user, host) --
+    backing the frontend's global search box. Deliberately a LIKE rather
+    than full-text: the dataset is a single analyst's ingested EVTX files,
+    not a multi-tenant log lake, so an index-free scan is fine and it works
+    identically on Postgres and the SQLite used in tests.
     """
     stmt = select(Event)
     if host is not None:
         stmt = stmt.where(Event.host == host)
+    if q:
+        pattern = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Event.process.ilike(pattern),
+                Event.command_line.ilike(pattern),
+                Event.user.ilike(pattern),
+                Event.host.ilike(pattern),
+            )
+        )
     if start_date is not None:
         stmt = stmt.where(Event.timestamp >= start_date)
     if end_date is not None:
@@ -84,6 +101,7 @@ def list_events(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     alert_only: bool | None = None,
+    q: str | None = None,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[Event]:
@@ -92,7 +110,7 @@ def list_events(
     triggered a rule, so the frontend can show the real signal-to-noise
     ratio (e.g. "64,558 events processed, 8 flagged").
     """
-    stmt = _filtered_events_stmt(host, start_date, end_date, alert_only).order_by(Event.timestamp.desc())
+    stmt = _filtered_events_stmt(host, start_date, end_date, alert_only, q).order_by(Event.timestamp.desc())
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
     return list(db.scalars(stmt))
@@ -104,12 +122,13 @@ def count_events(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     alert_only: bool | None = None,
+    q: str | None = None,
 ) -> int:
     """Total events matching the same filters as list_events, ignoring
     limit/offset -- lets `GET /events` report a page-independent `total`
     alongside the page of results.
     """
-    subq = _filtered_events_stmt(host, start_date, end_date, alert_only).subquery()
+    subq = _filtered_events_stmt(host, start_date, end_date, alert_only, q).subquery()
     return db.scalar(select(func.count()).select_from(subq)) or 0
 
 
@@ -129,3 +148,14 @@ def get_alerts_for_event_ids(db: Session, event_ids: list[int]) -> dict[int, Ale
         if existing is None or severity_service.higher_severity(existing.severity, alert.severity) != existing.severity:
             best[alert.event_id] = alert
     return best
+
+
+def get_event(db: Session, event_id: int) -> Event | None:
+    """One event by id, including its raw_json payload -- backs
+    `GET /events/{id}`, the Logs page's expandable raw-record view. The
+    list endpoint deliberately omits raw_json (it is the largest column by
+    far and would dominate a 200-row page), so this is the only way to see
+    the fields normalization didn't flatten (ParentImage, Hashes,
+    network 5-tuple, ...).
+    """
+    return db.get(Event, event_id)

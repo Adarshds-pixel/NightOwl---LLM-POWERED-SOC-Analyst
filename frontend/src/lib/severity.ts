@@ -60,17 +60,43 @@ export const SEVERITY_BG_SOFT_CLASSES: Record<Severity, string> = {
   critical: 'bg-severity-critical/10',
 }
 
-// Hex values duplicated from src/index.css's @theme block (Tailwind slate/emerald/amber/orange/red
-// tokens) -- recharts renders to SVG/canvas and cannot read CSS custom properties as prop values,
-// so chart series colors need real hex here, kept in lockstep with the CSS tokens by hand.
-export const SEVERITY_HEX: Record<Severity, string> = {
-  informational: '#94a3b8', // slate-400
-  low: '#10b981', // emerald-500
-  medium: '#f59e0b', // amber-500
-  high: '#f97316', // orange-500
-  critical: '#dc2626', // red-600
-}
+// Re-exported from lib/tokens.ts, the single JS-side mirror of the CSS
+// custom properties -- recharts and inline SVG can't read CSS variables, so
+// chart series need real hex. Kept as a re-export (not a second copy) so
+// the old "keep these two lists in sync by hand" hazard is gone.
+export { SEVERITY_HEX } from './tokens'
 
 export function severityLabel(severity: Severity): string {
   return severity.charAt(0).toUpperCase() + severity.slice(1)
 }
+
+/** Ring/dot classes used by badges, legends and status dots. */
+export const SEVERITY_RING_CLASSES: Record<Severity, string> = {
+  informational: 'ring-severity-informational/25',
+  low: 'ring-severity-low/25',
+  medium: 'ring-severity-medium/25',
+  high: 'ring-severity-high/25',
+  critical: 'ring-severity-critical/25',
+}
+
+export const SEVERITY_BORDER_SOFT_CLASSES: Record<Severity, string> = {
+  informational: 'border-severity-informational/30',
+  low: 'border-severity-low/30',
+  medium: 'border-severity-medium/30',
+  high: 'border-severity-high/30',
+  critical: 'border-severity-critical/30',
+}
+
+/** Severity -> accent channel, so a severity-coloured card can reuse the
+ *  shared accent glow/icon-chip styling without a second colour system. */
+export const SEVERITY_ACCENT: Record<Severity, 'neutral' | 'green' | 'amber' | 'red'> = {
+  informational: 'neutral',
+  low: 'green',
+  medium: 'amber',
+  high: 'amber',
+  critical: 'red',
+}
+
+/** Severities an analyst actually filters by (informational is never
+ *  assigned to an incident by severity_service, only to raw events). */
+export const FILTERABLE_SEVERITIES: Severity[] = ['critical', 'high', 'medium', 'low']

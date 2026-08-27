@@ -71,7 +71,15 @@ class Settings(BaseSettings):
     # In-memory token-bucket rate limiting (Day 13, Pair 1). Requests/minute
     # per client; <= 0 disables limiting entirely (same "0/empty = off"
     # pattern).
-    rate_limit_per_minute: int = 60
+    #
+    # Raised from 60 during the Phase 3 frontend build: 60/min is one token
+    # per second, while a single dashboard paint legitimately costs about a
+    # dozen requests (KPIs, severity split, heatmap, alerts, live log slice).
+    # At the old ceiling a normal page load plus the background pollers kept
+    # the bucket at zero, so the console showed "rate limit exceeded" during
+    # ordinary use. This is a per-IP burst guard for a single-analyst local
+    # deployment, not a multi-tenant quota.
+    rate_limit_per_minute: int = 300
 
     # Day 14 (Pair 1): origins the new frontend (Vite dev server) is allowed
     # to call the API from. Comma-separated; without this, every browser

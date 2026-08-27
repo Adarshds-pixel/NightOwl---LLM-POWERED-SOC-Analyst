@@ -261,3 +261,89 @@ export function hostActivity(incidents: IncidentSummary[]): { nodes: HostNode[];
 
   return { nodes, edges }
 }
+
+// --- Period-over-period deltas ------------------------------------------
+// Every "+12% from yesterday" figure in the UI comes from here. It is a
+// real comparison of two equal windows of ingested data, and it returns
+// null rather than a number whenever the older window contains nothing to
+// compare against -- the KPI card then says so instead of showing a
+// fabricated percentage.
+
+export interface PeriodDelta {
+  percent: number
+  label: string
+  current: number
+  previous: number
+}
+
+export function periodDelta(
+  timestamps: string[],
+  windowHours = 24,
+  now = Date.now(),
+): PeriodDelta | null {
+  const windowMs = windowHours * 3600_000
+  const currentStart = now - windowMs
+  const previousStart = now - windowMs * 2
+
+  let current = 0
+  let previous = 0
+  for (const iso of timestamps) {
+    const time = new Date(iso).getTime()
+    if (time >= currentStart) current++
+    else if (time >= previousStart) previous++
+  }
+
+  // No prior window to compare with: a brand-new dataset is not a "100%
+  // increase", it is simply an unknown trend.
+  if (previous === 0) return null
+
+  return {
+    percent: ((current - previous) / previous) * 100,
+    label: `vs previous ${windowHours}h`,
+    current,
+    previous,
+  }
+}
+
+/** Counts per equal-width bucket over the last `hours`, oldest first --
+ *  the shape KPI sparklines want. */
+export function bucketCounts(timestamps: string[], buckets = 12, hours = 24, now = Date.now()): number[] {
+  const spanMs = hours * 3600_000
+  const bucketMs = spanMs / buckets
+  const start = now - spanMs
+  const counts = new Array<number>(buckets).fill(0)
+
+  for (const iso of timestamps) {
+    const time = new Date(iso).getTime()
+    if (time < start || time > now) continue
+    const index = Math.min(buckets - 1, Math.floor((time - start) / bucketMs))
+    counts[index]++
+  }
+  return counts
+}
+
+/** Distinct hosts across a set of records -- the honest version of the
+ *  mockups "assets monitored" tile: we know exactly which hosts have sent
+ *  telemetry, so that is what the card reports. */
+export function distinctHosts(records: { host: string }[]): string[] {
+  return [...new Set(records.map((record) => record.host))].sort()
+}
+
+/** Generic "top N by count" over any key extractor, with the remainder
+ *  folded into an explicit Other bucket when requested. */
+export function topBy<T>(
+  records: T[],
+  key: (record: T) => string | null | undefined,
+  limit = 5,
+): { label: string; count: number }[] {
+  const counts = new Map<string, number>()
+  for (const record of records) {
+    const value = key(record)
+    if (!value) continue
+    counts.set(value, (counts.get(value) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, limit)
+    .map(([label, count]) => ({ label, count }))
+}

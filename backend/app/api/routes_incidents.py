@@ -236,6 +236,7 @@ def get_incidents(
     status: str | None = Query(default=None),
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
+    q: str | None = Query(default=None, description="case-insensitive substring match on incident title or host"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -246,10 +247,11 @@ def get_incidents(
         status=status,
         start_date=start_date,
         end_date=end_date,
+        q=q,
         limit=limit,
         offset=offset,
     )
-    total = count_incidents(db, severity=severity, status=status, start_date=start_date, end_date=end_date)
+    total = count_incidents(db, severity=severity, status=status, start_date=start_date, end_date=end_date, q=q)
     return IncidentListResponse(
         incidents=[
             IncidentSummary(

@@ -1,41 +1,46 @@
 import clsx from 'clsx'
 import { useEffect, useRef } from 'react'
 import type { DemoLogLine } from '../../hooks/useDemoMode'
-import { Panel } from '../ui'
 
-const TONE_CLASSES: Record<DemoLogLine['tone'], string> = {
-  info: 'text-accent-cyan',
-  success: 'text-accent-green',
-  error: 'text-accent-red',
-}
-
-const TONE_PREFIX: Record<DemoLogLine['tone'], string> = {
-  info: '>',
-  success: '[OK]',
-  error: '[ERROR]',
-}
-
-// A styled scrolling log, not a real terminal emulator -- consistent with
-// the project's existing Panel/HudCorners visual language rather than a new
-// widget system.
+/**
+ * Terminal-style narration for Demo Mode. Every line is emitted by the real
+ * pipeline run (ingest, detection, explain, chat) as it happens -- the
+ * terminal never prints a step that did not execute.
+ */
 export function DemoTerminal({ log }: { log: DemoLogLine[] }) {
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'nearest' })
+    ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: 'smooth' })
   }, [log.length])
 
   return (
-    <Panel title="Demo Terminal" accent="green">
-      <div className="max-h-80 overflow-y-auto font-mono text-xs leading-relaxed">
-        {log.length === 0 && <span className="text-text-muted">Waiting to start...</span>}
-        {log.map((line) => (
-          <div key={line.id} className={clsx(TONE_CLASSES[line.tone])}>
-            {TONE_PREFIX[line.tone]} {line.text}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-    </Panel>
+    <div
+      ref={ref}
+      className="max-h-80 overflow-y-auto rounded-control border border-line bg-bg-deep/70 px-3 py-2.5 font-mono text-micro leading-relaxed"
+    >
+      {log.length === 0 ? (
+        <p className="text-text-faint">Waiting to start...</p>
+      ) : (
+        log.map((line) => (
+          <p
+            key={line.id}
+            className={clsx(
+              'py-0.5',
+              line.tone === 'error'
+                ? 'text-accent-red'
+                : line.tone === 'success'
+                  ? 'text-accent-green'
+                  : 'text-text-muted',
+            )}
+          >
+            <span className="text-text-faint">
+              {line.tone === 'error' ? '[ERROR] ' : line.tone === 'success' ? '[OK] ' : '> '}
+            </span>
+            {line.text}
+          </p>
+        ))
+      )}
+    </div>
   )
 }

@@ -1,40 +1,64 @@
-import { useRef, type ChangeEvent } from 'react'
+import { Upload } from 'lucide-react'
+import { useEffect, useRef, type ChangeEvent } from 'react'
 import type { IngestResponse } from '../../api'
+import { useToast } from '../../context/toast/useToast'
 import { useLogIngest } from '../../hooks/useLogIngest'
+import { Button } from '../ui'
 
-interface LogUploadControlProps {
+/**
+ * EVTX upload. The button is the whole control: the file input stays
+ * hidden, and the result is reported through the global toast system
+ * instead of a line of text under the button, so it reads the same
+ * wherever the control is placed (header, logs page, demo page).
+ */
+export function LogUploadControl({
+  onSuccess,
+  variant = 'secondary',
+  label = 'Upload logs',
+}: {
   onSuccess?: (res: IngestResponse) => void
-}
-
-export function LogUploadControl({ onSuccess }: LogUploadControlProps) {
+  variant?: 'primary' | 'secondary' | 'ghost'
+  label?: string
+}) {
   const { pending, result, error, upload } = useLogIngest()
   const inputRef = useRef<HTMLInputElement>(null)
+  const { push } = useToast()
+  const reported = useRef<IngestResponse | null>(null)
 
-  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
+  useEffect(() => {
+    if (result && reported.current !== result) {
+      reported.current = result
+      push({
+        tone: result.alerts_created > 0 ? 'warning' : 'success',
+        title: `${result.events_ingested.toLocaleString()} events ingested`,
+        description: `${result.alerts_created} alert(s), ${result.incident_ids.length} incident(s) from ${result.filename}`,
+      })
+    }
+  }, [result, push])
+
+  useEffect(() => {
+    if (error) push({ tone: 'error', title: 'Ingest failed', description: error })
+  }, [error, push])
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
     if (!file) return
-    const res = await upload(file)
-    if (res) onSuccess?.(res)
+    const response = await upload(file)
+    if (response) onSuccess?.(response)
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <input ref={inputRef} type="file" accept=".evtx" onChange={handleFileChange} className="hidden" />
-      <button
-        type="button"
+    <>
+      <input ref={inputRef} type="file" accept=".evtx" onChange={handleFileChange} className="hidden" aria-hidden />
+      <Button
+        variant={variant}
         onClick={() => inputRef.current?.click()}
         disabled={pending}
-        className="rounded border border-accent-cyan bg-accent-cyan/10 px-3 py-2 text-xs font-semibold tracking-widest text-accent-cyan uppercase disabled:opacity-50"
+        icon={<Upload className="h-3.5 w-3.5" />}
       >
-        {pending ? 'Uploading...' : 'Upload Logs'}
-      </button>
-      {result && (
-        <span className="text-xs text-accent-green">
-          {result.events_ingested} events, {result.alerts_created} alert(s), {result.incident_ids.length} incident(s)
-        </span>
-      )}
-      {error && <span className="text-xs text-accent-red">{error}</span>}
-    </div>
+        {pending ? 'Uploading...' : label}
+      </Button>
+    </>
   )
 }

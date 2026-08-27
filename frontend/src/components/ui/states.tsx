@@ -1,0 +1,173 @@
+import clsx from 'clsx'
+import { AlertTriangle, Hourglass, Inbox, Loader2, RefreshCw } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { isRateLimited } from '../../api'
+import { Button } from './Button'
+
+/**
+ * The three async states every data surface in the app must handle. They
+ * share one geometry so a panel does not visibly jump between loading,
+ * empty and loaded.
+ */
+
+export function LoadingState({ label = 'Loading', className }: { label?: string; className?: string }) {
+  return (
+    <div
+      className={clsx('flex items-center justify-center gap-2 px-4 py-10 text-meta text-text-muted', className)}
+      role="status"
+      aria-live="polite"
+    >
+      <Loader2 className="h-4 w-4 animate-spin text-accent-blue" />
+      {label}...
+    </div>
+  )
+}
+
+export function EmptyState({
+  message,
+  hint,
+  icon,
+  action,
+  className,
+}: {
+  message: string
+  hint?: string
+  icon?: ReactNode
+  action?: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={clsx('flex flex-col items-center justify-center gap-2 px-4 py-10 text-center', className)}>
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-text-faint">
+        {icon ?? <Inbox className="h-5 w-5" />}
+      </span>
+      <p className="text-body text-text-dim">{message}</p>
+      {hint && <p className="max-w-sm text-meta text-text-faint">{hint}</p>}
+      {action}
+    </div>
+  )
+}
+
+/** Seconds to wait before retrying automatically after a 429. Long enough
+ *  for the backend token bucket to refill more than a single page load
+ *  needs, so the retry does not immediately re-drain it and bounce straight
+ *  back into this state. */
+const THROTTLE_RETRY_SECONDS = 20
+
+export function ErrorState({
+  message,
+  onRetry,
+  className,
+}: {
+  message: string
+  onRetry?: () => void
+  className?: string
+}) {
+  // Throttling is not a failure -- it is the API asking us to slow down, and
+  // it clears on its own. It gets a calmer treatment and retries itself, so
+  // the analyst is not sitting there clicking Retry into an empty bucket.
+  if (isRateLimited(message)) return <ThrottledState message={message} onRetry={onRetry} className={className} />
+
+  return (
+    <div
+      className={clsx('flex flex-col items-center justify-center gap-3 px-4 py-10 text-center', className)}
+      role="alert"
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-red/12 text-accent-red">
+        <AlertTriangle className="h-5 w-5" />
+      </span>
+      <div>
+        <p className="text-body font-medium text-text">Something went wrong</p>
+        <p className="mt-0.5 max-w-md text-meta text-text-muted">{message}</p>
+      </div>
+      {onRetry && (
+        <Button size="sm" onClick={onRetry} icon={<RefreshCw className="h-3.5 w-3.5" />}>
+          Retry
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function ThrottledState({
+  message,
+  onRetry,
+  className,
+}: {
+  message: string
+  onRetry?: () => void
+  className?: string
+}) {
+  const [secondsLeft, setSecondsLeft] = useState(THROTTLE_RETRY_SECONDS)
+
+  useEffect(() => {
+    if (!onRetry) return
+    const timer = window.setInterval(() => {
+      setSecondsLeft((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer)
+          onRetry()
+          return 0
+        }
+        return current - 1
+      })
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [onRetry])
+
+  return (
+    <div
+      className={clsx('flex flex-col items-center justify-center gap-3 px-4 py-10 text-center', className)}
+      role="status"
+      aria-live="polite"
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-amber/12 text-accent-amber">
+        <Hourglass className="h-5 w-5" />
+      </span>
+      <div>
+        <p className="text-body font-medium text-text">Slowing down</p>
+        <p className="mt-0.5 max-w-md text-meta text-text-muted">{message}</p>
+      </div>
+      {onRetry && (
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-meta text-text-faint tabular-nums">
+            Retrying in {secondsLeft}s
+          </span>
+          <Button size="sm" variant="ghost" onClick={onRetry} icon={<RefreshCw className="h-3.5 w-3.5" />}>
+            Retry now
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Shimmering placeholder block. Callers size it to match the real content
+ *  so the layout does not shift when data lands. */
+export function Skeleton({ className }: { className?: string }) {
+  return (
+    <div className={clsx('relative overflow-hidden rounded-md bg-white/4', className)}>
+      <span className="absolute inset-0 -translate-x-full animate-sweep bg-gradient-to-r from-transparent via-white/6 to-transparent" />
+    </div>
+  )
+}
+
+export function SkeletonRows({ rows = 5, className }: { rows?: number; className?: string }) {
+  return (
+    <div className={clsx('flex flex-col gap-2 p-4', className)}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <Skeleton key={i} className="h-9 w-full" />
+      ))}
+    </div>
+  )
+}
+
+export function SkeletonCard({ className }: { className?: string }) {
+  return (
+    <div className={clsx('rounded-card border border-line bg-surface-1/70 p-4', className)}>
+      <Skeleton className="h-3 w-28" />
+      <Skeleton className="mt-4 h-8 w-24" />
+      <Skeleton className="mt-3 h-3 w-36" />
+    </div>
+  )
+}

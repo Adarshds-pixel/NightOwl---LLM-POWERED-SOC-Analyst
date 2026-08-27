@@ -8,11 +8,19 @@ backend/venv/
 # Secrets
 .env
 
-# Generated/cached data (regenerable from source, not curated content)
-data/chroma/
-data/mitre/*.json
+# Generated/cached AI-layer data (regenerable from source, not curated
+# content): the Chroma vector store is rebuilt by ai/tools/build_kb.py and
+# the ATT&CK bundle is re-downloaded on demand by app/mitre/loader.py.
+ai/vector_store/
+ai/mitre/*.json
 
 # Frontend (Day 14) -- frontend/.gitignore covers this locally too, but keep
 # the root aware for `git status` run from the repo root.
 frontend/node_modules/
 frontend/dist/
+
+# Working material, deliberately not part of the repository:
+# design references handed over for the frontend build, and personal
+# interview preparation notes.
+frontend design images/
+docs/interview-prep.md

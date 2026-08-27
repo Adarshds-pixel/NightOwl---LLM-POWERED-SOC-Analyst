@@ -155,6 +155,9 @@ export interface EventLogRow {
   severity: Severity | null
   rule_title: string | null
   technique_id: string | null
+  // Present when this event's alert was grouped into an incident, so an
+  // alert row can link straight to its investigation.
+  incident_id: number | null
 }
 
 export interface EventListResponse {
@@ -163,4 +166,54 @@ export interface EventListResponse {
   total: number
   limit: number
   offset: number
+}
+
+// --- Rules Engine (GET /rules, backend/app/api/routes_rules.py) ---------
+// The detection rule set is read-only by design: rules are version-
+// controlled YAML reviewed like code, so `enabled` reports "loaded and
+// running", not a switch the UI can flip.
+export interface RuleInfo {
+  rule_id: string
+  title: string
+  description: string
+  level: Severity | 'unknown'
+  category: string | null
+  technique_id: string | null
+  tactics: string[]
+  condition: string
+  selections: string[]
+  author: string
+  date: string
+  status: string
+  references: string[]
+  filename: string
+  enabled: boolean
+  match_count: number
+  matches_24h: number
+  last_triggered: string | null
+}
+
+export interface RuleListResponse {
+  rules: RuleInfo[]
+  count: number
+  total: number
+}
+
+// --- Single raw event (GET /events/{id}) --------------------------------
+// Carries raw_json, which the list endpoint deliberately omits.
+export interface EventDetailResponse {
+  id: number
+  host: string
+  timestamp: string
+  event_id: number
+  process: string | null
+  command_line: string | null
+  user: string | null
+  is_alert: boolean
+  severity: Severity | null
+  rule_title: string | null
+  technique_id: string | null
+  incident_id: number | null
+  raw: Record<string, unknown> | null
+  normalized: Record<string, unknown> | null
 }

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import chromadb
 
-CHROMA_PERSIST_DIR = Path(__file__).resolve().parents[3] / "data" / "chroma"
+CHROMA_PERSIST_DIR = Path(__file__).resolve().parents[3] / "ai" / "vector_store"
 
 
 def get_client() -> chromadb.ClientAPI:

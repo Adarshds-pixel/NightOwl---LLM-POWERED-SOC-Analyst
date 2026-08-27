@@ -5,6 +5,7 @@ backend/.pytest_cache
 **/*.pyc
 backend/tests
 backend/scripts
-data/chroma
-data/mitre/*.json
+ai/vector_store
+ai/mitre/*.json
+backend/sample_logs
 .env
