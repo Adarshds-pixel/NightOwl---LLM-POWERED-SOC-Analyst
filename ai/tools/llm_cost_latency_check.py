@@ -21,12 +21,13 @@ real shape) = 10 requests, half of Gemini's 20 req/day free-tier cap.
 in .env) to avoid competing with Gemini's tight 20 req/day cap for other
 manual testing -- same reasoning as the Day 10 hallucination spot-check.
 
-Run for real from backend/ (requires a real LLM key -- see .env's
-LLM_PROVIDER/LLM_API_KEY/GROQ_API_KEY -- no Postgres/Docker needed):
-    ./venv/Scripts/python.exe scripts/llm_cost_latency_check.py
+Run for real from the repository root (requires a real LLM key -- see
+.env's LLM_PROVIDER/LLM_API_KEY/GROQ_API_KEY -- no Postgres/Docker needed):
+    ./backend/venv/Scripts/python.exe ai/tools/llm_cost_latency_check.py
 
-Writes full per-call data to scripts/llm_cost_latency_output.json for
-reference while writing docs/llm-cost-latency.md.
+Writes full per-call data to ai/tools/llm_cost_latency_output.json for
+reference. Results are summarised in docs/ARCHITECTURE.md section 7
+("Evaluation results").
 """
 
 import json

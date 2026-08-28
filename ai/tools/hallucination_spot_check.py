@@ -12,13 +12,13 @@ Postgres via DATABASE_URL, real detection/incident/severity pipeline) --
 only `read_records_as_dicts` is mocked, so nothing about matching, grouping,
 or severity scoring is faked.
 
-Run for real from backend/ (requires `docker compose up -d db` and a real
-LLM key -- see .env's LLM_PROVIDER/LLM_API_KEY/GROQ_API_KEY):
-    ./venv/Scripts/python.exe scripts/hallucination_spot_check.py
+Run for real from the repository root (requires `docker compose up -d db`
+and a real LLM key -- see .env's LLM_PROVIDER/LLM_API_KEY/GROQ_API_KEY):
+    ./backend/venv/Scripts/python.exe ai/tools/hallucination_spot_check.py
 
 Writes full request/response data to
-scripts/hallucination_spot_check_output.json for reference while writing
-docs/research/hallucination-eval.md.
+ai/tools/hallucination_spot_check_output.json for reference. Findings are
+summarised in docs/ARCHITECTURE.md section 7 ("Evaluation results").
 """
 
 import json
