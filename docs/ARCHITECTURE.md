@@ -85,6 +85,13 @@ No prefix; all routes are mounted at root and (except `/health`) sit behind `req
 | GET | `/events` | Raw timeline. Filters: `host`, `start_date`, `end_date`, `alert_only`, `q`, `limit`, `offset` |
 | GET | `/events/{id}` | One event including `raw_json` |
 | GET | `/rules`, `/rules/{rule_id}` | Loaded rule set + per-rule match counts and last-triggered |
+| GET | `/demo/scenarios` | Live-replay scenario manifest: which real capture backs each segment and what it detects |
+| POST | `/demo/replay/start` | Starts a background replay of a scenario against wall-clock time; 409 if one is already running |
+| GET | `/demo/replay/status` | Progress of the current (or last) replay run |
+| POST | `/demo/replay/stop` | Stops the running replay |
+| POST | `/demo/reset` | Deletes every event/alert/incident/chat/audit row; 409 while a replay is running |
+
+The `/demo/*` routes sit behind an additional `require_demo_mode` gate (`DEMO_MODE_ENABLED`, on by default) on top of the usual API key, since `/demo/reset` is destructive.
 
 Error shape is uniform: `{"detail": "<string>"}`. `LLMProviderError` gives 503; anything unhandled gives 500; throttled gives 429.
 
@@ -212,12 +219,29 @@ The design references this console was built against included panels that a syst
 | Log storage and retention | Ingest summary (events stored, alerting, hosts, time span) | Events are stored in Postgres with no retention policy to report |
 | Enable/disable rule toggles | Read-only enabled state with an explanation | Rules are version-controlled files; no endpoint edits them at runtime |
 | Threat intelligence feed | Not present at all | No feed is integrated, and a placeholder page is a promise the product does not keep |
+| "Live" incident feed for a demo | Live SOC replay (section 10): real captured records, rebased timestamps only | Nothing is generated; every record, field and rule match is genuine, only its clock position is scripted |
 
 Confidence figures follow the same rule: the UI shows retrieval similarity scores and the model's own self-critique result, never an invented confidence percentage.
 
 ---
 
-## 10. Decision log
+## 10. Live SOC replay
+
+A `/demo` upload of one fixture produces one incident stamped "now" -- nothing like a real shift, where telemetry arrives continuously and detections surface over time. The replay solves that without inventing any data.
+
+**Where the timestamp problem lives.** `POST /ingest` computes one `matched_at = datetime.now()` for the whole upload and uses it for every `Alert.matched_at` and for incident grouping; event timestamps are read from the records but never used for either. `services/ingest_service.py`'s shared `ingest_records()` function (used by both the upload route and the replay) takes `matched_at` as a parameter: an explicit value reproduces the upload's original one-stamp-per-batch behaviour byte for byte; `matched_at=None` takes each match's own event timestamp instead, so an incident's `created_at` reflects when the activity happened rather than when it was posted.
+
+**Rebasing, not fabricating.** `app/demo/timeline.py` maps a real capture's timestamps onto simulated time (preserving each segment's own ordering and relative spacing, optionally stretched via `time_scale`) and then onto wall-clock emit times, so a scenario's whole simulated window compresses into a few real minutes. `with_rebased_timestamp` rewrites exactly one field, `Event.System.TimeCreated.@SystemTime` -- every other field (host, process, command line, user, the network 5-tuple) is untouched, which is what makes "only the clock is scripted" a checked fact rather than a claim: `tests/demo/test_timeline.py` deep-compares the rest of the record, and `tests/demo/test_scenario_loader.py` re-runs the real detection engine over every committed scenario record and asserts its rule matches equal the manifest's declared `expected_rule_titles`.
+
+**Scenario authoring is derivation, not hand-writing.** `backend/scripts/build_demo_scenarios.py` is a one-shot tool: it runs the real `normalize_event -> evaluate_event` pipeline over the captures in `backend/sample_logs/`, keeps the records that actually trip a rule (grouped into an initial-access, a persistence and a credential-access/lateral-movement segment by curatorial choice of *which* techniques go together, never by hand-picking *which records* qualify), and asserts a 1,500-record noise window trips zero rules before writing it. The committed `demo_shift` scenario's segments are anchored more than an hour apart in simulated time, so they form three separate incidents rather than one escalating pile -- a property of the manifest's anchors, checked in `test_attack_segment_anchors_are_more_than_an_hour_apart`, not of anything invented about the underlying telemetry.
+
+**A background thread, not a browser-timed loop.** `services/replay_service.py` runs the schedule on a daemon `threading.Thread` inside the API process, ticking every `DEMO_REPLAY_TICK_SECONDS` (2s default) and opening a fresh DB session per tick rather than reusing the request's session (which closes the instant `/demo/replay/start` responds). Closing the browser tab, or the presenter's laptop sleeping, does not kill an in-progress replay; reloading the page reattaches to it via `GET /demo/replay/status`, which the frontend's `ReplayProvider` fetches unconditionally on mount before deciding whether to poll.
+
+**Reset is total, not scoped.** `services/demo_service.py`'s `reset_demo_data` deletes every row from all five operational tables. Nothing distinguishes a replayed row from an uploaded one, and a partial reset is the actually dangerous option here: a row left over from an earlier run can silently absorb the next run's alerts if it falls inside that run's rebased grouping window, making a fresh replay look like it detected nothing.
+
+---
+
+## 11. Decision log
 
 One entry per significant decision. Every one names its alternative and whether it is reversible.
 
@@ -258,3 +282,5 @@ One entry per significant decision. Every one names its alternative and whether 
 **Rate limiting is a per-IP token bucket, with /health exempt and a 300/min ceiling (2026-08-27).** The original 60/min was one token per second, while a single dashboard paint legitimately costs about a dozen requests, so ordinary use throttled itself. Exempting the liveness probe stops a busy API from being reported as a dead one.
 
 **Reports and settings are client-side by design (2026-08-27).** There is no reports table and no settings endpoint, so the Reports page generates its document live from API data and exports it locally, and Settings stores genuinely local browser preferences. Neither pretends to persist server-side.
+
+**Live replay is a background thread, not a public JSON ingest endpoint or a browser-timed loop (2026-08-28).** A `POST /ingest/events` accepting arbitrary event JSON was considered and rejected outright: an endpoint that accepts fabricated telemetry from the client is exactly the surface the honesty policy (section 9) exists to not have. The replay instead only ever plays back server-side scenario files derived from real captures, driven by a `threading.Thread` inside the API process rather than `BackgroundTasks` (would hold a threadpool worker for the whole 2-3 minute run, exceptions vanish silently) or an asyncio task (the first blocking sync SQLAlchemy call would stall the single event loop serving every other request). Separate incidents come from anchoring scenario segments far apart in simulated time, never from inventing hosts. See section 10. Reversible: `app/demo/`, `services/replay_service.py` and `services/demo_service.py` are all new, additive modules; `services/ingest_service.py` is a pure extraction of `routes_ingest.py`'s existing body with the full existing ingest test suite passing unchanged.

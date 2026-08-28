@@ -21,7 +21,11 @@ Individual malformed *records* inside an otherwise-valid file
 upload failure -- one corrupt/truncated record in a large real-world log
 shouldn't block ingesting the rest of an otherwise-good batch, matching
 normalizer.py's existing policy that narrow record-level problems aren't
-fatal.
+fatal. The actual normalize -> persist -> detect -> group pipeline lives in
+`services/ingest_service.py` (`ingest_records`), shared with the live-replay
+service so a replayed scenario runs the identical code path a real upload
+does; this route's own job is the file-format checks and EVTX parsing that
+only apply to a browser upload.
 
 Day 7 adds detection: every normalized event is evaluated against the
 loaded Sigma rules (detection/rule_loader.py + detection/engine.py) before
@@ -45,13 +49,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.detection.engine import evaluate_event
 from app.detection.rule_loader import get_loaded_rules
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts
-from app.ingestion.normalizer import EventNormalizationError, normalize_event
-from app.services.detection_service import save_alerts
-from app.services.event_service import save_events
-from app.services.incident_service import find_or_create_incident
+from app.services.ingest_service import ingest_records
 
 logger = logging.getLogger(__name__)
 
@@ -90,54 +90,38 @@ def ingest_evtx(file: UploadFile = File(...), db: Session = Depends(get_db)) -> 
             tmp.write(content)
             tmp_path = Path(tmp.name)
 
-        records_read = 0
-        skipped = 0
-        normalized_events = []
         try:
-            for record in read_records_as_dicts(tmp_path):
-                records_read += 1
-                try:
-                    normalized_events.append(normalize_event(record))
-                except EventNormalizationError as e:
-                    logger.warning("skipping malformed record in %s: %s", filename, e)
-                    skipped += 1
+            records = list(read_records_as_dicts(tmp_path))
         except EvtxReadError as e:
             raise HTTPException(status_code=400, detail=f"failed to parse EVTX file: {e}") from e
 
-        saved = save_events(db, normalized_events)
-
-        rules = get_loaded_rules()
-        matched_titles: list[str] = []
-        rule_matches = 0
-        alert_data = []
-        incident_ids: list[int] = []
-        matched_at = datetime.now(timezone.utc)
-        for event_row, normalized_event in zip(saved, normalized_events, strict=True):
-            for match in evaluate_event(normalized_event, rules):
-                rule_matches += 1
-                if match.title not in matched_titles:
-                    matched_titles.append(match.title)
-                incident = find_or_create_incident(db, normalized_event.host, matched_at, match)
-                if incident.id not in incident_ids:
-                    incident_ids.append(incident.id)
-                alert_data.append((event_row.id, match, matched_at, incident.id))
-
-        alerts = save_alerts(db, alert_data)
+        outcome = ingest_records(
+            db,
+            records,
+            rules=get_loaded_rules(),
+            matched_at=datetime.now(timezone.utc),
+        )
 
         logger.info(
             "ingest %s: %d records read, %d events ingested, %d skipped, %d rule matches, "
             "%d alerts created, %d incidents involved",
-            filename, records_read, len(saved), skipped, rule_matches, len(alerts), len(incident_ids),
+            filename,
+            outcome.records_read,
+            outcome.events_ingested,
+            outcome.events_skipped,
+            outcome.rule_matches,
+            outcome.alerts_created,
+            len(outcome.incident_ids),
         )
         return IngestResponse(
             filename=filename,
-            records_read=records_read,
-            events_ingested=len(saved),
-            events_skipped=skipped,
-            rule_matches=rule_matches,
-            matched_rule_titles=matched_titles,
-            alerts_created=len(alerts),
-            incident_ids=incident_ids,
+            records_read=outcome.records_read,
+            events_ingested=outcome.events_ingested,
+            events_skipped=outcome.events_skipped,
+            rule_matches=outcome.rule_matches,
+            matched_rule_titles=outcome.matched_rule_titles,
+            alerts_created=outcome.alerts_created,
+            incident_ids=outcome.incident_ids,
         )
     finally:
         if tmp_path is not None and tmp_path.exists():

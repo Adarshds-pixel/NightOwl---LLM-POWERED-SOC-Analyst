@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { IncidentSummary } from '../api'
 
 const STORAGE_KEY = 'nightowl:seen-incident-ids'
@@ -24,6 +24,27 @@ function saveSeenIds(ids: Set<number>) {
   }
 }
 
+// Fired when the seen-ids storage is cleared from outside a component (see
+// clearSeenIncidentIds below), so every mounted useUnseenIncidents instance
+// picks it up immediately rather than only on next reload.
+const CLEARED_EVENT = 'nightowl:seen-incident-ids-cleared'
+
+/**
+ * Clears the seen-incident set. Needed because a demo reset restarts the
+ * backend's identity sequences (see services/demo_service.py), so the next
+ * replay's incidents are again #1, #2, #3 -- ids already in this browser's
+ * seen set from the previous run. Without this, the notification bell
+ * would show zero unread for a run that just created three incidents.
+ */
+export function clearSeenIncidentIds(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // Nothing to clear if storage was never usable.
+  }
+  window.dispatchEvent(new Event(CLEARED_EVENT))
+}
+
 /**
  * Backs the notification bell. A "notification" here is a real open
  * incident this browser has not acknowledged yet -- NightOwl has no
@@ -33,6 +54,12 @@ function saveSeenIds(ids: Set<number>) {
  */
 export function useUnseenIncidents(incidents: IncidentSummary[]) {
   const [seenIds, setSeenIds] = useState<Set<number>>(loadSeenIds)
+
+  useEffect(() => {
+    const onCleared = () => setSeenIds(new Set())
+    window.addEventListener(CLEARED_EVENT, onCleared)
+    return () => window.removeEventListener(CLEARED_EVENT, onCleared)
+  }, [])
 
   const unseen = useMemo(
     () =>

@@ -1,11 +1,12 @@
 import clsx from 'clsx'
-import { Bell, Bot, Clock, Menu, Search, Settings, Sparkles, UserRound } from 'lucide-react'
+import { Bell, Bot, Clock, Menu, Radio, Search, Settings, Sparkles, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { NotificationPanel } from '../components/notifications/NotificationPanel'
 import { Popover, StatusDot, Tooltip } from '../components/ui'
 import { useHealth } from '../context/health/useHealth'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
+import { useReplay } from '../context/replay/useReplay'
 import { usePreferences } from '../context/preferences/usePreferences'
 import { useClock } from '../hooks/useClock'
 import { useUnseenIncidents } from '../hooks/useUnseenIncidents'
@@ -23,6 +24,7 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
   const { status } = useHealth()
   const { incidents } = useIncidentsSnapshot()
   const { unseen, unseenCount, markAllSeen, markSeen } = useUnseenIncidents(incidents)
+  const { status: replayStatus } = useReplay()
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const now = useClock()
@@ -59,6 +61,21 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
             <p className="text-micro text-text-faint">{formatShortDate(now)}</p>
           </div>
         </div>
+
+        {replayStatus?.state === 'running' && (
+          <Link
+            to="/demo"
+            className="hidden items-center gap-2 rounded-control border border-accent-cyan/40 bg-accent-cyan/10 px-3 py-1.5 transition-colors hover:border-accent-cyan/60 md:flex"
+          >
+            <Radio className="h-3.5 w-3.5 animate-pulse-dot text-accent-cyan" />
+            <span className="leading-tight">
+              <span className="block text-meta font-medium text-text">Replay running</span>
+              <span className="block font-mono text-micro text-text-muted tabular-nums">
+                {Math.round(replayStatus.elapsed_seconds)}s / {Math.round(replayStatus.duration_seconds)}s
+              </span>
+            </span>
+          </Link>
+        )}
 
         <Link
           to="/assistant"

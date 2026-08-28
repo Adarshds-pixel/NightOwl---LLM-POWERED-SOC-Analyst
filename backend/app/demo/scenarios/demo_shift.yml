@@ -1,0 +1,72 @@
+id: demo_shift
+title: Simulated 3-hour analyst shift
+description: Every record below is copied verbatim from a real Sysmon capture in backend/sample_logs/.
+  The replay rewrites exactly one field -- Event.System.TimeCreated.@SystemTime -- to place the recorded
+  activity onto the last window_minutes, preserving each segment own ordering and relative spacing. Nothing
+  is synthesised; see backend/scripts/build_demo_scenarios.py for how each segment was selected.
+host: Nightowl
+window_minutes: 180
+duration_seconds: 180
+segments:
+- id: noise
+  kind: noise
+  title: Ordinary workstation activity
+  source_capture: sysmon_vm_capture.evtx
+  records_file: noise_vm_capture.jsonl
+  record_count: 1500
+  offset_minutes: -180
+  time_scale: fill
+  expected_rule_titles: []
+  expected_technique_ids: []
+- id: seg_01_initial_access
+  kind: attack
+  title: Encoded PowerShell, LOLBin download and tool staging
+  source_capture: sysmon_malicious_demo.evtx
+  records_file: seg_01_initial_access.jsonl
+  record_count: 7
+  offset_minutes: -170
+  time_scale: 20
+  expected_rule_titles:
+  - PowerShell Execution Policy Bypass
+  - Suspicious Encoded PowerShell Command
+  - Suspicious Executable Written to Public or Temp Directory
+  - Suspicious Mshta Execution
+  expected_technique_ids:
+  - T1059.001
+  - T1105
+  - T1218.005
+- id: seg_02_persistence
+  kind: attack
+  title: Scheduled-task persistence
+  source_capture: sysmon_malicious_demo.evtx
+  records_file: seg_02_persistence.jsonl
+  record_count: 2
+  offset_minutes: -95
+  time_scale: 20
+  expected_rule_titles:
+  - Scheduled Task Creation via schtasks.exe
+  - Suspicious Scheduled Task via PowerShell Cmdlet
+  expected_technique_ids:
+  - T1053.005
+- id: seg_03_credential_lateral
+  kind: attack
+  title: Credential dumping and lateral movement
+  source_capture: sysmon_malicious_demo.evtx
+  records_file: seg_03_credential_lateral.jsonl
+  record_count: 9
+  offset_minutes: -12
+  time_scale: 20
+  expected_rule_titles:
+  - LSASS Memory Dump
+  - Lateral Movement via Windows Admin Share
+  - RDP Lateral Movement
+  - SAM/SYSTEM/SECURITY Registry Hive Dump
+  - Suspicious Network Connection from LOLBin
+  - WinRM Lateral Movement
+  expected_technique_ids:
+  - T1003.001
+  - T1003.002
+  - T1021.001
+  - T1021.002
+  - T1021.006
+  - T1071.001

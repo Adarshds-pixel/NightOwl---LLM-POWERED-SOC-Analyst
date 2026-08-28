@@ -48,3 +48,9 @@ export const DEMO_FIXTURE_FILENAME = 'sysmon_malicious_demo.evtx'
 // is scripted, but the reply comes from a real POST /incidents/{id}/chat
 // call, never a canned answer.
 export const DEMO_CHAT_QUESTION = 'What should I do first to contain this incident?'
+
+// Live SOC replay (backend/app/api/routes_demo.py). The provider polls
+// /demo/replay/status on this interval only while a run is "running" --
+// idle time costs zero extra requests.
+export const REPLAY_STATUS_POLL_MS = 2_000
+export const DEFAULT_DEMO_SCENARIO_ID = 'demo_shift'

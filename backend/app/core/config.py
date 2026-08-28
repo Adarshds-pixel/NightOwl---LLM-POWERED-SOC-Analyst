@@ -87,6 +87,16 @@ class Settings(BaseSettings):
     # curl/Postman work fine (browsers enforce it, other tools don't).
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # Live SOC replay (/demo/*, api/routes_demo.py). On by default: this is
+    # a single-analyst local deployment whose whole point is demoing the
+    # pipeline, and /demo/reset is only destructive to data this same
+    # replay creates. Set false for any deployment where a reachable,
+    # destructive reset endpoint is not acceptable.
+    demo_mode_enabled: bool = True
+    # How often the replay worker thread checks for due records and commits
+    # them. Not a request-rate knob -- see services/replay_service.py.
+    demo_replay_tick_seconds: float = 2.0
+
 
 @lru_cache
 def get_settings() -> Settings:

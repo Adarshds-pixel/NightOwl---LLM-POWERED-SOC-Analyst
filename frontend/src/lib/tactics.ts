@@ -50,3 +50,24 @@ export const TACTIC_LABELS: Record<Tactic, string> = {
 export function isTactic(value: string): value is Tactic {
   return (TACTIC_ORDER as readonly string[]).includes(value)
 }
+
+// Official ATT&CK tactic identifiers, shown under each column in the MITRE
+// heatmap. Fixed public constants (attack.mitre.org/tactics/<id>), not derived
+// from the STIX bundle: /mitre/techniques returns per-technique data only and
+// never carries the tactic objects these ids belong to.
+export const TACTIC_IDS: Record<Tactic, string> = {
+  reconnaissance: 'TA0043',
+  'resource-development': 'TA0042',
+  'initial-access': 'TA0001',
+  execution: 'TA0002',
+  persistence: 'TA0003',
+  'privilege-escalation': 'TA0004',
+  'defense-evasion': 'TA0005',
+  'credential-access': 'TA0006',
+  discovery: 'TA0007',
+  'lateral-movement': 'TA0008',
+  collection: 'TA0009',
+  'command-and-control': 'TA0011',
+  exfiltration: 'TA0010',
+  impact: 'TA0040',
+}

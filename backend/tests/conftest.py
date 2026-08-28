@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.rate_limit import reset_rate_limiter
+from app.services.replay_service import reset_replay_state
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -71,6 +72,19 @@ def _reset_rate_limiter():
     reset_rate_limiter()
     yield
     reset_rate_limiter()
+
+
+@pytest.fixture(autouse=True)
+def _reset_replay_state():
+    """`app.services.replay_service` keeps the in-progress demo run as
+    process-global state (same reasoning as `_reset_rate_limiter` above) --
+    without a reset, a run started (or a stop event set) in one test would
+    make an unrelated later test see a spurious 409 or a run it never
+    started.
+    """
+    reset_replay_state()
+    yield
+    reset_replay_state()
 
 
 @pytest.fixture

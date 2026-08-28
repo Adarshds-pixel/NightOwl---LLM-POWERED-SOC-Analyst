@@ -76,7 +76,7 @@ Frontend variables live in `frontend/.env.local` (`VITE_API_BASE_URL`, `VITE_API
 ## 4. Testing
 
 ```bash
-cd backend && ./venv/Scripts/python.exe -m pytest -q     # 289 tests
+cd backend && ./venv/Scripts/python.exe -m pytest -q     # 344 tests
 cd frontend && npm run build && npm run lint             # typecheck + build + oxlint
 ```
 
@@ -107,7 +107,31 @@ A Postman collection covering every endpoint is in `docs/postman/`.
 
 ---
 
-## 5. Troubleshooting
+## 5. Demonstrating the project live
+
+Uploading the same fixture every time looks nothing like a real SOC and gets repetitive fast in front of a panel. `/demo`'s **Live SOC replay** card instead feeds real captured telemetry in continuously over a few minutes, with realistic pacing -- see [`ARCHITECTURE.md` §10](ARCHITECTURE.md#10-live-soc-replay) for how it works and why nothing in it is fabricated.
+
+**Before the demo:**
+
+- Restart the backend without `--reload` -- a file-watcher reload mid-replay kills the background thread.
+- Confirm the process is single-worker (no `--workers` flag); the replay's in-progress-run state is per-process.
+- In Settings > Data, shorten the incident refresh to 15s and the log stream to 5s so the console visibly updates during the shorter replay window rather than waiting out the longer defaults.
+
+**During the demo, on `/demo`:**
+
+1. Click **Reset demo data** once (confirm the dialog) so the console starts empty -- "this is a SOC with no telemetry yet."
+2. Click **Start replay**. Narrate as it runs: for the first ~10 seconds only benign noise arrives (Logs page fills, alert count stays zero); then an attack segment lands and an incident forms within seconds; noise resumes; two more segments land at their scheduled offsets, each forming its own incident. The Topbar's "Replay running" pill and the sidebar threat-level ring update live throughout.
+3. Open one of the incident badges the card links to (or the sidebar/notification bell), and walk through its Evidence, MITRE techniques, and AI Analysis tabs exactly as in the one-shot walkthrough above.
+4. Ask a follow-up in chat; show the audit trail.
+5. Close with the honesty framing: every record and every rule match is genuine, drawn from real Sysmon captures in `backend/sample_logs/`; only each record's timestamp was rewritten to place it on the current shift (`app/demo/timeline.py`, `with_rebased_timestamp`). `GET /demo/scenarios` (the segment-provenance list on the card itself) states exactly which capture backed each segment.
+
+**If something goes wrong live:** click **Stop replay**, then **Reset demo data**, and start again -- both are safe at any point. A replay that reports `state: "failed"` shows its error inline on the card; the terminal running the backend also logs the full traceback.
+
+**No admin rights / no Sysmon on the demo machine:** the replay needs neither -- it reads pre-built scenario files already committed under `backend/app/demo/scenarios/`. The optional live-capture finale (`backend/scripts/vm_generate_demo_narrative_events.ps1`, run on a Sysmon-capable VM) is a bonus, not a requirement.
+
+---
+
+## 6. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -131,7 +155,7 @@ Network-connection events (Sysmon Event ID 3) could not be captured on the prima
 
 ---
 
-## 6. Roadmap and status
+## 7. Roadmap and status
 
 A 30-day plan compressed to 26, run by a 4-person team as two rotating pairs (backend/detection and AI/RAG), swapping tracks in the frontend phase so everyone touches at least two of the three layers.
 
@@ -154,7 +178,7 @@ Still open: a responsive and accessibility sweep at laptop and tablet widths, a 
 
 ---
 
-## 7. Working conventions
+## 8. Working conventions
 
 - **Commits** follow Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `style:`), one line, describing the behaviour change rather than the file touched.
 - **Layering** is enforced by review: routes compose services, services own database access, models stay dumb. A route that queries the database directly is a bug.

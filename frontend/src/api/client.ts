@@ -1,5 +1,6 @@
 import type {
   AuditLogResponse,
+  DemoResetResponse,
   EventDetailResponse,
   ChatHistoryResponse,
   ChatMessageResponse,
@@ -11,7 +12,9 @@ import type {
   IncidentStatusUpdateResponse,
   IngestResponse,
   MitreTechniquesResponse,
+  ReplayStatusResponse,
   RuleListResponse,
+  ScenarioListResponse,
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
@@ -216,4 +219,30 @@ export async function pingHealth(): Promise<{ ok: boolean; latencyMs: number; th
     // which would wrongly tell the analyst the backend is down.
     return { ok: false, latencyMs: performance.now() - started, throttled: isRateLimited(error) }
   }
+}
+
+
+// --- Live SOC replay ------------------------------------------------------
+
+export function getDemoScenarios() {
+  return apiFetch<ScenarioListResponse>('/demo/scenarios')
+}
+
+export function startReplay(scenarioId: string, resetFirst = true) {
+  return apiFetch<ReplayStatusResponse>('/demo/replay/start', {
+    method: 'POST',
+    body: JSON.stringify({ scenario_id: scenarioId, reset_first: resetFirst }),
+  })
+}
+
+export function getReplayStatus() {
+  return apiFetch<ReplayStatusResponse>('/demo/replay/status')
+}
+
+export function stopReplay() {
+  return apiFetch<ReplayStatusResponse>('/demo/replay/stop', { method: 'POST' })
+}
+
+export function resetDemoData() {
+  return apiFetch<DemoResetResponse>('/demo/reset', { method: 'POST' })
 }

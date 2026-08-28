@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { Play, RotateCcw, TerminalSquare } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { DemoTerminal } from '../components/demo/DemoTerminal'
+import { ReplayControlCard } from '../components/demo/ReplayControlCard'
 import { Button, Card, EmptyState, MiniStat, PageHeader } from '../components/ui'
 import { type DemoStageId, useDemoMode } from '../hooks/useDemoMode'
 import { DEMO_CHAT_QUESTION } from '../lib/constants'
@@ -53,7 +54,9 @@ function DemoModePage() {
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'Demo Mode' }]}
       />
 
-      <Card title="Pipeline run" accent="cyan">
+      <ReplayControlCard />
+
+      <Card title="Pipeline run (one-shot)" subtitle="A single bundled fixture, ingested once" accent="cyan">
         <div className="flex flex-wrap items-center gap-6">
           <Button variant="primary" onClick={run} disabled={running} icon={<Play className="h-3.5 w-3.5" />}>
             {running ? 'Running...' : status === 'idle' ? 'Run demo' : 'Run again'}

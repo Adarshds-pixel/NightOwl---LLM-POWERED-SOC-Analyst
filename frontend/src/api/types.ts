@@ -217,3 +217,62 @@ export interface EventDetailResponse {
   raw: Record<string, unknown> | null
   normalized: Record<string, unknown> | null
 }
+
+// --- Live SOC replay (GET/POST /demo/*, backend/app/api/routes_demo.py) --
+// A replay ingests real captured Sysmon telemetry through the same
+// ingest_records pipeline POST /ingest uses, with each record's own
+// (rebased) timestamp driving alert/incident grouping instead of "now" --
+// see backend/app/demo/timeline.py. Nothing here is fabricated data; a
+// scenario names which real capture each segment came from and what the
+// real detection engine found in it (expected_rule_titles/
+// expected_technique_ids), which is what ScenarioInfo exposes.
+
+export interface ScenarioSegmentInfo {
+  id: string
+  title: string
+  kind: 'attack' | 'noise'
+  source_capture: string
+  record_count: number
+  expected_rule_titles: string[]
+  expected_technique_ids: string[]
+}
+
+export interface ScenarioInfo {
+  id: string
+  title: string
+  description: string
+  host: string
+  window_minutes: number
+  duration_seconds: number
+  segments: ScenarioSegmentInfo[]
+}
+
+export interface ScenarioListResponse {
+  scenarios: ScenarioInfo[]
+}
+
+export type ReplayState = 'idle' | 'running' | 'finished' | 'stopped' | 'failed'
+
+export interface ReplayStatusResponse {
+  run_id: string | null
+  scenario_id: string | null
+  scenario_title: string | null
+  state: ReplayState
+  started_at: string | null
+  finished_at: string | null
+  duration_seconds: number
+  window_minutes: number
+  elapsed_seconds: number
+  records_emitted: number
+  records_total: number
+  events_ingested: number
+  alerts_created: number
+  incident_ids: number[]
+  matched_rule_titles: string[]
+  current_segment_id: string | null
+  error: string | null
+}
+
+export interface DemoResetResponse {
+  deleted: Record<string, number>
+}

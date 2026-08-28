@@ -193,6 +193,7 @@ function MitrePage() {
             <HeatmapGrid
               incidents={incidents}
               techniqueById={byId}
+              showAllTactics
               selectedTactic={selectedTactic}
               onSelectTactic={(tactic) => setSelectedTactic(tactic === selectedTactic ? null : tactic)}
             />
@@ -263,8 +264,8 @@ function MitrePage() {
 
       {tab === 'matrix' && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          <Card title="Full attack matrix" subtitle="Every observed technique, by tactic" accent="cyan" className="xl:col-span-9">
-            <HeatmapGrid incidents={incidents} techniqueById={byId} />
+          <Card title="Full attack matrix" subtitle="All 14 tactics - dimmed columns have no detections" accent="cyan" className="xl:col-span-9">
+            <HeatmapGrid incidents={incidents} techniqueById={byId} showAllTactics />
           </Card>
           <Card title="Recently detected" accent="amber" className="xl:col-span-3" bodyClassName="px-2 pb-3">
             <div className="flex flex-col">
