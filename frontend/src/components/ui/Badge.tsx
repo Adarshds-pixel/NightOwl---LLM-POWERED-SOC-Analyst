@@ -59,10 +59,15 @@ export function accentDot(accent: Accent): string {
 
 export function SeverityBadge({
   severity,
+  score,
   dot = true,
   className,
 }: {
   severity: Severity
+  /** The 1-5 rank the label was derived from (base Sigma level + tactic
+   *  weight) -- optional so call sites without it (e.g. rule definitions,
+   *  which have no tactic-weighted score of their own) render unchanged. */
+  score?: number | null
   dot?: boolean
   className?: string
 }) {
@@ -78,6 +83,7 @@ export function SeverityBadge({
     >
       {dot && <span className={clsx('h-1.5 w-1.5 rounded-full', severityDot(severity))} />}
       {severityLabel(severity)}
+      {score != null && <span className="font-mono opacity-70">· {score}/5</span>}
     </span>
   )
 }

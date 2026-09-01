@@ -23,7 +23,9 @@ import {
 } from '../components/ui'
 import { usePreferences } from '../context/preferences/usePreferences'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
-import { EMPTY_EVENT_FILTERS, useEvents } from '../hooks/useEvents'
+import { useAlerts } from '../hooks/useAlerts'
+import { EMPTY_EVENT_FILTERS, useEvents, type EventFilters } from '../hooks/useEvents'
+import { useRules } from '../hooks/useRules'
 import { activityByHour, eventTypeLabel, levelFor } from '../lib/events'
 import { formatDateTime, incidentRef } from '../lib/format'
 import { SEVERITY_HEX, severityLabel, FILTERABLE_SEVERITIES } from '../lib/severity'
@@ -50,12 +52,30 @@ function AlertsPage() {
 
   // Only the settled search term reaches the API -- see useDebouncedValue.
   const debouncedSearch = useDebouncedValue(search)
+  // Severity goes to the server, so `total` (and the "N alerts" heading and
+  // pagination below it) describe the filtered set rather than the whole
+  // feed -- previously this narrowed one already-fetched page client-side,
+  // which made a filtered view disagree with its own row count.
   const { events, total, page, setPage, loading, error, refresh } = useEvents(
-    { ...EMPTY_EVENT_FILTERS, search: debouncedSearch, alertOnly: true },
+    {
+      ...EMPTY_EVENT_FILTERS,
+      search: debouncedSearch,
+      alertOnly: true,
+      severity: severity as EventFilters['severity'],
+    },
     pageSize,
   )
 
-  const visible = severity === 'all' ? events : events.filter((event) => event.severity === severity)
+  // Whole-feed severity counts for the KPI tiles, independent of which page
+  // is open (one lightweight limit=1 request each, read for `total` only).
+  const criticalTotal = useAlerts({ limit: 1, severity: 'critical' }).total
+  const highTotal = useAlerts({ limit: 1, severity: 'high' }).total
+  // Rule definitions are session-cached (see useRules), so this costs no
+  // extra request in practice -- and it keeps the whole KPI row whole-feed.
+  const { rules } = useRules()
+  const rulesFiredTotal = rules.filter((rule) => rule.match_count > 0).length
+
+  const visible = events
   const bySeverity = FILTERABLE_SEVERITIES.map((level) => ({
     name: severityLabel(level),
     value: events.filter((event) => event.severity === level).length,
@@ -78,7 +98,8 @@ function AlertsPage() {
       key: 'severity',
       header: 'Severity',
       sortValue: (alert) => alert.severity ?? '',
-      cell: (alert) => (alert.severity ? <SeverityBadge severity={alert.severity} /> : <span>--</span>),
+      cell: (alert) =>
+        alert.severity ? <SeverityBadge severity={alert.severity} score={alert.severity_score} /> : <span>--</span>,
     },
     {
       key: 'rule',
@@ -142,28 +163,32 @@ function AlertsPage() {
           value={total}
           icon={<Bell className="h-4 w-4" />}
           accent="amber"
-          note="Every rule match ever recorded"
+          note="Every event with at least one rule match"
         />
+        {/* Whole-feed totals, not page-scoped -- a KPI row that mixed the
+            two made a filtered or later page look like the alert counts had
+            changed. Page-scoped breakdowns live in the side panels, which
+            label themselves "Current page". */}
         <StatCard
           label="Critical"
-          value={events.filter((event) => event.severity === 'critical').length}
+          value={criticalTotal}
           icon={<Siren className="h-4 w-4" />}
           accent="red"
-          note="On this page"
+          note="Across all alerts"
         />
         <StatCard
           label="High"
-          value={events.filter((event) => event.severity === 'high').length}
+          value={highTotal}
           icon={<Siren className="h-4 w-4" />}
           accent="amber"
-          note="On this page"
+          note="Across all alerts"
         />
         <StatCard
-          label="Distinct rules"
-          value={new Set(events.map((event) => event.rule_title)).size}
+          label="Rules fired"
+          value={rulesFiredTotal}
           icon={<Bell className="h-4 w-4" />}
           accent="violet"
-          note="Rules firing on this page"
+          note={`of ${rules.length} loaded detection rules`}
         />
       </div>
 
@@ -243,7 +268,10 @@ function AlertsPage() {
         {selected && (
           <div className="flex flex-col gap-4 p-5">
             <dl className="grid grid-cols-2 gap-3">
-              <KeyValue label="Severity" value={selected.severity ? <SeverityBadge severity={selected.severity} /> : '--'} />
+              <KeyValue
+                label="Severity"
+                value={selected.severity ? <SeverityBadge severity={selected.severity} score={selected.severity_score} /> : '--'}
+              />
               <KeyValue label="Technique" value={selected.technique_id ?? '--'} mono />
               <KeyValue label="Event type" value={eventTypeLabel(selected.event_id)} />
               <KeyValue label="Level" value={levelFor(selected.severity, selected.is_alert).toUpperCase()} mono />

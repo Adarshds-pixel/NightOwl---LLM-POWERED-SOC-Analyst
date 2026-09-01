@@ -12,6 +12,7 @@ from app.db.base import Base
 from app.detection.engine import RuleMatch
 from app.models.alert import Alert
 from app.schemas.event import NormalizedEvent
+from app.services import severity_service
 from app.services.detection_service import create_alert, save_alerts
 from app.services.event_service import create_event
 
@@ -41,7 +42,7 @@ def _persisted_event(db):
 def test_create_alert_persists_fk_severity_and_matched_at():
     with Session(_engine()) as db:
         event = _persisted_event(db)
-        match = RuleMatch(rule_id="rule-1", title="Test Rule", level="high")
+        match = RuleMatch(rule_id="rule-1", title="Test Rule", level="high", score=severity_service.compute_severity_score("high", []))
 
         alert = create_alert(db, event.id, match, MATCHED_AT)
         db.commit()
@@ -51,6 +52,7 @@ def test_create_alert_persists_fk_severity_and_matched_at():
         assert alert.event_id == event.id
         assert alert.rule_id == "rule-1"
         assert alert.severity == "high"
+        assert alert.severity_score == 4
         # SQLite (unlike Postgres) doesn't preserve tzinfo across a round
         # trip, so compare naively -- this is a SQLite-test-only quirk,
         # not something the app needs to handle for real Postgres usage.
@@ -60,8 +62,8 @@ def test_create_alert_persists_fk_severity_and_matched_at():
 def test_save_alerts_commits_and_returns_rows_with_ids():
     with Session(_engine()) as db:
         event = _persisted_event(db)
-        match_1 = RuleMatch(rule_id="rule-1", title="Test Rule 1", level="high")
-        match_2 = RuleMatch(rule_id="rule-2", title="Test Rule 2", level="medium")
+        match_1 = RuleMatch(rule_id="rule-1", title="Test Rule 1", level="high", score=4)
+        match_2 = RuleMatch(rule_id="rule-2", title="Test Rule 2", level="medium", score=3)
 
         rows = save_alerts(
             db,
@@ -83,7 +85,7 @@ def test_save_alerts_empty_list_is_a_noop():
 def test_save_alerts_logs_persisted_count(caplog):
     with Session(_engine()) as db:
         event = _persisted_event(db)
-        match = RuleMatch(rule_id="rule-1", title="Test Rule", level="high")
+        match = RuleMatch(rule_id="rule-1", title="Test Rule", level="high", score=4)
         with caplog.at_level("INFO"):
             save_alerts(db, [(event.id, match, MATCHED_AT, None)])
         assert "persisted 1 alerts" in caplog.text
@@ -93,7 +95,7 @@ def test_persisted_alert_roundtrips_from_db():
     engine = _engine()
     with Session(engine) as db:
         event = _persisted_event(db)
-        match = RuleMatch(rule_id="rule-1", title="Test Rule", level="critical")
+        match = RuleMatch(rule_id="rule-1", title="Test Rule", level="critical", score=5)
         alert = create_alert(db, event.id, match, MATCHED_AT)
         db.commit()
         alert_id = alert.id
@@ -102,4 +104,5 @@ def test_persisted_alert_roundtrips_from_db():
         fetched = db.get(Alert, alert_id)
         assert fetched is not None
         assert fetched.severity == "critical"
+        assert fetched.severity_score == 5
         assert fetched.rule_id == "rule-1"

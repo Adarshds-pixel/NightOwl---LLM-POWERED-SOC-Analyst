@@ -7,7 +7,7 @@ a dialect-specific type.
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, String
+from sqlalchemy import JSON, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -20,6 +20,10 @@ class Incident(Base):
     title: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(50), default="open")
     severity: Mapped[str] = mapped_column(String(50))
+    # Same 1-5 rank as Alert.severity_score, bumped to the max of every
+    # merged alert's score as new alerts join this incident (mirrors how
+    # `severity` itself is bumped via severity_service.higher_severity).
+    severity_score: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
     mitre_technique_ids: Mapped[list[str]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # Alerts are grouped into one incident by same host + time window

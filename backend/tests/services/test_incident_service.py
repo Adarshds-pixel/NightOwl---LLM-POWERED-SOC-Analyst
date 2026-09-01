@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db.base import Base
 from app.detection.engine import RuleMatch
 from app.models.incident import Incident
+from app.services import severity_service
 from app.services.incident_service import count_incidents, find_or_create_incident, list_incidents
 
 BASE_TIME = datetime(2026, 8, 19, 12, 0, 0, tzinfo=timezone.utc)
@@ -23,7 +24,11 @@ def _engine():
 
 
 def _match(rule_id="rule-1", title="Test Rule", level="high", technique_id="T1059.001"):
-    return RuleMatch(rule_id=rule_id, title=title, level=level, technique_id=technique_id)
+    # score is derived from level the same way the real engine derives it
+    # (empty tactics -- these tests aren't exercising tactic weighting), so
+    # every call site stays internally consistent without having to pass
+    # a matching score by hand.
+    return RuleMatch(rule_id=rule_id, title=title, level=level, score=severity_service.compute_severity_score(level, []), technique_id=technique_id)
 
 
 def test_creates_new_incident_when_none_exists():
@@ -88,6 +93,7 @@ def test_merging_bumps_severity_to_the_higher_of_the_two():
         db.commit()
 
         assert merged.severity == "critical"
+        assert merged.severity_score == 5
 
 
 def test_merging_does_not_duplicate_an_already_present_technique_id():

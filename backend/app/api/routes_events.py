@@ -32,6 +32,7 @@ class EventLogRow(BaseModel):
     user: str | None
     is_alert: bool
     severity: str | None = None
+    severity_score: int | None = None
     rule_title: str | None = None
     technique_id: str | None = None
     # The incident this event's alert was grouped into, when it triggered
@@ -55,6 +56,7 @@ def get_events(
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
     alert_only: bool | None = Query(default=None, description="true = only alert-triggering events, false = only normal events"),
+    severity: str | None = Query(default=None, description="only events with an alert of this severity, e.g. 'critical'"),
     q: str | None = Query(default=None, description="case-insensitive substring match on process, command line, user or host"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -69,8 +71,11 @@ def get_events(
         q=q,
         limit=limit,
         offset=offset,
+        severity=severity,
     )
-    total = count_events(db, host=host, start_date=start_date, end_date=end_date, alert_only=alert_only, q=q)
+    total = count_events(
+        db, host=host, start_date=start_date, end_date=end_date, alert_only=alert_only, q=q, severity=severity
+    )
 
     alerts_by_event_id = get_alerts_for_event_ids(db, [event.id for event in events])
     rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()}
@@ -90,6 +95,7 @@ def get_events(
                 user=event.user,
                 is_alert=alert is not None,
                 severity=alert.severity if alert else None,
+                severity_score=alert.severity_score if alert else None,
                 rule_title=rule.title if rule else None,
                 technique_id=rule.technique_id if rule else None,
                 incident_id=alert.incident_id if alert else None,
@@ -115,6 +121,7 @@ class EventDetailResponse(BaseModel):
     user: str | None
     is_alert: bool
     severity: str | None = None
+    severity_score: int | None = None
     rule_title: str | None = None
     technique_id: str | None = None
     incident_id: int | None = None
@@ -144,6 +151,7 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db)) -> EventDetai
         user=event.user,
         is_alert=alert is not None,
         severity=alert.severity if alert else None,
+        severity_score=alert.severity_score if alert else None,
         rule_title=rule.title if rule else None,
         technique_id=rule.technique_id if rule else None,
         incident_id=alert.incident_id if alert else None,

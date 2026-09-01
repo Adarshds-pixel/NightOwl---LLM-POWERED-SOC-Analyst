@@ -66,6 +66,7 @@ class IncidentSummary(BaseModel):
     title: str
     status: str
     severity: str
+    severity_score: int
     host: str
     mitre_technique_ids: list[str]
     created_at: datetime
@@ -100,6 +101,7 @@ class AlertInfo(BaseModel):
     rule_id: str
     matched_at: datetime
     severity: str
+    severity_score: int
     event: EventInfo
 
 
@@ -108,6 +110,7 @@ class IncidentDetailResponse(BaseModel):
     title: str
     status: str
     severity: str
+    severity_score: int
     host: str
     created_at: datetime
     mitre_technique_ids: list[str]
@@ -259,6 +262,7 @@ def get_incidents(
                 title=incident.title,
                 status=incident.status,
                 severity=incident.severity,
+                severity_score=incident.severity_score,
                 host=incident.host,
                 mitre_technique_ids=incident.mitre_technique_ids or [],
                 created_at=incident.created_at,
@@ -299,6 +303,7 @@ def get_incident_detail(incident_id: int, db: Session = Depends(get_db)) -> Inci
             rule_id=alert.rule_id,
             matched_at=alert.matched_at,
             severity=alert.severity,
+            severity_score=alert.severity_score,
             event=EventInfo(
                 id=event.id,
                 host=event.host,
@@ -317,6 +322,7 @@ def get_incident_detail(incident_id: int, db: Session = Depends(get_db)) -> Inci
         title=incident.title,
         status=incident.status,
         severity=incident.severity,
+        severity_score=incident.severity_score,
         host=incident.host,
         created_at=incident.created_at,
         mitre_technique_ids=incident.mitre_technique_ids or [],

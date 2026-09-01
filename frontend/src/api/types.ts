@@ -25,6 +25,8 @@ export interface IncidentSummary {
   title: string
   status: IncidentStatus
   severity: Severity
+  /** 1-5 rank `severity` was derived from (base Sigma level + tactic weight). */
+  severity_score: number
   host: string
   mitre_technique_ids: string[]
   created_at: string
@@ -59,6 +61,7 @@ export interface AlertInfo {
   rule_id: string
   matched_at: string
   severity: Severity
+  severity_score: number
   event: EventInfo
 }
 
@@ -67,6 +70,7 @@ export interface IncidentDetailResponse {
   title: string
   status: IncidentStatus
   severity: Severity
+  severity_score: number
   host: string
   created_at: string
   mitre_technique_ids: string[]
@@ -153,6 +157,7 @@ export interface EventLogRow {
   user: string | null
   is_alert: boolean
   severity: Severity | null
+  severity_score: number | null
   rule_title: string | null
   technique_id: string | null
   // Present when this event's alert was grouped into an incident, so an
@@ -211,6 +216,7 @@ export interface EventDetailResponse {
   user: string | null
   is_alert: boolean
   severity: Severity | null
+  severity_score: number | null
   rule_title: string | null
   technique_id: string | null
   incident_id: number | null

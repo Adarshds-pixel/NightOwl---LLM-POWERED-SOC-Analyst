@@ -50,6 +50,10 @@ class RuleMatch:
     # Final severity after severity_service.compute_severity (base Sigma
     # level + tactic weight, Day 10) -- not the raw, unweighted rule level.
     level: str
+    # The 1-5 rank `level` is derived from (severity_service.compute_severity_score),
+    # kept alongside the label so callers can persist/display it instead of
+    # only ever the collapsed label.
+    score: int
     technique_id: str | None = None
 
 
@@ -189,11 +193,13 @@ def evaluate_event(event: NormalizedEvent, rules: list[LoadedRule]) -> list[Rule
 
         if matched:
             final_level = severity_service.compute_severity(rule.level, rule.tactics)
+            final_score = severity_service.compute_severity_score(rule.level, rule.tactics)
             matches.append(
                 RuleMatch(
                     rule_id=rule.rule_id,
                     title=rule.title,
                     level=final_level,
+                    score=final_score,
                     technique_id=rule.technique_id,
                 )
             )

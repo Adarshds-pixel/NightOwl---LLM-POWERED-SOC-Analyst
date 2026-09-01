@@ -110,7 +110,13 @@ export function ReplayControlCard() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <MiniStat label="Records" value={`${status?.records_emitted ?? 0} / ${status?.records_total ?? 0}`} />
             <MiniStat label="Events ingested" value={status?.events_ingested ?? 0} />
-            <MiniStat label="Alerts raised" value={status?.alerts_created ?? 0} />
+            {/* One Alert row per rule match -- an event that trips 2 rules at once
+                counts twice here. Deliberately NOT "Alerts raised": that label is
+                used elsewhere (KpiRow.tsx, AlertsPage.tsx) for the distinct-event
+                count from GET /events?alert_only=true, which is a different, also
+                correct, number. Keep the labels distinct so they never look like
+                a data-integrity bug against each other. */}
+            <MiniStat label="Rule matches" value={status?.alerts_created ?? 0} />
             <MiniStat label="Incidents formed" value={status?.incident_ids.length ?? 0} />
           </div>
 

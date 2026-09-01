@@ -59,11 +59,17 @@ def _filtered_events_stmt(
     end_date: datetime | None,
     alert_only: bool | None,
     q: str | None = None,
+    severity: str | None = None,
 ):
     """Shared by list_events and count_events so the two never drift out of
     sync -- every filter is optional and additive (AND'd together).
     alert_only=True restricts to events with at least one Alert row,
     alert_only=False restricts to events with none, None applies no filter.
+    `severity` restricts to events with at least one Alert row of that
+    severity -- server-side so a filtered page's `total` is the real total
+    for that filter, not the unfiltered one (the frontend previously
+    narrowed severity client-side over one page, which made a filtered view
+    disagree with its own pagination footer).
     `q` is a case-insensitive substring match across the fields an analyst
     would actually search by hand (process, command line, user, host) --
     backing the frontend's global search box. Deliberately a LIKE rather
@@ -92,6 +98,8 @@ def _filtered_events_stmt(
         stmt = stmt.where(exists().where(Alert.event_id == Event.id))
     elif alert_only is False:
         stmt = stmt.where(~exists().where(Alert.event_id == Event.id))
+    if severity is not None:
+        stmt = stmt.where(exists().where((Alert.event_id == Event.id) & (Alert.severity == severity)))
     return stmt
 
 
@@ -104,13 +112,16 @@ def list_events(
     q: str | None = None,
     limit: int | None = None,
     offset: int = 0,
+    severity: str | None = None,
 ) -> list[Event]:
     """Newest-first raw event list for `GET /events`, the full ingested
     timeline -- unlike `GET /incidents`, this includes events that never
     triggered a rule, so the frontend can show the real signal-to-noise
     ratio (e.g. "64,558 events processed, 8 flagged").
     """
-    stmt = _filtered_events_stmt(host, start_date, end_date, alert_only, q).order_by(Event.timestamp.desc())
+    stmt = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity).order_by(
+        Event.timestamp.desc()
+    )
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
     return list(db.scalars(stmt))
@@ -123,12 +134,13 @@ def count_events(
     end_date: datetime | None = None,
     alert_only: bool | None = None,
     q: str | None = None,
+    severity: str | None = None,
 ) -> int:
     """Total events matching the same filters as list_events, ignoring
     limit/offset -- lets `GET /events` report a page-independent `total`
     alongside the page of results.
     """
-    subq = _filtered_events_stmt(host, start_date, end_date, alert_only, q).subquery()
+    subq = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity).subquery()
     return db.scalar(select(func.count()).select_from(subq)) or 0
 
 

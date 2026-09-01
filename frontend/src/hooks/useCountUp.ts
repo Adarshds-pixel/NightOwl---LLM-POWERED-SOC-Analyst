@@ -22,11 +22,17 @@ export function useCountUp(target: number, enabled = true): number {
 
     const from = fromRef.current
     const start = performance.now()
+    // Counts round to whole numbers; a fractional target (e.g. a 0.17%
+    // detection rate) keeps two decimals, since rounding it to an integer
+    // would animate to a flat 0 and render as "0.00%".
+    const snap = Number.isInteger(target)
+      ? (value: number) => Math.round(value)
+      : (value: number) => Math.round(value * 100) / 100
 
     function tick(now: number) {
       const t = Math.min((now - start) / DURATION_MS, 1)
       const eased = 1 - (1 - t) * (1 - t)
-      setValue(Math.round(from + (target - from) * eased))
+      setValue(snap(from + (target - from) * eased))
       if (t < 1) rafRef.current = requestAnimationFrame(tick)
       else fromRef.current = target
     }

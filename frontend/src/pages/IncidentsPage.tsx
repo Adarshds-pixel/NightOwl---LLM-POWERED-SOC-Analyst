@@ -76,7 +76,7 @@ function IncidentsPage() {
       key: 'severity',
       header: 'Severity',
       sortValue: (incident) => incident.severity,
-      cell: (incident) => <SeverityBadge severity={incident.severity} />,
+      cell: (incident) => <SeverityBadge severity={incident.severity} score={incident.severity_score} />,
     },
     {
       key: 'status',

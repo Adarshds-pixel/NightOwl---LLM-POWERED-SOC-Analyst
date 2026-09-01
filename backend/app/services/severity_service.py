@@ -43,6 +43,15 @@ _RANK_LABELS = ["informational", "low", "medium", "high", "critical"]
 _MAX_RANK = len(_RANK_LABELS)
 
 
+def _final_rank(base_level: str, tactics: list[str]) -> int:
+    """The shared 1-5 rank computation behind both compute_severity (label)
+    and compute_severity_score (the same number, kept instead of discarded)
+    -- see this module's docstring for what the rank means."""
+    base_rank = _BASE_RANK.get(base_level.lower(), _DEFAULT_RANK)
+    weight = max((_TACTIC_WEIGHT.get(t.lower(), 0) for t in tactics), default=0)
+    return min(base_rank + weight, _MAX_RANK)
+
+
 def compute_severity(base_level: str, tactics: list[str]) -> str:
     """Combines `base_level` (a rule's raw Sigma `level`, e.g. "high") with
     the highest tactic weight among `tactics`, capped at "critical".
@@ -50,10 +59,15 @@ def compute_severity(base_level: str, tactics: list[str]) -> str:
     contribute 0 weight rather than raising, so a rule tagged with a tactic
     name outside the table above still gets a sane result.
     """
-    base_rank = _BASE_RANK.get(base_level.lower(), _DEFAULT_RANK)
-    weight = max((_TACTIC_WEIGHT.get(t.lower(), 0) for t in tactics), default=0)
-    final_rank = min(base_rank + weight, _MAX_RANK)
-    return _RANK_LABELS[final_rank - 1]
+    return _RANK_LABELS[_final_rank(base_level, tactics) - 1]
+
+
+def compute_severity_score(base_level: str, tactics: list[str]) -> int:
+    """The same 1-5 rank compute_severity's label is derived from, kept as a
+    number instead of thrown away -- lets the UI show e.g. "Critical - 5/5"
+    rather than only ever the label, which collapses "just barely critical"
+    and "maximally critical" into an identical badge."""
+    return _final_rank(base_level, tactics)
 
 
 def higher_severity(a: str, b: str) -> str:

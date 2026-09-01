@@ -51,12 +51,14 @@ def find_or_create_incident(db: Session, host: str, matched_at: datetime, match:
         if match.technique_id and match.technique_id not in existing.mitre_technique_ids:
             existing.mitre_technique_ids = [*existing.mitre_technique_ids, match.technique_id]
         existing.severity = severity_service.higher_severity(existing.severity, match.level)
+        existing.severity_score = max(existing.severity_score, match.score)
         return existing
 
     incident = Incident(
         title=f"{match.title} on {host}",
         status="open",
         severity=match.level,
+        severity_score=match.score,
         mitre_technique_ids=[match.technique_id] if match.technique_id else [],
         created_at=matched_at,
         host=host,

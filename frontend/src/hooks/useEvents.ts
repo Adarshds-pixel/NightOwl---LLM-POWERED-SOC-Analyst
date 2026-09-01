@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getEvents, type EventLogRow } from '../api'
-import { levelFor } from '../lib/events'
-import type { LogLevel } from '../components/ui/Badge'
+import { getEvents, type EventLogRow, type Severity } from '../api'
 
 export interface EventFilters {
   host: string
@@ -9,11 +7,14 @@ export interface EventFilters {
   search: string
   /** true = only rule-matching events, false = only ordinary events. */
   alertOnly: boolean | null
-  /** Client-side narrowing of the fetched page: the API has no level
-   *  concept (level is derived from the matched alert severity), so this
-   *  filters what came back rather than pretending it is a query param. */
-  level: LogLevel | 'all'
-  /** Sysmon event id, e.g. 1 for process creation. Also client-side. */
+  /** Server-side severity narrowing: a real severity keeps only events
+   *  carrying an alert of that severity, 'clean' keeps only events that
+   *  matched no rule at all. Sent as a query param (not applied to the
+   *  fetched page) so `total` and the pagination footer describe the
+   *  filtered set, not the unfiltered one. */
+  severity: Severity | 'all' | 'clean'
+  /** Sysmon event id, e.g. 1 for process creation. Client-side: the API
+   *  has no event-id filter, and this only ever narrows one visible page. */
   eventId: number | 'all'
   startDate?: string
   endDate?: string
@@ -23,7 +24,7 @@ export const EMPTY_EVENT_FILTERS: EventFilters = {
   host: '',
   search: '',
   alertOnly: null,
-  level: 'all',
+  severity: 'all',
   eventId: 'all',
 }
 
@@ -40,13 +41,19 @@ export function useEvents(filters: EventFilters, pageSize: number) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // 'clean' is the "matched no rule" case, which the API expresses as
+  // alert_only=false rather than as a severity value.
+  const severityParam = filters.severity !== 'all' && filters.severity !== 'clean' ? filters.severity : undefined
+  const alertOnlyParam = filters.severity === 'clean' ? false : (filters.alertOnly ?? undefined)
+
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
     getEvents({
       host: filters.host || undefined,
       q: filters.search || undefined,
-      alert_only: filters.alertOnly ?? undefined,
+      alert_only: alertOnlyParam,
+      severity: severityParam,
       start_date: filters.startDate,
       end_date: filters.endDate,
       limit: pageSize,
@@ -58,7 +65,7 @@ export function useEvents(filters: EventFilters, pageSize: number) {
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [filters.host, filters.search, filters.alertOnly, filters.startDate, filters.endDate, page, pageSize])
+  }, [filters.host, filters.search, alertOnlyParam, severityParam, filters.startDate, filters.endDate, page, pageSize])
 
   useEffect(() => {
     load()
@@ -66,13 +73,12 @@ export function useEvents(filters: EventFilters, pageSize: number) {
 
   useEffect(() => {
     setPage(0)
-  }, [filters.host, filters.search, filters.alertOnly, filters.startDate, filters.endDate, pageSize])
+  }, [filters.host, filters.search, alertOnlyParam, severityParam, filters.startDate, filters.endDate, pageSize])
 
-  // Level and event-id narrowing happen after the fetch; `total` still
-  // reports the server-side total so the pagination footer stays honest
-  // about what it is paging through.
+  // Only event-id narrowing is client-side now (the API has no event-id
+  // filter); severity is a real query param, so `total` and the pagination
+  // footer describe the filtered set.
   const visible = events.filter((event) => {
-    if (filters.level !== 'all' && levelFor(event.severity, event.is_alert) !== filters.level) return false
     if (filters.eventId !== 'all' && event.event_id !== filters.eventId) return false
     return true
   })

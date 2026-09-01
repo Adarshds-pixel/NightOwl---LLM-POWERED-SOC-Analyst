@@ -18,7 +18,7 @@ export function useAlerts(params: Omit<ListEventsParams, 'alert_only'> = {}, pol
 
   const refresh = useCallback(() => setGeneration((g) => g + 1), [])
 
-  const { host, start_date, end_date, q, limit, offset } = params
+  const { host, start_date, end_date, q, limit, offset, severity } = params
 
   useEffect(() => {
     let cancelled = false
@@ -26,7 +26,7 @@ export function useAlerts(params: Omit<ListEventsParams, 'alert_only'> = {}, pol
     async function load(showSpinner: boolean) {
       if (showSpinner) setLoading(true)
       try {
-        const response = await getEvents({ host, start_date, end_date, q, limit, offset, alert_only: true })
+        const response = await getEvents({ host, start_date, end_date, q, limit, offset, severity, alert_only: true })
         if (cancelled) return
         setAlerts(response.events)
         setTotal(response.total)
@@ -47,7 +47,7 @@ export function useAlerts(params: Omit<ListEventsParams, 'alert_only'> = {}, pol
       cancelled = true
       if (timer) window.clearInterval(timer)
     }
-  }, [host, start_date, end_date, q, limit, offset, pollMs, generation])
+  }, [host, start_date, end_date, q, limit, offset, severity, pollMs, generation])
 
   return { alerts, total, loading, error, refresh }
 }

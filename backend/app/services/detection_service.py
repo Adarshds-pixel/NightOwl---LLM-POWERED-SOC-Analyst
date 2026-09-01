@@ -34,6 +34,7 @@ def create_alert(
         rule_id=match.rule_id,
         matched_at=matched_at,
         severity=match.level,
+        severity_score=match.score,
         incident_id=incident_id,
     )
     db.add(alert)

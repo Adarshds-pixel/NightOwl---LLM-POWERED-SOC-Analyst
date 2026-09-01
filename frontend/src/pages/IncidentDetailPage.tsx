@@ -74,7 +74,11 @@ function IncidentDetailPage() {
         <span className="font-mono text-meta whitespace-nowrap text-text-muted">{formatDateTime(alert.matched_at)}</span>
       ),
     },
-    { key: 'severity', header: 'Severity', cell: (alert) => <SeverityBadge severity={alert.severity} /> },
+    {
+      key: 'severity',
+      header: 'Severity',
+      cell: (alert) => <SeverityBadge severity={alert.severity} score={alert.severity_score} />,
+    },
     {
       key: 'event',
       header: 'Event',
@@ -131,7 +135,7 @@ function IncidentDetailPage() {
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <dl className="grid flex-1 grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-            <KeyValue label="Severity" value={<SeverityBadge severity={incident.severity} />} />
+            <KeyValue label="Severity" value={<SeverityBadge severity={incident.severity} score={incident.severity_score} />} />
             <KeyValue label="Host" value={incident.host} mono />
             <KeyValue label="Detected" value={formatDateTime(incident.created_at)} mono />
             <KeyValue label="Open for" value={formatDuration(incident.created_at)} mono />

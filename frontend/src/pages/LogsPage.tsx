@@ -58,6 +58,7 @@ function LogsPage() {
   )
   const { eventTotal, alertTotal } = useEventTotals()
 
+  const detectionRatePercent = eventTotal > 0 ? (alertTotal / eventTotal) * 100 : 0
   const counts = levelCounts(rawEvents)
   const span = timeSpan(rawEvents)
   const hosts = topBy(rawEvents, (event) => event.host, 5)
@@ -144,19 +145,25 @@ function LogsPage() {
           accent="amber"
           note={eventTotal > 0 ? `${((alertTotal / eventTotal) * 100).toFixed(2)}% of all events` : 'No events yet'}
         />
+        {/* All four tiles are whole-dataset totals. Anything scoped to the
+            visible page lives in the side panels below, which say
+            "Current page" on their own headings -- mixing a page-scoped
+            number into this row made "0 errors" sit beside "37 alerting
+            events" and read like a contradiction. */}
         <StatCard
-          label="Errors on page"
-          value={counts.error + counts.critical}
-          icon={<TriangleAlert className="h-4 w-4" />}
-          accent="red"
-          note="High and critical rule matches"
+          label="Clean events"
+          value={eventTotal - alertTotal}
+          icon={<FileText className="h-4 w-4" />}
+          accent="green"
+          note="Matched no detection rule"
         />
         <StatCard
-          label="Warnings on page"
-          value={counts.warn}
-          icon={<FileText className="h-4 w-4" />}
+          label="Detection rate"
+          value={detectionRatePercent}
+          icon={<TriangleAlert className="h-4 w-4" />}
           accent="violet"
-          note="Medium severity matches"
+          note={`${alertTotal.toLocaleString()} of ${eventTotal.toLocaleString()} events flagged`}
+          format={(v) => `${v.toFixed(2)}%`}
         />
       </div>
 
@@ -172,18 +179,23 @@ function LogsPage() {
             }
             filters={
               <>
+                {/* Severity, not the old info/warn/error vocabulary: the
+                    rest of the app speaks in severities, and this is now a
+                    real server-side filter, so the row count and pagination
+                    below describe the filtered set. */}
                 <Select
-                  label="Level"
-                  value={filters.level}
-                  onChange={(level) => setFilters({ ...filters, level: level as EventFilters['level'] })}
+                  label="Severity"
+                  value={filters.severity}
+                  onChange={(severity) => setFilters({ ...filters, severity: severity as EventFilters['severity'] })}
                   options={[
-                    { label: 'All levels', value: 'all' },
+                    { label: 'All events', value: 'all' },
                     { label: 'Critical', value: 'critical' },
-                    { label: 'Error', value: 'error' },
-                    { label: 'Warning', value: 'warn' },
-                    { label: 'Info', value: 'info' },
+                    { label: 'High', value: 'high' },
+                    { label: 'Medium', value: 'medium' },
+                    { label: 'Low', value: 'low' },
+                    { label: 'Clean (no detection)', value: 'clean' },
                   ]}
-                  className="w-36"
+                  className="w-44"
                 />
                 <Select
                   label="Event type"

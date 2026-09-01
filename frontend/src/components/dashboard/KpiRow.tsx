@@ -53,6 +53,12 @@ export function KpiRow({
         trend={bucketCounts(criticalTimes)}
         onClick={() => navigate('/incidents?severity=critical')}
       />
+      {/* Distinct EVENTS with >=1 rule match (GET /events?alert_only=true's
+          total -- see event_service.py's EXISTS filter), not raw Alert-table
+          rows. An event that trips 2 rules at once counts once here but
+          twice in Demo Mode's Live Replay "Rule matches" stat
+          (ReplayControlCard.tsx) -- both are correct, they measure
+          different things, so don't "fix" one to match the other. */}
       <StatCard
         label="Alerts raised"
         value={alertTotal}

@@ -15,6 +15,7 @@ import type {
   ReplayStatusResponse,
   RuleListResponse,
   ScenarioListResponse,
+  Severity,
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
@@ -170,6 +171,9 @@ export interface ListEventsParams {
   start_date?: string
   end_date?: string
   alert_only?: boolean
+  /** Only events carrying an alert of this severity. Server-side, so a
+   *  filtered page's `total` is the real total for that filter. */
+  severity?: Severity
   /** Case-insensitive substring match on process, command line, user, host. */
   q?: string
   limit?: number

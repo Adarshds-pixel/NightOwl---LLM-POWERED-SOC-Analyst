@@ -196,6 +196,49 @@ def test_list_events_alert_only_false_restricts_to_normal_events():
         assert [e.id for e in events] == [normal.id]
 
 
+def test_list_events_severity_restricts_to_events_with_an_alert_of_that_severity():
+    with Session(_engine()) as db:
+        critical_event = _insert_event(db)
+        high_event = _insert_event(db)
+        _insert_event(db)  # no alert at all
+        _insert_alert(db, critical_event.id, rule_id="rule-critical", severity="critical")
+        _insert_alert(db, high_event.id, rule_id="rule-high", severity="high")
+        db.commit()
+
+        assert [e.id for e in list_events(db, severity="critical")] == [critical_event.id]
+        assert [e.id for e in list_events(db, severity="high")] == [high_event.id]
+        assert list_events(db, severity="low") == []
+
+
+def test_count_events_severity_matches_the_filtered_list_not_the_whole_table():
+    """The bug this guards: the frontend used to narrow severity client-side
+    over one fetched page, so a filtered view's row count disagreed with its
+    own pagination total. count_events must apply the same filter."""
+    with Session(_engine()) as db:
+        critical_event = _insert_event(db)
+        for _ in range(4):
+            _insert_event(db)  # noise, no alerts
+        _insert_alert(db, critical_event.id, rule_id="rule-critical", severity="critical")
+        db.commit()
+
+        assert count_events(db) == 5
+        assert count_events(db, severity="critical") == 1
+        assert count_events(db, severity="critical") == len(list_events(db, severity="critical"))
+
+
+def test_list_events_severity_counts_an_event_once_even_if_two_rules_of_that_severity_matched():
+    """An event that trips two critical rules is still one event in this
+    event-level view -- the EXISTS filter must not fan it out into two rows."""
+    with Session(_engine()) as db:
+        event = _insert_event(db)
+        _insert_alert(db, event.id, rule_id="rule-a", severity="critical")
+        _insert_alert(db, event.id, rule_id="rule-b", severity="critical")
+        db.commit()
+
+        assert [e.id for e in list_events(db, severity="critical")] == [event.id]
+        assert count_events(db, severity="critical") == 1
+
+
 def test_list_events_limit_and_offset_page_through_distinct_results():
     with Session(_engine()) as db:
         for i in range(5):
