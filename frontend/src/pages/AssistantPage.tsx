@@ -214,15 +214,6 @@ function AssistantPage() {
             </p>
           </Card>
 
-          <Card title="Sources and references" icon={<BookOpen className="h-3.5 w-3.5" />} accent="cyan">
-            <EvidenceSourcePanel
-              status={explain.status}
-              result={explain.result}
-              error={explain.error}
-              selfCritiqueFlagged={explain.selfCritiqueFlagged}
-            />
-          </Card>
-
           <Card title="Recent questions" icon={<MessagesSquare className="h-3.5 w-3.5" />} accent="neutral" bodyClassName="px-2 pb-3">
             {recentConversations.length === 0 ? (
               <EmptyState message="No questions asked yet" />
@@ -241,6 +232,18 @@ function AssistantPage() {
           </Card>
         </div>
       </div>
+
+      {/* Full-width, not the right rail: a real explanation can run to
+          several hundred pixels, and a narrow xl:col-span-4 column made it
+          tower over the left column, leaving the left side empty on scroll. */}
+      <Card title="Sources and references" icon={<BookOpen className="h-3.5 w-3.5" />} accent="cyan">
+        <EvidenceSourcePanel
+          status={explain.status}
+          result={explain.result}
+          error={explain.error}
+          selfCritiqueFlagged={explain.selfCritiqueFlagged}
+        />
+      </Card>
     </div>
   )
 }

@@ -3,7 +3,7 @@ import type { IncidentSummary, MitreTechnique } from '../../api'
 import { tacticTechniqueMatrix } from '../../lib/aggregations'
 import { TACTIC_IDS, TACTIC_LABELS, TACTIC_ORDER, type Tactic } from '../../lib/tactics'
 import { heatColor, HEAT_LEGEND } from '../../lib/tokens'
-import { EmptyState, Tooltip } from '../ui'
+import { EmptyState, FloatingTooltip } from '../ui'
 
 /**
  * Tactic columns x observed techniques. Only techniques with at least one
@@ -71,14 +71,15 @@ export function HeatmapGrid({
             return (
               <div
                 key={tactic}
-                className={clsx('flex flex-1 flex-col gap-1', compact ? 'min-w-[56px]' : 'min-w-[76px]')}
+                className={clsx('flex flex-1 flex-col gap-1', compact ? 'min-w-[68px]' : 'min-w-[92px]')}
               >
                 <button
                   type="button"
                   onClick={() => onSelectTactic?.(tactic)}
                   disabled={!onSelectTactic}
                   className={clsx(
-                    'rounded-chip border px-1.5 py-1.5 text-left transition-colors duration-200',
+                    'flex flex-col justify-center rounded-chip border px-1.5 py-1.5 text-left transition-colors duration-200',
+                    compact ? 'min-h-[40px]' : 'min-h-[52px]',
                     selected
                       ? 'border-accent-blue/50 bg-accent-blue/15'
                       : observed
@@ -89,7 +90,7 @@ export function HeatmapGrid({
                 >
                   <span
                     className={clsx(
-                      'block leading-tight font-semibold',
+                      'line-clamp-2 leading-tight font-semibold',
                       compact ? 'text-[9px]' : 'text-micro',
                       observed ? 'text-text-dim' : 'text-text-faint',
                     )}
@@ -97,13 +98,13 @@ export function HeatmapGrid({
                     {compact ? shortLabel(tactic) : TACTIC_LABELS[tactic]}
                   </span>
                   {!compact && (
-                    <span className="mt-0.5 block font-mono text-[9px] text-text-faint tabular-nums">
+                    <span className="mt-0.5 block truncate font-mono text-[9px] leading-tight text-text-faint tabular-nums">
                       {TACTIC_IDS[tactic]}
                     </span>
                   )}
                   <span
                     className={clsx(
-                      'mt-0.5 block font-mono text-[9px] tabular-nums',
+                      'mt-0.5 block truncate font-mono text-[9px] leading-tight tabular-nums',
                       observed ? 'text-text-faint' : 'text-text-faint/60',
                     )}
                   >
@@ -124,8 +125,9 @@ export function HeatmapGrid({
                       )
                     }
                     return (
-                      <Tooltip
+                      <FloatingTooltip
                         key={cell.techniqueId}
+                        className="w-full"
                         label={`${cell.techniqueId} - ${cell.techniqueName}: ${cell.count} detection${cell.count === 1 ? '' : 's'}`}
                       >
                         <div
@@ -141,7 +143,7 @@ export function HeatmapGrid({
                             </span>
                           )}
                         </div>
-                      </Tooltip>
+                      </FloatingTooltip>
                     )
                   })}
                 </div>
