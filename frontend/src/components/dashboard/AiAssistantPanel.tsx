@@ -35,7 +35,6 @@ export function AiAssistantPanel({ incident }: { incident: IncidentSummary | nul
       title="AI security assistant"
       icon={<Sparkles className="h-3.5 w-3.5" />}
       accent="violet"
-      className="border-accent-violet/25 bg-gradient-to-b from-accent-violet/8 to-transparent"
       action={
         <Badge accent={online ? 'violet' : 'neutral'} dot>
           {online ? 'AI online' : 'API offline'}

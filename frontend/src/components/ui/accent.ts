@@ -72,6 +72,18 @@ export const ACCENT_GLOW: Record<Accent, string> = {
   neutral: '',
 }
 
+/** Card-scale version of ACCENT_GLOW: ambient lift + accent bloom combined
+ * into one shadow value, since a card can only carry one `box-shadow`. */
+export const ACCENT_CARD_SHADOW: Record<Accent, string> = {
+  blue: 'shadow-card-blue',
+  cyan: 'shadow-card-cyan',
+  violet: 'shadow-card-violet',
+  green: 'shadow-card-green',
+  amber: 'shadow-card-amber',
+  red: 'shadow-card-red',
+  neutral: 'shadow-card',
+}
+
 export const ACCENT_HEX: Record<Accent, string> = {
   blue: '#3b82f6',
   cyan: '#22d3ee',

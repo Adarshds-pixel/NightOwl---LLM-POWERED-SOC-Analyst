@@ -88,6 +88,17 @@
   --shadow-glow-red: 0 0 18px -6px var(--color-accent-red);
   --shadow-glow-neutral: none;
 
+  /* Card lift + a soft accent-tinted bloom in one shadow, for cards whose
+     `accent` prop marks them as belonging to a channel (KPIs, the AI panel,
+     live feeds). Wider/softer spread than --shadow-glow-* above, which is
+     sized for a small icon chip, not a whole card's perimeter. */
+  --shadow-card-blue: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-blue);
+  --shadow-card-cyan: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-cyan);
+  --shadow-card-violet: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-violet);
+  --shadow-card-green: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-green);
+  --shadow-card-amber: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-amber);
+  --shadow-card-red: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-red);
+
   --animate-pulse-dot: pulse-dot 2.4s ease-in-out infinite;
   --animate-sweep: sweep 2.6s linear infinite;
   --animate-rise: rise 0.22s ease-out;
@@ -132,9 +143,17 @@ body::before {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(900px 520px at 12% -6%, rgba(37, 99, 235, 0.18), transparent 62%),
-    radial-gradient(760px 520px at 92% 108%, rgba(139, 92, 246, 0.15), transparent 60%),
-    radial-gradient(620px 420px at 78% 8%, rgba(34, 211, 238, 0.07), transparent 65%);
+    /* Scattered point-lights, mirroring the reference mockup's faint
+       circuit/constellation texture -- small, soft, static. */
+    radial-gradient(2px 2px at 6% 88%, rgba(180, 210, 255, 0.5), transparent 70%),
+    radial-gradient(2px 2px at 11% 95%, rgba(140, 190, 255, 0.4), transparent 70%),
+    radial-gradient(1.5px 1.5px at 4% 78%, rgba(180, 210, 255, 0.35), transparent 70%),
+    radial-gradient(2px 2px at 16% 82%, rgba(150, 200, 255, 0.3), transparent 70%),
+    radial-gradient(1.5px 1.5px at 88% 14%, rgba(200, 170, 255, 0.4), transparent 70%),
+    radial-gradient(2px 2px at 94% 20%, rgba(160, 220, 255, 0.35), transparent 70%),
+    radial-gradient(900px 520px at 12% -6%, rgba(37, 99, 235, 0.21), transparent 62%),
+    radial-gradient(760px 520px at 92% 108%, rgba(139, 92, 246, 0.18), transparent 60%),
+    radial-gradient(620px 420px at 78% 8%, rgba(34, 211, 238, 0.10), transparent 65%);
 }
 
 body::after {

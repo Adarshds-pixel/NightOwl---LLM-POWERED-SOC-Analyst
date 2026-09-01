@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
-import { ACCENT_BG_SOFT, ACCENT_TEXT, type Accent } from './accent'
+import { ACCENT_BG_SOFT, ACCENT_BORDER, ACCENT_CARD_SHADOW, ACCENT_TEXT, type Accent } from './accent'
 
 /**
  * The surface every panel in NightOwl is built on: a translucent navy card
@@ -8,9 +8,11 @@ import { ACCENT_BG_SOFT, ACCENT_TEXT, type Accent } from './accent'
  * shadow (never a heavy drop shadow or a heavy blur -- the mockups read as
  * lit glass, not frosted plastic).
  *
- * `accent` tints the title and the optional icon chip only. The card body
- * itself stays neutral, so a page of eight cards does not turn into eight
- * competing colours.
+ * `accent` tints the title, the optional icon chip, and the card's own
+ * border/glow -- a KPI, an AI/RAG surface or a live feed reads as belonging
+ * to its channel, the way the mockups tint each card's outline. Defaults to
+ * `neutral` (today's plain hairline) so tables and bare content cards that
+ * never pass an accent stay plain glass, matching the mockups' own tables.
  */
 
 interface CardProps {
@@ -34,7 +36,7 @@ export function Card({
   title,
   subtitle,
   icon,
-  accent = 'blue',
+  accent = 'neutral',
   action,
   divided = false,
   flush = false,
@@ -45,7 +47,9 @@ export function Card({
   return (
     <section
       className={clsx(
-        'relative flex min-w-0 flex-col rounded-card border border-line bg-surface-1/70 shadow-card backdrop-blur-[2px]',
+        'relative flex min-w-0 flex-col rounded-card border bg-surface-1/70 bg-gradient-to-b from-white/[0.035] to-transparent backdrop-blur-[4px]',
+        ACCENT_BORDER[accent],
+        ACCENT_CARD_SHADOW[accent],
         className,
       )}
     >

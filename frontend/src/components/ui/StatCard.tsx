@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { usePreferences } from '../../context/preferences/usePreferences'
 import { useCountUp } from '../../hooks/useCountUp'
 import { formatCount } from '../../lib/format'
-import { type Accent } from './accent'
+import { ACCENT_BORDER, ACCENT_CARD_SHADOW, type Accent } from './accent'
 import { IconChip } from './Card'
 import { Sparkline } from './Sparkline'
 
@@ -36,6 +36,10 @@ interface StatCardProps {
   trend?: number[]
   /** Replaces the delta line, for metrics with no time dimension. */
   note?: string
+  /** Renders the (count-up animated) value. Defaults to formatCount, which
+   *  is integer-only -- pass this for a metric that isn't a plain count,
+   *  e.g. a percentage. */
+  format?: (value: number) => string
   onClick?: () => void
   className?: string
 }
@@ -48,6 +52,7 @@ export function StatCard({
   delta,
   trend,
   note,
+  format,
   onClick,
   className,
 }: StatCardProps) {
@@ -59,7 +64,9 @@ export function StatCard({
     <Wrapper
       {...(onClick ? { type: 'button' as const, onClick } : {})}
       className={clsx(
-        'group relative flex min-w-0 flex-col overflow-hidden rounded-card border border-line bg-surface-1/70 px-4 py-3.5 text-left shadow-card backdrop-blur-[2px] transition-colors duration-200',
+        'group relative flex min-w-0 flex-col overflow-hidden rounded-card border bg-surface-1/70 bg-gradient-to-b from-white/[0.035] to-transparent px-4 py-3.5 text-left backdrop-blur-[4px] transition-colors duration-200',
+        ACCENT_BORDER[accent],
+        ACCENT_CARD_SHADOW[accent],
         onClick && 'hover:border-line-strong',
         className,
       )}
@@ -72,7 +79,7 @@ export function StatCard({
           <p className="truncate text-micro font-semibold tracking-[0.14em] text-text-muted uppercase">{label}</p>
           <div className="mt-1 flex items-end justify-between gap-3">
             <span className="font-mono text-metric leading-none font-semibold tracking-tight text-text tabular-nums">
-              {formatCount(animated)}
+              {format ? format(animated) : formatCount(animated)}
             </span>
             {trend && trend.length > 1 && <Sparkline data={trend} accent={accent} className="mb-0.5 shrink-0" />}
           </div>
