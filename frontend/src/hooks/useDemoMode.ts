@@ -10,7 +10,7 @@ import {
 } from '../api'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { selectMostActionableIncident } from '../lib/aggregations'
-import { DEMO_CHAT_QUESTION, DEMO_FIXTURE_FILENAME, DEMO_FIXTURE_URL } from '../lib/constants'
+import { DEMO_CHAT_QUESTION, nextDemoFixture, type DemoFixture } from '../lib/constants'
 
 export type DemoStageId = 'ingest' | 'resolve' | 'explain' | 'chat'
 export type DemoRunStatus = 'idle' | 'running' | 'success' | 'error'
@@ -28,11 +28,11 @@ let logCounter = 0
 // it in a real File, so the actual upload below goes through the same
 // multipart POST /ingest path a human dragging in a file would use -- no
 // mocked ingest response.
-async function fetchDemoFixtureFile(): Promise<File> {
-  const res = await fetch(DEMO_FIXTURE_URL)
+async function fetchDemoFixtureFile(fixture: DemoFixture): Promise<File> {
+  const res = await fetch(fixture.url)
   if (!res.ok) throw new Error(`Failed to load demo fixture (${res.status})`)
   const blob = await res.blob()
-  return new File([blob], DEMO_FIXTURE_FILENAME, { type: 'application/octet-stream' })
+  return new File([blob], fixture.filename, { type: 'application/octet-stream' })
 }
 
 // Each stage below wraps one real awaited backend call -- unlike
@@ -49,6 +49,7 @@ export function useDemoMode() {
   const [chatResult, setChatResult] = useState<ChatMessageResponse | null>(null)
   const [primaryIncidentId, setPrimaryIncidentId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [activeFixture, setActiveFixture] = useState<DemoFixture | null>(null)
   const runningRef = useRef(false)
 
   const appendLog = useCallback((text: string, tone: DemoLogLine['tone'] = 'info') => {
@@ -66,10 +67,14 @@ export function useDemoMode() {
     setChatResult(null)
     setPrimaryIncidentId(null)
 
+    const fixture = nextDemoFixture()
+    setActiveFixture(fixture)
+
     try {
       setCurrentStage('ingest')
-      appendLog(`Fetching ${DEMO_FIXTURE_FILENAME}...`)
-      const file = await fetchDemoFixtureFile()
+      appendLog(`Scenario: ${fixture.label}`)
+      appendLog(`Fetching ${fixture.filename}...`)
+      const file = await fetchDemoFixtureFile(fixture)
       appendLog('Uploading to POST /ingest...')
       const ingest = await ingestEvtxFile(file)
       setIngestResult(ingest)
@@ -89,10 +94,11 @@ export function useDemoMode() {
         targetId = ingest.incident_ids[0]
         appendLog(`Resolved incident #${targetId} for the rest of this run.`, 'success')
       } else {
-        // Defensive fallback, not the expected path with the current
-        // fixture (which reliably trips 12/15 rules) -- kept in case a
-        // future fixture swap or a rule change ever yields zero matches,
-        // so explain/chat still have real data to run against.
+        // Defensive fallback, not the expected path with any pool fixture
+        // (each one is individually verified to trip its declared
+        // techniques -- see backend/scripts/build_demo_evtx_fixtures.py) --
+        // kept in case a future fixture swap or a rule change ever yields
+        // zero matches, so explain/chat still have real data to run against.
         appendLog('This fixture triggered no detection rule this run.')
         const fallback = selectMostActionableIncident(incidents)
         if (!fallback) {
@@ -137,6 +143,7 @@ export function useDemoMode() {
     setChatResult(null)
     setPrimaryIncidentId(null)
     setError(null)
+    setActiveFixture(null)
   }, [])
 
   return {
@@ -147,6 +154,7 @@ export function useDemoMode() {
     explainResult,
     chatResult,
     primaryIncidentId,
+    activeFixture,
     error,
     run,
     reset,

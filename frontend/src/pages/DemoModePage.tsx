@@ -41,7 +41,7 @@ function StageDot({
  * calls. Nothing here is a scripted animation.
  */
 function DemoModePage() {
-  const { status, currentStage, log, ingestResult, explainResult, chatResult, primaryIncidentId, run, reset } =
+  const { status, currentStage, log, ingestResult, explainResult, chatResult, primaryIncidentId, activeFixture, run, reset } =
     useDemoMode()
   const running = status === 'running'
 
@@ -56,7 +56,11 @@ function DemoModePage() {
 
       <ReplayControlCard />
 
-      <Card title="Pipeline run (one-shot)" subtitle="A single bundled fixture, ingested once" accent="cyan">
+      <Card
+        title="Pipeline run (one-shot)"
+        subtitle={activeFixture ? `Scenario: ${activeFixture.label}` : 'Rotates through 7 real attack scenarios each run'}
+        accent="cyan"
+      >
         <div className="flex flex-wrap items-center gap-6">
           <Button variant="primary" onClick={run} disabled={running} icon={<Play className="h-3.5 w-3.5" />}>
             {running ? 'Running...' : status === 'idle' ? 'Run demo' : 'Run again'}
