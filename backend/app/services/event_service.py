@@ -144,6 +144,82 @@ def count_events(
     return db.scalar(select(func.count()).select_from(subq)) or 0
 
 
+def _filtered_alerts_stmt(
+    host: str | None,
+    start_date: datetime | None,
+    end_date: datetime | None,
+    severity: str | None,
+    q: str | None,
+):
+    """Backs GET /alerts: one row per Alert (joined to its Event), never
+    collapsed. This is deliberately a separate statement from
+    `_filtered_events_stmt` rather than that query with a different filter --
+    `alert_only=True` there restricts *events* to ones with >=1 alert and
+    still returns one row per event (correct for a raw log timeline), while
+    this restricts and returns *alerts* directly, one row each (correct for
+    a page whose job is showing every detection). An event that trips two
+    rules produces two rows here and one there, on purpose.
+    """
+    stmt = select(Alert, Event).join(Event, Alert.event_id == Event.id)
+    if host is not None:
+        stmt = stmt.where(Event.host == host)
+    if severity is not None:
+        stmt = stmt.where(Alert.severity == severity)
+    if start_date is not None:
+        stmt = stmt.where(Event.timestamp >= start_date)
+    if end_date is not None:
+        stmt = stmt.where(Event.timestamp <= end_date)
+    if q:
+        pattern = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Event.process.ilike(pattern),
+                Event.command_line.ilike(pattern),
+                Event.user.ilike(pattern),
+                Event.host.ilike(pattern),
+            )
+        )
+    return stmt
+
+
+def list_alert_rows(
+    db: Session,
+    host: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    severity: str | None = None,
+    q: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[tuple[Alert, Event]]:
+    """Newest-first (Alert.matched_at desc) list of (Alert, Event) pairs for
+    `GET /alerts` -- the real "every rule match" feed. Ordered by
+    matched_at, not Event.timestamp, so it agrees with how an incident's own
+    evidence list (`get_incident_alerts_with_events`) is already ordered.
+    """
+    stmt = _filtered_alerts_stmt(host, start_date, end_date, severity, q).order_by(Alert.matched_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit).offset(offset)
+    return [(alert, event) for alert, event in db.execute(stmt)]
+
+
+def count_alert_rows(
+    db: Session,
+    host: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    severity: str | None = None,
+    q: str | None = None,
+) -> int:
+    """Total alerts matching the same filters as list_alert_rows, ignoring
+    limit/offset -- lets GET /alerts report a page-independent `total` that
+    always equals the sum of every incident's evidence-list length, since
+    both read from the same un-collapsed Alert rows.
+    """
+    subq = _filtered_alerts_stmt(host, start_date, end_date, severity, q).subquery()
+    return db.scalar(select(func.count()).select_from(subq)) or 0
+
+
 def get_alerts_for_event_ids(db: Session, event_ids: list[int]) -> dict[int, Alert]:
     """One query for a page of event ids -> {event_id: highest-severity
     Alert}, so `GET /events` can enrich each row with alert status without

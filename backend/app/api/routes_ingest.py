@@ -37,6 +37,16 @@ each match's alert into an incident (services/incident_service.py, same
 host + a 1-hour window reuses the most recent open incident) before the
 alert is persisted, so the alert's `incident_id` FK is set on creation
 rather than backfilled later.
+
+`matched_at` is intentionally NOT "now": it is derived from each record's own
+event timestamp (`ingest_records(matched_at=None)`), the same behavior the
+former live-replay path used. Using wall-clock upload time here used to mean
+uploading several distinct EVTX fixtures back-to-back in one testing session
+(same host, all within the ~1 hour grouping window) silently merged them into
+one incident, because "close together" was measured by when you clicked
+upload rather than by when the activity actually happened. Grouping now
+reflects the file's own history, so two unrelated captures only merge if the
+activity they recorded genuinely happened close together.
 """
 
 import logging
@@ -51,6 +61,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts
+from app.ingestion.normalizer import EventNormalizationError, normalize_event
 from app.services.ingest_service import ingest_records
 
 logger = logging.getLogger(__name__)
@@ -95,11 +106,28 @@ def ingest_evtx(file: UploadFile = File(...), db: Session = Depends(get_db)) -> 
         except EvtxReadError as e:
             raise HTTPException(status_code=400, detail=f"failed to parse EVTX file: {e}") from e
 
+        # `ingest_records(matched_at=None)` groups incidents by each record's
+        # own event time and requires ascending order (see its docstring).
+        # EVTX chunk order is usually close to chronological but is not
+        # guaranteed, so this sorts explicitly rather than trusting file
+        # order. A record that fails to normalize here sorts last -- it
+        # doesn't matter where it lands, since ingest_records' own
+        # normalization pass will skip it for real and count it.
+        _DISTANT_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
+
+        def _timestamp_sort_key(record: dict) -> datetime:
+            try:
+                return normalize_event(record).timestamp
+            except EventNormalizationError:
+                return _DISTANT_FUTURE
+
+        records.sort(key=_timestamp_sort_key)
+
         outcome = ingest_records(
             db,
             records,
             rules=get_loaded_rules(),
-            matched_at=datetime.now(timezone.utc),
+            matched_at=None,
         )
 
         logger.info(

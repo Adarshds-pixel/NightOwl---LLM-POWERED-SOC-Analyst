@@ -1,13 +1,10 @@
 """Shared normalize -> persist -> detect -> group -> persist-alerts pipeline.
 
-Extracted from `api/routes_ingest.py`'s inline body so the live-replay
-service (`services/replay_service.py`) runs the exact same code the
-`POST /ingest` upload has always run, rather than a second copy of it that
-could quietly drift out of sync. `routes_ingest.py` still does its own
-file-format checks and EVTX parsing (those stay route-specific -- a replay
-tick never has an uploaded file to validate); this module starts at "here
-are some raw Sysmon/Windows Event dicts" and ends at the same
-`IngestResponse`-shaped counts either caller returns.
+Extracted from `api/routes_ingest.py`'s inline body so the pipeline itself is
+testable independent of the HTTP/EVTX-parsing concerns `routes_ingest.py`
+still owns (file-format checks, multipart handling); this module starts at
+"here are some raw Sysmon/Windows Event dicts" and ends at the
+`IngestResponse`-shaped counts the route returns.
 
 `rules` is a parameter rather than a `get_loaded_rules()` call inside this
 function, on purpose: several existing tests
@@ -55,24 +52,28 @@ def ingest_records(
     """Normalizes `records`, persists them as events, evaluates each against
     `rules`, and groups/persists any matches as alerts.
 
-    `matched_at`: an explicit datetime reproduces `POST /ingest`'s original,
-    upload-time-stamped behavior -- every match in the batch shares one
-    `Alert.matched_at`/`Incident.created_at`, byte-for-byte what every
-    existing ingest test already asserts. `None` (the live-replay path)
-    takes each match's own timestamp from its event instead, so an
-    incident's `created_at` reflects when the activity actually happened,
-    not when the batch was posted -- which is what lets replayed telemetry
-    form incidents at realistic times instead of one giant incident stamped
-    "now".
+    `matched_at=None` (the default, and what `POST /ingest` always passes)
+    takes each match's own timestamp from its event, so an incident's
+    `created_at` reflects when the activity actually happened rather than
+    when it was uploaded -- this is what makes `find_or_create_incident`'s
+    same-host-within-an-hour grouping mean something real: two unrelated
+    EVTX files uploaded back-to-back only merge into one incident if the
+    activity they recorded genuinely happened close together, not merely
+    because they were uploaded close together.
+
+    An explicit `matched_at` stamps every match in the batch with one shared
+    timestamp instead -- useful for tests that want a deterministic
+    `Alert.matched_at`/`Incident.created_at` without needing to reason about
+    a fixture's real event times.
 
     When `matched_at` is `None`, `records` MUST already be in ascending
     event-timestamp order: `find_or_create_incident`'s grouping window is
     anchored on `Incident.created_at`, so an out-of-order earlier match
     could attach to a *later* incident than the one it actually belongs to.
     This is checked and raises `ValueError` rather than silently
-    mis-grouping -- the replay driver is the only caller that hits this
-    path, and it always emits chronologically, so tripping it means a real
-    bug in the caller, not a data quirk to route around.
+    mis-grouping -- `routes_ingest.py` sorts records by timestamp before
+    calling this, so tripping it means a real bug in that sort, not a data
+    quirk to route around.
     """
     records_read = 0
     skipped = 0

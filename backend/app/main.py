@@ -8,13 +8,15 @@ consistent unhandled-error handler. Day 14 adds CORS so the new Vite
 frontend (`frontend/`) can call this API from the browser. `api/routes_events.py`
 adds the raw event-timeline endpoint behind the new Logs page, and
 `api/routes_rules.py` exposes the loaded detection rule set (read-only)
-behind the Rules Engine page. `api/routes_demo.py` adds the live-replay
-demo endpoints (behind require_demo_mode in addition to the usual API key).
+behind the Rules Engine page. `api/routes_alerts.py` adds the real
+one-row-per-alert feed behind the Alerts page. `api/routes_demo.py` adds
+POST /demo/reset (behind require_demo_mode in addition to the usual API key).
 """
 
 from fastapi import Depends, FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from app.api.routes_alerts import router as alerts_router
 from app.api.routes_chat import router as chat_router
 from app.api.routes_demo import require_demo_mode
 from app.api.routes_demo import router as demo_router
@@ -49,6 +51,7 @@ app.include_router(mitre_router, dependencies=[Depends(require_api_key)])
 app.include_router(incidents_router, dependencies=[Depends(require_api_key)])
 app.include_router(chat_router, dependencies=[Depends(require_api_key)])
 app.include_router(events_router, dependencies=[Depends(require_api_key)])
+app.include_router(alerts_router, dependencies=[Depends(require_api_key)])
 app.include_router(rules_router, dependencies=[Depends(require_api_key)])
 app.include_router(demo_router, dependencies=[Depends(require_api_key), Depends(require_demo_mode)])
 
