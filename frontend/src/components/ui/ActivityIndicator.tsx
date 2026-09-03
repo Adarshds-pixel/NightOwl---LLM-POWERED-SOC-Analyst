@@ -37,7 +37,7 @@ export function TypingDots({ className }: { className?: string }) {
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="h-1.5 w-1.5 rounded-full bg-accent-violet animate-pulse-dot"
+          className="h-1.5 w-1.5 rounded-full bg-accent-violet animate-ai-pulse"
           style={{ animationDelay: `${i * 160}ms` }}
         />
       ))}

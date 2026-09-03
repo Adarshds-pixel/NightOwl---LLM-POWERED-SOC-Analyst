@@ -35,6 +35,9 @@ export function AiAssistantPanel({ incident }: { incident: IncidentSummary | nul
       title="AI security assistant"
       icon={<Sparkles className="h-3.5 w-3.5" />}
       accent="violet"
+      // The dashboard's one dominant AI surface -- deeper elevation and a
+      // floor reflection, same treatment as the login's hero card.
+      hero
       action={
         <Badge accent={online ? 'violet' : 'neutral'} dot>
           {online ? 'AI online' : 'API offline'}
@@ -78,7 +81,7 @@ export function AiAssistantPanel({ incident }: { incident: IncidentSummary | nul
                 </p>
               )
             })}
-            <p className="mt-1 border-t border-line-soft pt-1.5 text-accent-cyan">
+            <p className="mt-1 border-t border-line-soft pt-1.5 text-accent-magenta">
               {explain.status === 'success'
                 ? 'AI status: analysis ready'
                 : explain.status === 'loading'

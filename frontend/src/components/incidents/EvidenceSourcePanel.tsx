@@ -55,7 +55,7 @@ export function EvidenceSourcePanel({
       <Markdown content={result.explanation} />
 
       {result.recommended_response && (
-        <Card title="Recommended response" accent="green" className="bg-surface-2/40">
+        <Card title="Recommended response" accent="violet" className="bg-surface-2/40">
           <Markdown content={result.recommended_response} />
         </Card>
       )}
@@ -69,11 +69,11 @@ export function EvidenceSourcePanel({
             <li key={source.chunk_id} className="rounded-control border border-line bg-surface-2/40 px-3 py-2">
               <div className="flex items-start justify-between gap-3">
                 <p className="line-clamp-2 text-meta text-text-muted">{source.document}</p>
-                <span className="shrink-0 font-mono text-micro text-accent-cyan tabular-nums">
+                <span className="shrink-0 font-mono text-micro text-accent-magenta tabular-nums">
                   {formatPercent(source.score * 100, 1)}
                 </span>
               </div>
-              <MeterBar className="mt-1.5" value={source.score * 100} color={ACCENT.cyan} />
+              <MeterBar className="mt-1.5" value={source.score * 100} color={ACCENT.magenta} />
             </li>
           ))}
         </ul>

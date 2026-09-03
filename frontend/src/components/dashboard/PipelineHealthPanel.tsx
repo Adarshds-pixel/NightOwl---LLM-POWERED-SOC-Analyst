@@ -32,7 +32,7 @@ export function PipelineHealthPanel({ alerts, eventTotal, alertTotal }: { alerts
   const trendData = activity.map((point) => ({ label: point.label, alerts: point.count }))
 
   return (
-    <Card title="Pipeline health" icon={<Cpu className="h-3.5 w-3.5" />} accent="green">
+    <Card title="Pipeline health" icon={<Cpu className="h-3.5 w-3.5" />} accent="primary">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <RingGauge
           value={online ? latencyScore : 0}
@@ -45,7 +45,7 @@ export function PipelineHealthPanel({ alerts, eventTotal, alertTotal }: { alerts
           value={rules.length > 0 ? 100 : 0}
           label="Rules"
           sublabel={`${rules.length} loaded`}
-          accent="blue"
+          accent="primary"
           unit=""
         />
         <RingGauge
@@ -59,7 +59,7 @@ export function PipelineHealthPanel({ alerts, eventTotal, alertTotal }: { alerts
           value={eventTotal > 0 ? 100 : 0}
           label="Ingest"
           sublabel={`${eventTotal.toLocaleString()} events`}
-          accent="cyan"
+          accent="magenta"
           unit=""
         />
       </div>

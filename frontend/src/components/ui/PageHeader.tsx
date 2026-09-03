@@ -37,7 +37,7 @@ export function PageHeader({
               <span key={crumb.label} className="flex items-center gap-1">
                 {i > 0 && <ChevronRight className="h-3 w-3 text-text-faint" />}
                 {crumb.to ? (
-                  <Link to={crumb.to} className="transition-colors hover:text-accent-blue">
+                  <Link to={crumb.to} className="transition-colors hover:text-accent-primary">
                     {crumb.label}
                   </Link>
                 ) : (

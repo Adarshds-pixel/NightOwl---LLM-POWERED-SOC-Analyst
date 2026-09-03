@@ -110,7 +110,7 @@ function IncidentDetailPage() {
     <div className="flex flex-col gap-4 p-5">
       <PageHeader
         title={incident.title}
-        icon={<ShieldAlert className="h-5 w-5 text-accent-blue" />}
+        icon={<ShieldAlert className="h-5 w-5 text-accent-primary" />}
         breadcrumbs={[
           { label: 'Overview', to: '/' },
           { label: 'Incidents', to: '/incidents' },
@@ -162,7 +162,7 @@ function IncidentDetailPage() {
 
       {tab === 'overview' && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <Card title="MITRE techniques" icon={<Crosshair className="h-3.5 w-3.5" />} accent="cyan" className="xl:col-span-2">
+          <Card title="MITRE techniques" icon={<Crosshair className="h-3.5 w-3.5" />} accent="magenta" className="xl:col-span-2">
             {incident.techniques.length === 0 ? (
               <p className="text-meta text-text-muted">No techniques resolved for this incident.</p>
             ) : (
@@ -170,7 +170,7 @@ function IncidentDetailPage() {
                 {incident.techniques.map((technique) => (
                   <li key={technique.id} className="rounded-control border border-line bg-surface-2/40 px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-meta text-accent-cyan">{technique.id}</span>
+                      <span className="font-mono text-meta text-accent-magenta">{technique.id}</span>
                       <span className="text-body text-text-dim">{technique.name}</span>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1.5">
@@ -186,7 +186,7 @@ function IncidentDetailPage() {
             )}
           </Card>
 
-          <Card title="Affected asset" icon={<Server className="h-3.5 w-3.5" />} accent="green">
+          <Card title="Affected asset" icon={<Server className="h-3.5 w-3.5" />} accent="primary">
             <dl className="flex flex-col gap-3">
               <KeyValue label="Host" value={incident.host} mono />
               <KeyValue

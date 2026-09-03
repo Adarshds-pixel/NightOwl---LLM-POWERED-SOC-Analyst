@@ -9,7 +9,15 @@ import clsx from 'clsx'
  * so the artwork's own glow melts into the sidebar surface instead of
  * showing a rectangle. Both are decorative next to real text, so they carry
  * empty alt text and the label lives in the markup beside them.
+ *
+ * BRAND_HUE_SHIFT rotates the source artwork's cyan/blue palette into the
+ * violet/magenta brand range. The PNGs are raster and predate the violet
+ * redesign, so a filter is the only way to keep one asset on-palette
+ * everywhere it appears; the silver highlights are near-desaturated and
+ * survive the rotation untouched. Replace the artwork and this goes away.
  */
+
+const BRAND_HUE_SHIFT = 'hue-rotate(40deg) saturate(1.05)'
 
 export function NightOwlMark({ size = 38, className }: { size?: number; className?: string }) {
   return (
@@ -19,7 +27,7 @@ export function NightOwlMark({ size = 38, className }: { size?: number; classNam
       width={size}
       height={size}
       className={clsx('shrink-0 select-none', className)}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size, filter: BRAND_HUE_SHIFT }}
       draggable={false}
     />
   )
@@ -33,7 +41,7 @@ export function AnalystAvatar({ size = 34, className }: { size?: number; classNa
       width={size}
       height={size}
       className={clsx('shrink-0 select-none rounded-full', className)}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size, filter: BRAND_HUE_SHIFT }}
       draggable={false}
     />
   )

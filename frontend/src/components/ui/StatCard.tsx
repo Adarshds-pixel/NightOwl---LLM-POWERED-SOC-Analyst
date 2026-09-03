@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { usePreferences } from '../../context/preferences/usePreferences'
 import { useCountUp } from '../../hooks/useCountUp'
 import { formatCount } from '../../lib/format'
-import { ACCENT_BORDER, ACCENT_CARD_SHADOW, type Accent } from './accent'
+import { ACCENT_BORDER, ACCENT_CARD_SHADOW, ACCENT_GRADIENT, type Accent } from './accent'
 import { IconChip } from './Card'
 import { Sparkline } from './Sparkline'
 
@@ -40,6 +40,10 @@ interface StatCardProps {
    *  is integer-only -- pass this for a metric that isn't a plain count,
    *  e.g. a percentage. */
   format?: (value: number) => string
+  /** Keeps the ambient glow breathing continuously rather than only on
+   *  hover -- reserve for a KPI that is itself a live security state (e.g.
+   *  "Critical incidents" while the count is above zero), never decoration. */
+  pulse?: boolean
   onClick?: () => void
   className?: string
 }
@@ -48,11 +52,12 @@ export function StatCard({
   label,
   value,
   icon,
-  accent = 'blue',
+  accent = 'primary',
   delta,
   trend,
   note,
   format,
+  pulse = false,
   onClick,
   className,
 }: StatCardProps) {
@@ -64,14 +69,31 @@ export function StatCard({
     <Wrapper
       {...(onClick ? { type: 'button' as const, onClick } : {})}
       className={clsx(
-        'group relative flex min-w-0 flex-col overflow-hidden rounded-card border bg-surface-1/70 bg-gradient-to-b from-white/[0.035] to-transparent px-4 py-3.5 text-left backdrop-blur-[4px] transition-colors duration-200',
+        'group relative flex min-w-0 flex-col overflow-hidden rounded-card border bg-surface-1/70 bg-gradient-to-b to-transparent px-4 py-3.5 text-left',
+        'backdrop-blur-[var(--blur-glass)] backdrop-saturate-[1.2] transition-all duration-200',
+        ACCENT_GRADIENT[accent],
         ACCENT_BORDER[accent],
         ACCENT_CARD_SHADOW[accent],
-        onClick && 'hover:border-line-strong',
+        // Every KPI brightens a little on hover; only a clickable one lifts.
+        'hover:border-border-active',
+        onClick && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-card-hover',
+        pulse && 'border-accent-red/35',
         className,
       )}
     >
-      <span aria-hidden className={clsx('pointer-events-none absolute -top-16 -left-10 h-32 w-40 rounded-full opacity-60 blur-2xl', glowClass(accent))} />
+      {/* Specular highlight, matching Card. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.055),transparent_40%)]"
+      />
+      <span
+        aria-hidden
+        className={clsx(
+          'pointer-events-none absolute -top-16 -left-10 h-32 w-40 rounded-full blur-2xl transition-opacity duration-200',
+          pulse ? 'opacity-80 animate-glow-pulse' : 'opacity-60 group-hover:opacity-90',
+          glowClass(accent),
+        )}
+      />
 
       <div className="relative flex items-start gap-3">
         <IconChip icon={icon} accent={accent} />
@@ -119,16 +141,18 @@ function DeltaLine({ delta }: { delta: StatDelta }) {
 
 function glowClass(accent: Accent): string {
   switch (accent) {
-    case 'blue':
-      return 'bg-accent-blue/20'
-    case 'cyan':
-      return 'bg-accent-cyan/20'
+    case 'primary':
+      return 'bg-accent-primary/20'
+    case 'magenta':
+      return 'bg-accent-magenta/20'
     case 'violet':
       return 'bg-accent-violet/20'
     case 'green':
       return 'bg-accent-green/20'
     case 'amber':
       return 'bg-accent-amber/20'
+    case 'orange':
+      return 'bg-accent-orange/20'
     case 'red':
       return 'bg-accent-red/20'
     default:

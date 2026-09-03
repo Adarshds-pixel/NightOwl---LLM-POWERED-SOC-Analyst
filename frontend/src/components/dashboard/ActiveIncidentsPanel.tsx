@@ -21,7 +21,7 @@ export function ActiveIncidentsPanel({ incidents }: { incidents: IncidentSummary
     <Card
       title="Active incidents"
       icon={<ShieldAlert className="h-3.5 w-3.5" />}
-      accent="blue"
+      accent="primary"
       action={<ViewAllLink to="/incidents" />}
       bodyClassName="px-2 pb-3"
     >

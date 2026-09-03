@@ -10,19 +10,34 @@ import { Button } from './Button'
  * empty and loaded.
  */
 
+/**
+ * Loading. The spinner sits inside its own soft violet bloom so a waiting
+ * panel still looks like part of the environment rather than a blank hole.
+ * Callers pass a contextual label ("Retrieving telemetry", "Mapping
+ * techniques") rather than a bare "Loading".
+ */
 export function LoadingState({ label = 'Loading', className }: { label?: string; className?: string }) {
   return (
     <div
-      className={clsx('flex items-center justify-center gap-2 px-4 py-10 text-meta text-text-muted', className)}
+      className={clsx('flex flex-col items-center justify-center gap-2.5 px-4 py-10', className)}
       role="status"
       aria-live="polite"
     >
-      <Loader2 className="h-4 w-4 animate-spin text-accent-blue" />
-      {label}...
+      <span className="relative flex h-9 w-9 items-center justify-center">
+        <span aria-hidden className="absolute inset-0 rounded-full bg-accent-primary/20 blur-lg animate-glow-pulse" />
+        <Loader2 className="relative h-5 w-5 animate-spin text-accent-violet" />
+      </span>
+      <span className="text-meta text-text-muted">{label}...</span>
     </div>
   )
 }
 
+/**
+ * Empty state. Deliberately not a grey "No data": an empty SOC panel is
+ * usually *good news*, so this is presented as a calm, lit statement with a
+ * haloed icon and room for a reassuring hint ("Your environment is
+ * currently clear") plus an optional next action.
+ */
 export function EmptyState({
   message,
   hint,
@@ -37,13 +52,19 @@ export function EmptyState({
   className?: string
 }) {
   return (
-    <div className={clsx('flex flex-col items-center justify-center gap-2 px-4 py-10 text-center', className)}>
-      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-text-faint">
+    <div className={clsx('relative flex flex-col items-center justify-center gap-2.5 px-4 py-12 text-center', className)}>
+      {/* Ambient pool of light behind the icon -- the same lighting language
+          as the rest of the app, at very low intensity. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-6 left-1/2 h-28 w-28 -translate-x-1/2 rounded-full bg-accent-primary/10 blur-2xl"
+      />
+      <span className="relative flex h-12 w-12 items-center justify-center rounded-full border border-line bg-surface-2/60 text-accent-violet/80 shadow-e2 backdrop-blur-md">
         {icon ?? <Inbox className="h-5 w-5" />}
       </span>
-      <p className="text-body text-text-dim">{message}</p>
-      {hint && <p className="max-w-sm text-meta text-text-faint">{hint}</p>}
-      {action}
+      <p className="relative text-body font-medium text-text-dim">{message}</p>
+      {hint && <p className="relative max-w-sm text-meta leading-relaxed text-text-faint">{hint}</p>}
+      {action && <div className="relative mt-1">{action}</div>}
     </div>
   )
 }
@@ -146,8 +167,8 @@ function ThrottledState({
  *  so the layout does not shift when data lands. */
 export function Skeleton({ className }: { className?: string }) {
   return (
-    <div className={clsx('relative overflow-hidden rounded-md bg-white/4', className)}>
-      <span className="absolute inset-0 -translate-x-full animate-sweep bg-gradient-to-r from-transparent via-white/6 to-transparent" />
+    <div className={clsx('relative overflow-hidden rounded-md bg-accent-primary/8', className)}>
+      <span className="absolute inset-0 -translate-x-full animate-sweep bg-gradient-to-r from-transparent via-accent-primary/20 to-transparent" />
     </div>
   )
 }

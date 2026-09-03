@@ -5,6 +5,7 @@ import { ChatHistory } from '../components/chat/ChatHistory'
 import { CommandInput } from '../components/chat/CommandInput'
 import { EvidenceSourcePanel } from '../components/incidents/EvidenceSourcePanel'
 import {
+  AIThinking,
   Badge,
   Button,
   Card,
@@ -20,7 +21,7 @@ import {
 } from '../components/ui'
 import { useHealth } from '../context/health/useHealth'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
-import { useExplain } from '../hooks/useExplain'
+import { EXPLAIN_STAGES, useExplain } from '../hooks/useExplain'
 import { useIncidentChat } from '../hooks/useIncidentChat'
 import { selectMostActionableIncident } from '../lib/aggregations'
 import { formatDuration, formatRelativeTime, incidentRef } from '../lib/format'
@@ -119,6 +120,9 @@ function AssistantPage() {
             title="Conversation"
             icon={<MessagesSquare className="h-3.5 w-3.5" />}
             accent="violet"
+            // The dominant surface on NightOwl's AI page -- the login
+            // reference's hero-card treatment, brought to the console.
+            hero
             action={
               <Select
                 value={String(incident.id)}
@@ -148,7 +152,7 @@ function AssistantPage() {
             </div>
           </Card>
 
-          <Card title="Suggested questions" icon={<Sparkles className="h-3.5 w-3.5" />} accent="blue">
+          <Card title="Suggested questions" icon={<Sparkles className="h-3.5 w-3.5" />} accent="primary">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {SUGGESTED_QUESTIONS.map((question) => (
                 <button
@@ -170,7 +174,7 @@ function AssistantPage() {
           <Card
             title="Context"
             icon={<Target className="h-3.5 w-3.5" />}
-            accent="blue"
+            accent="primary"
             action={
               <Button size="sm" variant="ghost" onClick={() => navigate(`/incidents/${incident.id}`)}>
                 View incident
@@ -202,12 +206,19 @@ function AssistantPage() {
               </Button>
             }
           >
-            <div className="grid grid-cols-2 gap-2">
-              <InsightTile icon={<Target className="h-4 w-4" />} value={incident.mitre_technique_ids[0] ?? '--'} label="Primary technique" />
-              <InsightTile icon={<Gauge className="h-4 w-4" />} value={incident.severity.toUpperCase()} label="Engine severity" />
-              <InsightTile icon={<BookOpen className="h-4 w-4" />} value={String(explain.result?.sources.length ?? 0)} label="Sources retrieved" />
-              <InsightTile icon={<Clock className="h-4 w-4" />} value={formatDuration(incident.created_at)} label="Time open" />
-            </div>
+            {explain.status === 'loading' ? (
+              // Real sub-steps of the one POST /explain request in flight,
+              // same EXPLAIN_STAGES the dashboard's AI panel narrates --
+              // documented there as cosmetic timing over a single real call.
+              <AIThinking stages={EXPLAIN_STAGES} activeIndex={explain.stageIndex} className="py-1" />
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <InsightTile icon={<Target className="h-4 w-4" />} value={incident.mitre_technique_ids[0] ?? '--'} label="Primary technique" />
+                <InsightTile icon={<Gauge className="h-4 w-4" />} value={incident.severity.toUpperCase()} label="Engine severity" />
+                <InsightTile icon={<BookOpen className="h-4 w-4" />} value={String(explain.result?.sources.length ?? 0)} label="Sources retrieved" />
+                <InsightTile icon={<Clock className="h-4 w-4" />} value={formatDuration(incident.created_at)} label="Time open" />
+              </div>
+            )}
             <p className="mt-2 text-micro text-text-faint">
               Severity is assigned by the detection engine, not by the model; the assistant never invents a confidence
               score.
@@ -236,7 +247,7 @@ function AssistantPage() {
       {/* Full-width, not the right rail: a real explanation can run to
           several hundred pixels, and a narrow xl:col-span-4 column made it
           tower over the left column, leaving the left side empty on scroll. */}
-      <Card title="Sources and references" icon={<BookOpen className="h-3.5 w-3.5" />} accent="cyan">
+      <Card title="Sources and references" icon={<BookOpen className="h-3.5 w-3.5" />} accent="magenta">
         <EvidenceSourcePanel
           status={explain.status}
           result={explain.result}

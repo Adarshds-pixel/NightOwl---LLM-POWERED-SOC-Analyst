@@ -28,7 +28,7 @@ import { useEventTotals } from '../hooks/useEventTotals'
 import { activityByHour, eventMessage, eventTypeLabel, levelCounts, levelFor, timeSpan } from '../lib/events'
 import { formatDateTime } from '../lib/format'
 import { topBy } from '../lib/aggregations'
-import { ACCENT } from '../lib/tokens'
+import { ACCENT, SEVERITY_HEX } from '../lib/tokens'
 import { SYSMON_EVENT_TYPE_LABELS } from '../lib/constants'
 
 /**
@@ -66,9 +66,11 @@ function LogsPage() {
 
   const levelSlices = [
     { name: 'Critical', value: counts.critical, color: ACCENT.red },
-    { name: 'Error', value: counts.error, color: '#f97316' },
+    { name: 'Error', value: counts.error, color: SEVERITY_HEX.high },
     { name: 'Warning', value: counts.warn, color: ACCENT.amber },
-    { name: 'Info', value: counts.info, color: ACCENT.cyan },
+    // Violet, not magenta: "Info" is the calm end of the level ramp and is
+    // usually ~100% of a page, so a hot accent would dominate the donut.
+    { name: 'Info', value: counts.info, color: ACCENT.primary },
   ].filter((slice) => slice.value > 0)
 
   const columns: Column<EventLogRow>[] = [
@@ -125,7 +127,7 @@ function LogsPage() {
     <div className="flex flex-col gap-4 p-5">
       <PageHeader
         title="Logs"
-        icon={<ScrollText className="h-5 w-5 text-accent-cyan" />}
+        icon={<ScrollText className="h-5 w-5 text-accent-magenta" />}
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'Logs' }]}
         actions={<LogUploadControl onSuccess={refresh} />}
       />
@@ -135,7 +137,7 @@ function LogsPage() {
           label="Events ingested"
           value={eventTotal}
           icon={<Database className="h-4 w-4" />}
-          accent="cyan"
+          accent="magenta"
           note="Every record in the store"
         />
         <StatCard
@@ -154,7 +156,7 @@ function LogsPage() {
           label="Clean events"
           value={eventTotal - alertTotal}
           icon={<FileText className="h-4 w-4" />}
-          accent="green"
+          accent="primary"
           note="Matched no detection rule"
         />
         <StatCard
@@ -253,7 +255,7 @@ function LogsPage() {
         </div>
 
         <div className="flex flex-col gap-4 xl:col-span-4">
-          <Card title="Level breakdown" subtitle="Current page" accent="cyan">
+          <Card title="Level breakdown" subtitle="Current page" accent="magenta">
             {levelSlices.length > 0 ? (
               <Donut slices={levelSlices} height={168} totalLabel="On page" />
             ) : (
@@ -261,7 +263,7 @@ function LogsPage() {
             )}
           </Card>
 
-          <Card title="Top hosts" subtitle="Current page" accent="blue">
+          <Card title="Top hosts" subtitle="Current page" accent="primary">
             <ul className="flex flex-col gap-2">
               {hosts.map((host) => (
                 <li key={host.label} className="flex items-center justify-between gap-3 text-meta">
@@ -277,7 +279,7 @@ function LogsPage() {
             <TrendChart data={activity} series={[{ key: 'events', label: 'Events', color: ACCENT.violet }]} height={140} area />
           </Card>
 
-          <Card title="Ingest summary" accent="green">
+          <Card title="Ingest summary" accent="primary">
             <div className="grid grid-cols-2 gap-2">
               <MiniStat label="Events stored" value={eventTotal.toLocaleString()} />
               <MiniStat label="Alerting" value={alertTotal.toLocaleString()} />

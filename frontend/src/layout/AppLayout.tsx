@@ -2,7 +2,7 @@ import clsx from 'clsx'
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { CommandPalette } from '../components/search/CommandPalette'
-import { LoadingState, ToastViewport } from '../components/ui'
+import { AmbientBackground, CursorGlow, LoadingState, PageTransition, ToastViewport } from '../components/ui'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 
@@ -55,6 +55,12 @@ export function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-transparent text-text">
+      {/* Environment layers, mounted once for the whole console. Both are
+          fixed, non-interactive and sit behind #root's content; the seed
+          shifts the lighting slightly from page to page. */}
+      <AmbientBackground seed={pathname} />
+      <CursorGlow />
+
       <div className="hidden lg:flex">
         <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       </div>
@@ -72,7 +78,10 @@ export function AppLayout() {
         <Topbar onOpenSearch={() => setSearchOpen(true)} onOpenSidebar={() => setMobileOpen(true)} />
         <main className={clsx('min-h-0 flex-1 overflow-y-auto')}>
           <Suspense fallback={<LoadingState label="Loading view" className="py-20" />}>
-            <Outlet />
+            {/* Keyed on pathname so each route replays the entrance. */}
+            <PageTransition routeKey={pathname}>
+              <Outlet />
+            </PageTransition>
           </Suspense>
         </main>
       </div>

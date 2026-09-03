@@ -51,7 +51,7 @@ export function Markdown({ content, className }: { content: string; className?: 
             <ul key={index} className="flex flex-col gap-1.5">
               {block.lines.map((line, i) => (
                 <li key={i} className="flex gap-2.5">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-cyan" />
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-magenta" />
                   <span className="min-w-0">{inline(line)}</span>
                 </li>
               ))}
@@ -142,7 +142,7 @@ function inline(text: string): ReactNode[] {
       }
       if (part.startsWith('`') && part.endsWith('`')) {
         return (
-          <code key={index} className="rounded bg-white/6 px-1 py-0.5 font-mono text-micro text-accent-cyan">
+          <code key={index} className="rounded bg-white/6 px-1 py-0.5 font-mono text-micro text-accent-magenta">
             {part.slice(1, -1)}
           </code>
         )

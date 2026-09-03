@@ -10,77 +10,83 @@
  */
 
 export const SURFACE = {
-  bg: '#060a14',
-  bgDeep: '#04070f',
-  surface: '#0b1220',
-  surface1: '#0d1526',
-  surface2: '#111b30',
-  surface3: '#16223c',
-  elevated: '#131d33',
+  bg: '#05030a',
+  bgDeep: '#030108',
+  surface: '#0b0715',
+  surface1: '#0f091c',
+  surface2: '#170e2d',
+  surface3: '#23123a',
+  elevated: '#1a0f2e',
 } as const
 
 export const LINE = {
-  soft: 'rgba(120, 160, 255, 0.07)',
-  base: 'rgba(120, 160, 255, 0.10)',
-  strong: 'rgba(125, 180, 255, 0.22)',
+  soft: 'rgba(139, 92, 246, 0.10)',
+  base: 'rgba(139, 92, 246, 0.18)',
+  strong: 'rgba(168, 85, 247, 0.38)',
 } as const
 
 export const TEXT = {
-  base: '#e8eefc',
-  dim: '#9fb0d0',
-  muted: '#6b7fa4',
-  faint: '#55658a',
+  base: '#f5f3ff',
+  dim: '#c4b5fd',
+  muted: '#8b849d',
+  faint: '#6b647d',
 } as const
 
 export const ACCENT = {
-  blue: '#3b82f6',
-  cyan: '#22d3ee',
-  violet: '#8b5cf6',
-  purple: '#a855f7',
+  primary: '#8b5cf6',
+  magenta: '#ec4899',
+  violet: '#a855f7',
+  pink: '#f472b6',
   green: '#22c55e',
   amber: '#f59e0b',
+  orange: '#f97316',
   red: '#ef4444',
-  neutral: '#64748b',
+  neutral: '#8b849d',
 } as const
 
+/** Severity ramp. Low is lavender, not green: green would read as "healthy"
+ *  and collide with the violet UI chrome. Warm hues stay reserved for the
+ *  genuinely urgent end of the scale. */
 export const SEVERITY_HEX = {
-  informational: '#7c8db3',
-  low: '#22c55e',
-  medium: '#eab308',
+  informational: '#8b849d',
+  low: '#a78bfa',
+  medium: '#f59e0b',
   high: '#f97316',
   critical: '#ef4444',
 } as const
 
-/** Categorical series colour ramp -- distinct hues at similar luminance so
- *  no slice reads as "more important" than another (see the project's
- *  dataviz palette guidance). Ordered for maximum adjacent contrast. */
+/** Categorical series colour ramp -- MITRE tactics are genuinely distinct
+ *  categories, so multiple hues are warranted here, but they stay inside the
+ *  violet/magenta brand family (with two warm outliers for separation) so a
+ *  donut never turns into a rainbow. Ordered for maximum adjacent contrast. */
 export const CATEGORICAL = [
-  '#3b82f6',
   '#8b5cf6',
-  '#22d3ee',
-  '#f59e0b',
-  '#22c55e',
   '#ec4899',
-  '#14b8a6',
+  '#a855f7',
+  '#f472b6',
+  '#7c3aed',
+  '#f59e0b',
+  '#c084fc',
   '#f97316',
 ] as const
 
-export const CATEGORICAL_OTHER = '#475569'
+export const CATEGORICAL_OTHER = '#4b4459'
 
 /** Shared recharts chrome: axes, grid, tooltip surface. */
 export const CHART = {
   axis: TEXT.muted,
-  axisLine: 'rgba(120, 160, 255, 0.12)',
-  grid: 'rgba(120, 160, 255, 0.08)',
-  tooltipBg: 'rgba(11, 18, 32, 0.96)',
+  axisLine: 'rgba(139, 92, 246, 0.20)',
+  grid: 'rgba(139, 92, 246, 0.12)',
+  tooltipBg: 'rgba(15, 9, 28, 0.96)',
   tooltipBorder: LINE.strong,
-  cursor: 'rgba(59, 130, 246, 0.10)',
+  cursor: 'rgba(139, 92, 246, 0.14)',
 } as const
 
-/** Heatmap ramp, cold (unobserved) -> hot (heavily observed). Cell colour
- *  is picked by bucket rather than a continuous gradient so the legend can
- *  state exactly what each shade means. */
-export const HEAT_RAMP = ['rgba(120, 160, 255, 0.05)', '#134e33', '#166534', '#ca8a04', '#ea580c', '#dc2626'] as const
+/** Heatmap ramp, cold (unobserved) -> hot (heavily observed): charcoal into
+ *  deep violet, through electric purple and magenta, ending at severity red.
+ *  Cell colour is picked by bucket rather than a continuous gradient so the
+ *  legend can state exactly what each shade means. */
+export const HEAT_RAMP = ['#171226', '#4c1d95', '#6d28d9', '#9333ea', '#ec4899', '#ef4444'] as const
 
 export function heatColor(count: number): string {
   if (count <= 0) return HEAT_RAMP[0]

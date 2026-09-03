@@ -26,8 +26,10 @@ import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
 import { usePreferences } from '../context/preferences/usePreferences'
 import { bucketCounts, periodDelta, severityDistribution } from '../lib/aggregations'
+import { SEVERITY_ACCENT } from '../lib/severity'
 import { filterIncidents, primaryTactic } from '../lib/filtering'
 import { formatDateTime, incidentRef } from '../lib/format'
+import { SEVERITY_HEX } from '../lib/tokens'
 import { TACTIC_LABELS, isTactic } from '../lib/tactics'
 
 /**
@@ -98,7 +100,7 @@ function IncidentsPage() {
       header: 'Technique',
       hideBelow: 'md',
       cell: (incident) => (
-        <span className="font-mono text-meta text-accent-cyan">{incident.mitre_technique_ids[0] ?? '--'}</span>
+        <span className="font-mono text-meta text-accent-magenta">{incident.mitre_technique_ids[0] ?? '--'}</span>
       ),
     },
     {
@@ -152,7 +154,7 @@ function IncidentsPage() {
     <div className="flex flex-col gap-4 p-5">
       <PageHeader
         title="Incidents"
-        icon={<ShieldAlert className="h-5 w-5 text-accent-blue" />}
+        icon={<ShieldAlert className="h-5 w-5 text-accent-primary" />}
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'Incidents' }]}
         actions={<LogUploadControl onSuccess={refresh} />}
       />
@@ -162,36 +164,39 @@ function IncidentsPage() {
           label="Total"
           value={meta.totalAll}
           icon={<ShieldAlert className="h-4 w-4" />}
-          accent="blue"
+          accent="primary"
           delta={periodDelta(times)}
           trend={bucketCounts(times)}
         />
+        {/* Accents come from SEVERITY_ACCENT rather than being chosen here,
+            so these four can never drift from the severity ramp used by
+            badges, heatmap cells and chart series. */}
         <StatCard
           label="Critical"
           value={distribution.critical}
           icon={<ShieldAlert className="h-4 w-4" />}
-          accent="red"
+          accent={SEVERITY_ACCENT.critical}
           note="Highest severity band"
         />
         <StatCard
           label="High"
           value={distribution.high}
           icon={<ShieldAlert className="h-4 w-4" />}
-          accent="amber"
+          accent={SEVERITY_ACCENT.high}
           note="Needs triage today"
         />
         <StatCard
           label="Medium"
           value={distribution.medium}
           icon={<ShieldAlert className="h-4 w-4" />}
-          accent="cyan"
+          accent={SEVERITY_ACCENT.medium}
           note="Queued for review"
         />
         <StatCard
           label="Low"
           value={distribution.low}
           icon={<ShieldAlert className="h-4 w-4" />}
-          accent="green"
+          accent={SEVERITY_ACCENT.low}
           note="Informational baseline"
         />
       </div>
@@ -210,6 +215,7 @@ function IncidentsPage() {
           rows={visible}
           rowKey={(incident) => incident.id}
           onRowClick={(incident) => navigate(`/incidents/${incident.id}`)}
+          rowAccent={(incident) => SEVERITY_HEX[incident.severity]}
           sort={sort}
           onSortChange={setSort}
           emptyMessage="No incidents match these filters"

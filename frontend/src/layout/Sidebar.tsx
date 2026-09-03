@@ -33,18 +33,26 @@ export function Sidebar({
   return (
     <aside
       className={clsx(
-        'relative z-20 flex shrink-0 flex-col border-r border-line bg-surface/85 backdrop-blur-md transition-[width] duration-200',
+        'relative z-20 flex shrink-0 flex-col border-r border-line',
+        'bg-gradient-to-b from-surface-2/80 via-surface/85 to-bg-deep/90',
+        'backdrop-blur-[var(--blur-glass-heavy)] backdrop-saturate-[1.2] transition-[width] duration-200',
         collapsed ? 'w-[68px]' : 'w-[228px]',
       )}
     >
-      <span aria-hidden className="pointer-events-none absolute -top-24 -left-16 h-56 w-56 rounded-full bg-accent-blue/12 blur-3xl" />
+      {/* Lit right edge: the rail reads as a panel with its own thickness
+          rather than a flat division in the page. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-accent-violet/35 to-transparent"
+      />
+      <span aria-hidden className="pointer-events-none absolute -top-24 -left-16 h-56 w-56 rounded-full bg-accent-primary/12 blur-3xl" />
 
       <div className={clsx('relative flex items-center gap-2.5 px-4 py-4', collapsed && 'justify-center px-0')}>
         <NightOwlMark size={collapsed ? 32 : 38} />
         {!collapsed && (
           <div className="min-w-0">
             <p className="text-[15px] leading-none font-semibold tracking-[0.16em] text-text">NIGHTOWL</p>
-            <p className="mt-1 text-[9px] leading-none font-medium tracking-[0.22em] text-accent-cyan uppercase">
+            <p className="mt-1 text-[9px] leading-none font-medium tracking-[0.22em] text-accent-magenta uppercase">
               AI-Powered SOC
             </p>
           </div>
@@ -94,7 +102,7 @@ export function Sidebar({
           {!collapsed && (
             <div className="min-w-0">
               <p className="truncate text-meta font-medium text-text">Administrator</p>
-              <p className="truncate text-micro tracking-[0.14em] text-accent-cyan uppercase">NightOwl SOC</p>
+              <p className="truncate text-micro tracking-[0.14em] text-accent-magenta uppercase">NightOwl SOC</p>
               <p className="mt-0.5 truncate text-micro text-text-faint">
                 {apiKeyConfigured ? 'API key configured' : 'Local deployment - no auth'}
               </p>
@@ -128,20 +136,39 @@ function SidebarLink({ entry, collapsed }: { entry: NavEntry; collapsed: boolean
       end={entry.end}
       className={({ isActive }) =>
         clsx(
-          'group relative flex h-9 items-center gap-2.5 rounded-control px-3 text-meta font-medium transition-colors duration-200',
+          'group relative flex h-9 items-center gap-2.5 rounded-control px-3 text-meta font-medium transition-all duration-200',
           collapsed && 'justify-center px-0',
           isActive
-            ? 'border border-accent-blue/35 bg-gradient-to-r from-accent-blue/25 to-accent-violet/10 text-text shadow-glow-blue'
-            : 'border border-transparent text-text-muted hover:bg-white/5 hover:text-text-dim',
+            ? 'border border-accent-violet/45 bg-gradient-to-r from-accent-violet-deep/45 via-accent-primary/25 to-accent-magenta/15 text-text shadow-glow-violet backdrop-blur-md'
+            : // Nudging right on hover is what makes the rail feel responsive
+              // rather than merely tinted.
+              'border border-transparent text-text-muted hover:translate-x-0.5 hover:border-accent-primary/25 hover:bg-accent-primary/10 hover:text-text-dim hover:shadow-glow-primary',
         )
       }
     >
       {({ isActive }) => (
         <>
           {isActive && !collapsed && (
-            <span aria-hidden className="absolute top-1/2 left-0 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent-cyan" />
+            // Left-edge energy indicator: a lit bar plus its own bloom.
+            <>
+              <span
+                aria-hidden
+                className="absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-full bg-gradient-to-b from-accent-violet to-accent-magenta"
+              />
+              <span
+                aria-hidden
+                className="absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-full bg-accent-violet blur-[5px]"
+              />
+            </>
           )}
-          <Icon className={clsx('h-4 w-4 shrink-0', isActive && 'text-accent-cyan')} />
+          <Icon
+            className={clsx(
+              'h-4 w-4 shrink-0 transition-all duration-200',
+              isActive
+                ? 'text-accent-violet drop-shadow-[0_0_6px_var(--color-accent-violet)]'
+                : 'group-hover:text-accent-primary',
+            )}
+          />
           {!collapsed && <span className="truncate">{entry.label}</span>}
         </>
       )}

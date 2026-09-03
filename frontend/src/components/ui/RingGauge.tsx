@@ -1,16 +1,26 @@
 import clsx from 'clsx'
+import { useEffect, useState } from 'react'
+import { LINE } from '../../lib/tokens'
 import { ACCENT_HEX, type Accent } from './accent'
 
 /**
  * Circular progress ring with a value in the middle -- the Pipeline Health
  * gauges and the sidebar threat level. Pure SVG (stroke-dasharray), no
  * chart library: it is one arc and a label.
+ *
+ * The arc uses `pathLength={1}` to normalise its own length to one unit
+ * regardless of the real on-screen radius, so a 0-100 value maps straight
+ * onto a 0-1 stroke-dashoffset with no circumference maths. On mount the
+ * offset starts at "empty" and moves to its target one animation frame
+ * later, so the ring draws in rather than appearing already full -- CSS
+ * transitions only animate a *change*, not an initial value, hence the
+ * `mounted` flag. Every later value change reuses the same transition.
  */
 export function RingGauge({
   value,
   label,
   sublabel,
-  accent = 'blue',
+  accent = 'primary',
   size = 74,
   thickness = 5,
   unit = '%',
@@ -28,9 +38,14 @@ export function RingGauge({
 }) {
   const clamped = Math.max(0, Math.min(100, value))
   const radius = (size - thickness) / 2
-  const circumference = 2 * Math.PI * radius
-  const dash = (clamped / 100) * circumference
   const color = ACCENT_HEX[accent]
+
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
+  const offset = mounted ? 1 - clamped / 100 : 1
 
   return (
     <div className={clsx('flex flex-col items-center gap-1.5', className)}>
@@ -41,7 +56,7 @@ export function RingGauge({
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke="rgba(120, 160, 255, 0.10)"
+            stroke={LINE.base}
             strokeWidth={thickness}
           />
           <circle
@@ -52,8 +67,13 @@ export function RingGauge({
             stroke={color}
             strokeWidth={thickness}
             strokeLinecap="round"
-            strokeDasharray={`${dash} ${circumference - dash}`}
-            style={{ transition: 'stroke-dasharray 400ms ease-out', filter: `drop-shadow(0 0 4px ${color}55)` }}
+            pathLength={1}
+            strokeDasharray={1}
+            strokeDashoffset={offset}
+            style={{
+              transition: 'stroke-dashoffset 700ms cubic-bezier(0.22, 0.61, 0.36, 1)',
+              filter: `drop-shadow(0 0 4px ${color}55)`,
+            }}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">

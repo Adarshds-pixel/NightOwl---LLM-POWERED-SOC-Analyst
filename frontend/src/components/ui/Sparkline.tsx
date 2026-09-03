@@ -11,7 +11,7 @@ import { ACCENT_HEX, type Accent } from './accent'
  */
 export function Sparkline({
   data,
-  accent = 'blue',
+  accent = 'primary',
   width = 76,
   height = 28,
   className,
@@ -56,8 +56,22 @@ export function Sparkline({
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={area} fill={`url(#${gradientId})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={area} fill={`url(#${gradientId})`} className="animate-rise" />
+      {/* pathLength=1 normalises the path to one unit regardless of its real
+          on-screen geometry, so the draw-in animation below needs no
+          per-instance length calculation -- just dasharray/dashoffset 0-1. */}
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        pathLength={1}
+        strokeDasharray={1}
+        className="animate-draw"
+        style={{ filter: `drop-shadow(0 0 3px ${color}70)` }}
+      />
     </svg>
   )
 }

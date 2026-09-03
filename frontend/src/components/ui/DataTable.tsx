@@ -50,6 +50,11 @@ interface DataTableProps<T> {
   emptyHint?: string
   /** Sticky header inside a scroll container. */
   stickyHeader?: boolean
+  /** A CSS colour for a row's left-edge marker (e.g. SEVERITY_HEX[row.severity]),
+   *  or null/undefined for no marker. A generic colour rather than an Accent
+   *  keeps this primitive independent of the severity vocabulary -- callers
+   *  already own that mapping. */
+  rowAccent?: (row: T) => string | null | undefined
   className?: string
 }
 
@@ -80,6 +85,7 @@ export function DataTable<T>({
   emptyMessage = 'Nothing to show yet',
   emptyHint,
   stickyHeader = true,
+  rowAccent,
   className,
 }: DataTableProps<T>) {
   const { prefs } = usePreferences()
@@ -95,7 +101,7 @@ export function DataTable<T>({
     <div className={clsx('w-full overflow-x-auto', className)}>
       <table className="w-full min-w-full border-collapse text-body">
         <thead className={clsx(stickyHeader && 'sticky top-0 z-10')}>
-          <tr className="bg-surface-2/80 backdrop-blur-sm">
+          <tr className="bg-surface-2/85 backdrop-blur-[var(--blur-glass)] backdrop-saturate-[1.2]">
             {columns.map((column) => (
               <th
                 key={column.key}
@@ -129,6 +135,7 @@ export function DataTable<T>({
         <tbody>
           {sorted.map((row) => {
             const active = isRowActive?.(row)
+            const accent = rowAccent?.(row)
             return (
               <tr
                 key={rowKey(row)}
@@ -145,22 +152,33 @@ export function DataTable<T>({
                 }
                 tabIndex={onRowClick ? 0 : undefined}
                 className={clsx(
-                  'border-b border-line-soft transition-colors duration-150 last:border-b-0',
-                  onRowClick && 'cursor-pointer hover:bg-white/4 focus-visible:bg-white/4',
-                  active && 'bg-accent-blue/8',
+                  'group/row border-b border-line-soft transition-colors duration-150 last:border-b-0',
+                  onRowClick && 'cursor-pointer hover:bg-accent-primary/6 focus-visible:bg-accent-primary/6',
+                  active && 'bg-accent-primary/8',
                 )}
               >
-                {columns.map((column) => (
+                {columns.map((column, i) => (
                   <td
                     key={column.key}
                     className={clsx(
-                      'px-3 align-middle text-text-dim',
+                      'relative px-3 align-middle text-text-dim',
                       rowPadding,
                       ALIGN[column.align ?? 'left'],
                       column.hideBelow && HIDE_BELOW[column.hideBelow],
                       column.className,
                     )}
                   >
+                    {/* Severity/status edge marker -- a coloured bar on the
+                        row's leading cell, so a critical row reads at a
+                        glance without colouring the whole row. Brightens
+                        with the row on hover via the group above. */}
+                    {i === 0 && accent && (
+                      <span
+                        aria-hidden
+                        className="absolute inset-y-0 left-0 w-[3px] opacity-70 shadow-[0_0_0_0_var(--row-accent)] transition-[opacity,box-shadow] duration-150 group-hover/row:opacity-100 group-hover/row:shadow-[0_0_8px_0_var(--row-accent)]"
+                        style={{ background: accent, '--row-accent': accent } as React.CSSProperties}
+                      />
+                    )}
                     {column.cell(row)}
                   </td>
                 ))}
@@ -176,9 +194,9 @@ export function DataTable<T>({
 function SortIcon({ active, direction }: { active?: boolean; direction?: 'asc' | 'desc' }) {
   if (!active) return <ChevronsUpDown className="h-3 w-3 text-text-faint" />
   return direction === 'asc' ? (
-    <ArrowUp className="h-3 w-3 text-accent-blue" />
+    <ArrowUp className="h-3 w-3 text-accent-primary" />
   ) : (
-    <ArrowDown className="h-3 w-3 text-accent-blue" />
+    <ArrowDown className="h-3 w-3 text-accent-primary" />
   )
 }
 

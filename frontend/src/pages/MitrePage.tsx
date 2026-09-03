@@ -95,7 +95,7 @@ function MitrePage() {
       key: 'id',
       header: 'Technique',
       sortValue: (row) => row.id,
-      cell: (row) => <span className="font-mono text-meta text-accent-cyan">{row.id}</span>,
+      cell: (row) => <span className="font-mono text-meta text-accent-magenta">{row.id}</span>,
     },
     {
       key: 'name',
@@ -137,7 +137,7 @@ function MitrePage() {
     <div className="flex flex-col gap-4 p-5">
       <PageHeader
         title="MITRE ATT&CK"
-        icon={<Crosshair className="h-5 w-5 text-accent-cyan" />}
+        icon={<Crosshair className="h-5 w-5 text-accent-magenta" />}
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'MITRE ATT&CK' }]}
       />
 
@@ -146,7 +146,7 @@ function MitrePage() {
           label="Techniques in catalog"
           value={techniques.length}
           icon={<Layers className="h-4 w-4" />}
-          accent="blue"
+          accent="primary"
           note="Enterprise ATT&CK, loaded from the official bundle"
         />
         <StatCard
@@ -167,7 +167,7 @@ function MitrePage() {
           label="Tactics active"
           value={matrix.tacticsPresent.length}
           icon={<Grid3x3 className="h-4 w-4" />}
-          accent="green"
+          accent="primary"
           note="Of 14 enterprise tactics"
         />
       </div>
@@ -187,7 +187,7 @@ function MitrePage() {
           <Card
             title="MITRE ATT&CK heatmap"
             subtitle="Observed techniques by tactic - click a tactic to inspect it"
-            accent="cyan"
+            accent="magenta"
             className="xl:col-span-8"
           >
             <HeatmapGrid
@@ -212,7 +212,7 @@ function MitrePage() {
                   {selectedTechniques.map((row) => (
                     <div key={row.id} className="rounded-control border border-line bg-surface-2/40 px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-meta text-accent-cyan">{row.id}</span>
+                        <span className="font-mono text-meta text-accent-magenta">{row.id}</span>
                         <span className="font-mono text-micro text-text-muted tabular-nums">
                           {row.detections} detections
                         </span>
@@ -222,7 +222,7 @@ function MitrePage() {
                         className="mt-1.5"
                         value={row.detections}
                         max={observedRows[0]?.detections ?? 1}
-                        color={ACCENT.cyan}
+                        color={ACCENT.magenta}
                       />
                     </div>
                   ))}
@@ -235,7 +235,7 @@ function MitrePage() {
               )}
             </Card>
 
-            <Card title="Tactic activity" subtitle="Total technique hits" accent="blue">
+            <Card title="Tactic activity" subtitle="Total technique hits" accent="primary">
               {tacticSlices.length > 0 ? (
                 <Donut slices={tacticSlices} totalLabel="Hits" height={168} />
               ) : (
@@ -264,7 +264,7 @@ function MitrePage() {
 
       {tab === 'matrix' && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          <Card title="Full attack matrix" subtitle="All 14 tactics - dimmed columns have no detections" accent="cyan" className="xl:col-span-9">
+          <Card title="Full attack matrix" subtitle="All 14 tactics - dimmed columns have no detections" accent="magenta" className="xl:col-span-9">
             <HeatmapGrid incidents={incidents} techniqueById={byId} showAllTactics />
           </Card>
           <Card title="Recently detected" accent="amber" className="xl:col-span-3" bodyClassName="px-2 pb-3">

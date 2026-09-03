@@ -40,16 +40,18 @@ export function Badge({
 
 export function accentDot(accent: Accent): string {
   switch (accent) {
-    case 'blue':
-      return 'bg-accent-blue'
-    case 'cyan':
-      return 'bg-accent-cyan'
+    case 'primary':
+      return 'bg-accent-primary'
+    case 'magenta':
+      return 'bg-accent-magenta'
     case 'violet':
       return 'bg-accent-violet'
     case 'green':
       return 'bg-accent-green'
     case 'amber':
       return 'bg-accent-amber'
+    case 'orange':
+      return 'bg-accent-orange'
     case 'red':
       return 'bg-accent-red'
     default:
@@ -105,7 +107,7 @@ export function severityDot(severity: Severity): string {
 
 // Incident status -> accent. Mirrors the backend ALLOWED_STATUSES set.
 const STATUS_ACCENT: Record<IncidentStatus, Accent> = {
-  open: 'blue',
+  open: 'primary',
   investigating: 'violet',
   resolved: 'green',
   closed: 'neutral',
@@ -140,7 +142,7 @@ export function logLevelFor(severity: Severity | null, isAlert: boolean): LogLev
 }
 
 export const LEVEL_ACCENT: Record<LogLevel, Accent> = {
-  info: 'cyan',
+  info: 'magenta',
   warn: 'amber',
   error: 'red',
   critical: 'red',

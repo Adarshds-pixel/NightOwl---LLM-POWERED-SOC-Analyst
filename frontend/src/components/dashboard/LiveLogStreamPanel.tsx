@@ -23,7 +23,7 @@ export function LiveLogStreamPanel() {
     <Card
       title="Live log stream"
       icon={<Radio className="h-3.5 w-3.5" />}
-      accent="cyan"
+      accent="magenta"
       divided
       flush
       action={

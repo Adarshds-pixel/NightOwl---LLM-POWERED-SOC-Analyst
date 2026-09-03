@@ -103,7 +103,7 @@ function ReportsPage() {
       <PageHeader
         title="Reports"
         subtitle="A live posture summary, generated from the current API data"
-        icon={<FileBarChart className="h-5 w-5 text-accent-blue" />}
+        icon={<FileBarChart className="h-5 w-5 text-accent-primary" />}
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'Reports' }]}
         className="print-hide"
         actions={
@@ -142,7 +142,7 @@ function ReportsPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge accent="blue">{report.id}</Badge>
+            <Badge accent="primary">{report.id}</Badge>
             <Badge accent="neutral">Generated in-browser</Badge>
           </div>
         </div>
@@ -157,7 +157,7 @@ function ReportsPage() {
           label="Incidents in window"
           value={report.incidentCount}
           icon={<FileBarChart className="h-4 w-4" />}
-          accent="blue"
+          accent="primary"
           note={`${meta.totalAll.toLocaleString()} total ingested`}
         />
         <StatCard
@@ -171,7 +171,7 @@ function ReportsPage() {
           label="Hosts involved"
           value={report.hosts.length}
           icon={<FileBarChart className="h-4 w-4" />}
-          accent="green"
+          accent="primary"
           note="Distinct hosts in this window"
         />
         <StatCard
@@ -200,7 +200,7 @@ function ReportsPage() {
           )}
         </Card>
 
-        <Card title="Status of these incidents" accent="blue" className="xl:col-span-4">
+        <Card title="Status of these incidents" accent="primary" className="xl:col-span-4">
           <dl className="grid grid-cols-2 gap-3">
             <KeyValue label="Open" value={report.status.open ?? 0} mono />
             <KeyValue label="Investigating" value={report.status.investigating ?? 0} mono />
@@ -214,7 +214,7 @@ function ReportsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <Card title="Most detected techniques" accent="cyan" className="xl:col-span-6">
+        <Card title="Most detected techniques" accent="magenta" className="xl:col-span-6">
           {report.techniques.length === 0 ? (
             <EmptyState message="No techniques detected in this window" />
           ) : (
@@ -223,7 +223,7 @@ function ReportsPage() {
                 <li key={technique.id}>
                   <div className="flex items-center justify-between gap-3 text-meta">
                     <span className="truncate">
-                      <span className="font-mono text-accent-cyan">{technique.id}</span>
+                      <span className="font-mono text-accent-magenta">{technique.id}</span>
                       <span className="ml-2 text-text-dim">{technique.name}</span>
                     </span>
                     <span className="font-mono text-text tabular-nums">{technique.detections}</span>
@@ -232,7 +232,7 @@ function ReportsPage() {
                     className="mt-1"
                     value={technique.detections}
                     max={report.techniques[0].detections}
-                    color={ACCENT.cyan}
+                    color={ACCENT.magenta}
                   />
                 </li>
               ))}

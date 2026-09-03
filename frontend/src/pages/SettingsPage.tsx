@@ -57,7 +57,7 @@ function SettingsPage() {
       <PageHeader
         title="Settings"
         subtitle="Preferences stored in this browser, plus the facts about this deployment"
-        icon={<SettingsIcon className="h-5 w-5 text-accent-blue" />}
+        icon={<SettingsIcon className="h-5 w-5 text-accent-primary" />}
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'Settings' }]}
         actions={
           <Button
@@ -89,7 +89,7 @@ function SettingsPage() {
                 aria-current={active ? 'true' : undefined}
                 className={`flex shrink-0 items-center gap-2.5 rounded-control border px-3 py-2.5 text-left text-meta transition-colors ${
                   active
-                    ? 'border-accent-blue/35 bg-accent-blue/12 text-text'
+                    ? 'border-accent-primary/35 bg-accent-primary/12 text-text'
                     : 'border-transparent text-text-muted hover:bg-white/5 hover:text-text-dim'
                 }`}
               >
@@ -102,7 +102,7 @@ function SettingsPage() {
 
         <div className="flex flex-col gap-4 xl:col-span-9">
           {section === 'appearance' && (
-            <Card title="Appearance" accent="blue">
+            <Card title="Appearance" accent="primary">
               <div className="flex flex-col divide-y divide-line-soft">
                 <Row label="Density" hint="Row height across every table and list.">
                   <SegmentedControl
@@ -114,7 +114,7 @@ function SettingsPage() {
                     ]}
                   />
                 </Row>
-                <Row label="Ambient background" hint="The blue and violet glow behind the interface.">
+                <Row label="Ambient background" hint="The violet and magenta glow behind the interface.">
                   <Toggle
                     checked={prefs.ambientBackground}
                     onChange={(value) => setPref('ambientBackground', value)}
@@ -143,7 +143,7 @@ function SettingsPage() {
           )}
 
           {section === 'data' && (
-            <Card title="Data and refresh" accent="cyan">
+            <Card title="Data and refresh" accent="magenta">
               <div className="flex flex-col divide-y divide-line-soft">
                 <Row
                   label="Incident refresh"
@@ -208,7 +208,7 @@ function SettingsPage() {
           )}
 
           {section === 'connection' && (
-            <Card title="Connection" accent="green">
+            <Card title="Connection" accent="primary">
               <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <KeyValue label="API base URL" value={apiBase} mono />
                 <KeyValue

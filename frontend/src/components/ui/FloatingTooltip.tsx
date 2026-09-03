@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { motion } from 'motion/react'
 import { useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -68,11 +69,15 @@ export function FloatingTooltip({ label, children, className }: { label: ReactNo
       >
         {children}
       </span>
+      {/* Positioning lives on this outer span (a plain translate, computed
+          once per hover-start); the inner motion.span only owns the
+          fade/scale entrance, so the two concerns never fight over
+          `transform`. */}
       {position &&
         createPortal(
           <span
             role="tooltip"
-            className="pointer-events-none fixed z-50 rounded-md border border-line-strong bg-surface-2 px-2 py-1 text-micro text-text-dim shadow-elevated"
+            className="pointer-events-none fixed z-50"
             style={{
               top: position.top,
               left: position.left,
@@ -80,7 +85,14 @@ export function FloatingTooltip({ label, children, className }: { label: ReactNo
               transform: `translate(-50%, ${position.placement === 'top' ? '-100%' : '0'})`,
             }}
           >
-            {label}
+            <motion.span
+              initial={{ opacity: 0, scale: 0.92, y: position.placement === 'top' ? 4 : -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.14, ease: [0.22, 0.61, 0.36, 1] }}
+              className="block rounded-control border border-border-active/60 bg-surface-1/95 px-2.5 py-1.5 text-micro text-text-dim shadow-e3 backdrop-blur-[var(--blur-glass)] backdrop-saturate-[1.2]"
+            >
+              {label}
+            </motion.span>
           </span>,
           document.body,
         )}

@@ -34,7 +34,7 @@ export function NotificationPanel({
           <button
             type="button"
             onClick={onMarkAllSeen}
-            className="flex items-center gap-1 text-micro font-semibold tracking-wide text-accent-blue uppercase transition-colors hover:text-accent-cyan"
+            className="flex items-center gap-1 text-micro font-semibold tracking-wide text-accent-primary uppercase transition-colors hover:text-accent-magenta"
           >
             <CheckCheck className="h-3 w-3" />
             Mark all read
@@ -58,7 +58,7 @@ export function NotificationPanel({
                 onMarkSeen(incident.id)
                 onNavigate()
               }}
-              className="flex items-start gap-2.5 rounded-control border-l-2 border-accent-blue/60 bg-accent-blue/6 px-3 py-2 transition-colors hover:bg-accent-blue/12"
+              className="flex items-start gap-2.5 rounded-control border-l-2 border-accent-primary/60 bg-accent-primary/6 px-3 py-2 transition-colors hover:bg-accent-primary/12"
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-body text-text-dim">{incident.title}</p>

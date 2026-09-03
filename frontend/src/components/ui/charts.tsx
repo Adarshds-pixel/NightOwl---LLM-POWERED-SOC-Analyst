@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { useReducedMotion } from 'motion/react'
 import type { ReactNode } from 'react'
 import {
   Area,
@@ -16,6 +17,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { usePreferences } from '../../context/preferences/usePreferences'
 import { CHART, TEXT } from '../../lib/tokens'
 
 /**
@@ -23,9 +25,27 @@ import { CHART, TEXT } from '../../lib/tokens'
  * micro-type axes, a glass tooltip and no default legend (legends are
  * hand-built HTML so they can carry counts and percentages the way the
  * mockups do). Pages pass data and colours; they never restyle recharts.
+ *
+ * Series draw themselves in on mount. That is deliberate and gated: recharts
+ * animation used to be off app-wide, which made every chart snap into place
+ * and read as static. It now runs once per mount, and only when neither the
+ * OS nor the in-app "Reduce motion" preference asks for stillness.
  */
 
 const AXIS_TICK = { fill: TEXT.muted, fontSize: 10 }
+const DRAW_MS = 700
+
+/** True when series may animate their entrance. */
+function useChartMotion(): boolean {
+  const systemReduced = useReducedMotion()
+  const { prefs } = usePreferences()
+  return !(systemReduced || prefs.reduceMotion)
+}
+
+/** Soft glow under a stroke, so a line reads as lit rather than drawn. */
+function glow(color: string): string {
+  return `drop-shadow(0 0 5px ${color}66)`
+}
 
 export function ChartTooltipContent({
   active,
@@ -41,7 +61,7 @@ export function ChartTooltipContent({
   if (!active || !payload || payload.length === 0) return null
 
   return (
-    <div className="rounded-md border border-line-strong bg-surface-2/95 px-2.5 py-2 shadow-elevated backdrop-blur-sm">
+    <div className="rounded-control border border-border-active/60 bg-surface-1/90 px-3 py-2 shadow-e3 backdrop-blur-[var(--blur-glass)] backdrop-saturate-[1.2]">
       {label !== undefined && <p className="mb-1 text-micro tracking-wide text-text-faint uppercase">{label}</p>}
       <div className="flex flex-col gap-0.5">
         {payload.map((entry, i) => (
@@ -82,6 +102,7 @@ export function Donut({
   onSliceClick?: (slice: DonutSlice) => void
 }) {
   const sum = total ?? slices.reduce((acc, slice) => acc + slice.value, 0)
+  const animate = useChartMotion()
 
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -97,10 +118,16 @@ export function Donut({
               paddingAngle={2}
               stroke="none"
               onClick={(entry) => onSliceClick?.(entry as unknown as DonutSlice)}
-              isAnimationActive={false}
+              isAnimationActive={animate}
+              animationDuration={DRAW_MS}
             >
               {slices.map((slice) => (
-                <Cell key={slice.name} fill={slice.color} className={onSliceClick ? 'cursor-pointer' : undefined} />
+                <Cell
+                  key={slice.name}
+                  fill={slice.color}
+                  style={{ filter: glow(slice.color), transition: 'opacity 150ms ease' }}
+                  className={onSliceClick ? 'cursor-pointer hover:opacity-85' : undefined}
+                />
               ))}
             </Pie>
             <Tooltip
@@ -166,14 +193,18 @@ export function TrendChart({
   yWidth?: number
 }) {
   const Chart = area ? AreaChart : LineChart
+  const animate = useChartMotion()
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <Chart data={data} margin={{ top: 6, right: 6, bottom: 0, left: 0 }}>
         <defs>
           {series.map((s) => (
+            // Deeper, longer fade than before so the area reads as light
+            // pooling under the line rather than a flat tinted block.
             <linearGradient key={s.key} id={`area-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={s.color} stopOpacity={0.28} />
+              <stop offset="0%" stopColor={s.color} stopOpacity={0.4} />
+              <stop offset="55%" stopColor={s.color} stopOpacity={0.12} />
               <stop offset="100%" stopColor={s.color} stopOpacity={0} />
             </linearGradient>
           ))}
@@ -194,7 +225,9 @@ export function TrendChart({
               fill={`url(#area-${s.key})`}
               dot={showDots ? { r: 2, fill: s.color, strokeWidth: 0 } : false}
               activeDot={{ r: 3 }}
-              isAnimationActive={false}
+              style={{ filter: glow(s.color) }}
+              isAnimationActive={animate}
+              animationDuration={DRAW_MS}
             />
           ) : (
             <Line
@@ -206,7 +239,9 @@ export function TrendChart({
               strokeWidth={1.75}
               dot={showDots ? { r: 2, fill: s.color, strokeWidth: 0 } : false}
               activeDot={{ r: 3 }}
-              isAnimationActive={false}
+              style={{ filter: glow(s.color) }}
+              isAnimationActive={animate}
+              animationDuration={DRAW_MS}
             />
           ),
         )}
@@ -225,14 +260,33 @@ export function RankedBars({
   color: string
   height?: number
 }) {
+  const animate = useChartMotion()
+  // One gradient id per colour, so two RankedBars on a page cannot collide.
+  const gradientId = `bar-${color.replace('#', '')}`
+
   return (
     <ResponsiveContainer width="100%" height={height ?? Math.max(160, data.length * 30)}>
       <BarChart data={data} layout="vertical" margin={{ top: 0, right: 12, bottom: 0, left: 0 }}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={color} stopOpacity={0.55} />
+            <stop offset="100%" stopColor={color} stopOpacity={1} />
+          </linearGradient>
+        </defs>
         <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" horizontal={false} />
         <XAxis type="number" tick={AXIS_TICK} tickLine={false} axisLine={false} allowDecimals={false} />
         <YAxis type="category" dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} width={116} />
         <Tooltip content={<ChartTooltipContent />} cursor={{ fill: CHART.cursor }} />
-        <Bar dataKey="value" name="Count" fill={color} radius={[0, 4, 4, 0]} barSize={12} isAnimationActive={false} />
+        <Bar
+          dataKey="value"
+          name="Count"
+          fill={`url(#${gradientId})`}
+          radius={[0, 4, 4, 0]}
+          barSize={12}
+          style={{ filter: glow(color) }}
+          isAnimationActive={animate}
+          animationDuration={DRAW_MS}
+        />
       </BarChart>
     </ResponsiveContainer>
   )

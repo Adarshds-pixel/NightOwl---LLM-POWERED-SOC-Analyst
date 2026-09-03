@@ -88,12 +88,16 @@ export const SEVERITY_BORDER_SOFT_CLASSES: Record<Severity, string> = {
 }
 
 /** Severity -> accent channel, so a severity-coloured card can reuse the
- *  shared accent glow/icon-chip styling without a second colour system. */
-export const SEVERITY_ACCENT: Record<Severity, 'neutral' | 'green' | 'amber' | 'red'> = {
+ *  shared accent glow/icon-chip styling without a second colour system.
+ *
+ *  Mirrors the SEVERITY_HEX ramp exactly: low is lavender (green would read
+ *  as "healthy" and is reserved for genuine success states), medium amber
+ *  and high orange are distinct rather than both amber. */
+export const SEVERITY_ACCENT: Record<Severity, 'neutral' | 'violet' | 'amber' | 'orange' | 'red'> = {
   informational: 'neutral',
-  low: 'green',
+  low: 'violet',
   medium: 'amber',
-  high: 'amber',
+  high: 'orange',
   critical: 'red',
 }
 

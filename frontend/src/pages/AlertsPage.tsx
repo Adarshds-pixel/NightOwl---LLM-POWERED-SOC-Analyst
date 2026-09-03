@@ -1,7 +1,7 @@
 import { Bell, ExternalLink, Eye, Siren } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { EventLogRow } from '../api'
+import type { AlertRow, Severity } from '../api'
 import {
   Badge,
   Button,
@@ -24,7 +24,6 @@ import {
 import { usePreferences } from '../context/preferences/usePreferences'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useAlerts } from '../hooks/useAlerts'
-import { EMPTY_EVENT_FILTERS, useEvents, type EventFilters } from '../hooks/useEvents'
 import { useRules } from '../hooks/useRules'
 import { activityByHour, eventTypeLabel, levelFor } from '../lib/events'
 import { formatDateTime, incidentRef } from '../lib/format'
@@ -33,20 +32,18 @@ import { topBy } from '../lib/aggregations'
 import { ACCENT } from '../lib/tokens'
 
 /**
- * Alerts: every event that matched a detection rule.
- *
- * There is no /alerts endpoint -- alerts are rows in the alerts table,
- * surfaced through GET /events?alert_only=true along with the rule that
- * matched, the severity the engine assigned and the incident the alert was
- * grouped into. The status column is that parent incident status, which is
- * the only status an alert genuinely has.
+ * Alerts: every real rule match, one row per Alert record -- GET /alerts
+ * (backend/app/api/routes_alerts.py), not GET /events?alert_only=true,
+ * which intentionally collapses an event matched by two rules down to one
+ * row. The status column is the parent incident's status, which is the
+ * only status an alert genuinely has.
  */
 function AlertsPage() {
   const navigate = useNavigate()
   const { prefs } = usePreferences()
   const [search, setSearch] = useState('')
   const [severity, setSeverity] = useState('all')
-  const [selected, setSelected] = useState<EventLogRow | null>(null)
+  const [selected, setSelected] = useState<AlertRow | null>(null)
   const [sort, setSort] = useState<SortState | null>(null)
   const [pageSize, setPageSize] = useState(prefs.pageSize)
 
@@ -56,15 +53,19 @@ function AlertsPage() {
   // pagination below it) describe the filtered set rather than the whole
   // feed -- previously this narrowed one already-fetched page client-side,
   // which made a filtered view disagree with its own row count.
-  const { events, total, page, setPage, loading, error, refresh } = useEvents(
-    {
-      ...EMPTY_EVENT_FILTERS,
-      search: debouncedSearch,
-      alertOnly: true,
-      severity: severity as EventFilters['severity'],
-    },
-    pageSize,
-  )
+  const {
+    alerts: events,
+    total,
+    page,
+    setPage,
+    loading,
+    error,
+    refresh,
+  } = useAlerts({
+    q: debouncedSearch || undefined,
+    severity: severity === 'all' ? undefined : (severity as Severity),
+    limit: pageSize,
+  })
 
   // Whole-feed severity counts for the KPI tiles, independent of which page
   // is open (one lightweight limit=1 request each, read for `total` only).
@@ -85,7 +86,7 @@ function AlertsPage() {
   const topRules = topBy(events, (event) => event.rule_title, 7)
   const activity = activityByHour(events, 12).map((point) => ({ label: point.label, alerts: point.count }))
 
-  const columns: Column<EventLogRow>[] = [
+  const columns: Column<AlertRow>[] = [
     {
       key: 'time',
       header: 'Time',
@@ -112,7 +113,7 @@ function AlertsPage() {
       key: 'technique',
       header: 'Technique',
       hideBelow: 'md',
-      cell: (alert) => <span className="font-mono text-meta text-accent-cyan">{alert.technique_id ?? '--'}</span>,
+      cell: (alert) => <span className="font-mono text-meta text-accent-magenta">{alert.technique_id ?? '--'}</span>,
     },
     {
       key: 'source',
@@ -132,7 +133,7 @@ function AlertsPage() {
       hideBelow: 'md',
       cell: (alert) =>
         alert.incident_id ? (
-          <Badge accent="blue">{incidentRef(alert.incident_id)}</Badge>
+          <Badge accent="primary">{incidentRef(alert.incident_id)}</Badge>
         ) : (
           <span className="text-text-faint">ungrouped</span>
         ),
@@ -163,7 +164,7 @@ function AlertsPage() {
           value={total}
           icon={<Bell className="h-4 w-4" />}
           accent="amber"
-          note="Every event with at least one rule match"
+          note="Every rule match -- matches an incident's own evidence count"
         />
         {/* Whole-feed totals, not page-scoped -- a KPI row that mixed the
             two made a filtered or later page look like the alert counts had
@@ -214,9 +215,10 @@ function AlertsPage() {
             <DataTable
               columns={columns}
               rows={visible}
-              rowKey={(alert) => alert.id}
+              rowKey={(alert) => alert.alert_id}
               onRowClick={(alert) => setSelected(alert)}
-              isRowActive={(alert) => selected?.id === alert.id}
+              isRowActive={(alert) => selected?.alert_id === alert.alert_id}
+              rowAccent={(alert) => (alert.severity ? SEVERITY_HEX[alert.severity] : null)}
               sort={sort}
               onSortChange={setSort}
               loading={loading}
@@ -278,6 +280,7 @@ function AlertsPage() {
               <KeyValue label="Host" value={selected.host} mono />
               <KeyValue label="User" value={selected.user ?? '--'} mono />
               <KeyValue label="Process" value={selected.process ?? '--'} mono />
+              <KeyValue label="Alert id" value={selected.alert_id} mono />
               <KeyValue label="Event id" value={selected.id} mono />
             </dl>
 

@@ -11,7 +11,7 @@ const TONE_ICON: Record<ToastTone, typeof Info> = {
 }
 
 const TONE_CLASS: Record<ToastTone, string> = {
-  info: 'text-accent-blue',
+  info: 'text-accent-primary',
   success: 'text-accent-green',
   warning: 'text-accent-amber',
   error: 'text-accent-red',

@@ -1,4 +1,4 @@
-import { lazy } from 'react'
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from './layout/AppLayout'
 import DashboardPage from './pages/DashboardPage'
@@ -23,11 +23,28 @@ const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const DemoModePage = lazy(() => import('./pages/DemoModePage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Sits outside AppLayout: the sign-in screen has no sidebar or
+            topbar. It is presentation only -- NightOwl has no accounts yet,
+            so this route gates nothing and every route below stays
+            reachable directly, exactly as before.
+
+            It carries its own Suspense because the only other boundary in
+            the app lives inside AppLayout, which this route deliberately
+            does not render. */}
+        <Route
+          path="/login"
+          element={
+            <Suspense fallback={null}>
+              <LoginPage />
+            </Suspense>
+          }
+        />
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/incidents" element={<IncidentsPage />} />

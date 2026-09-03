@@ -2,6 +2,7 @@ import { History } from 'lucide-react'
 import { useIncidentAudit } from '../../hooks/useIncidentAudit'
 import { formatDateTime, formatRelativeTime } from '../../lib/format'
 import { Card, EmptyState, ErrorState, LoadingState, Timeline, TimelineItem } from '../ui'
+import { ACCENT } from '../../lib/tokens'
 
 /**
  * The backend audit log for one incident (GET /incidents/{id}/audit): who
@@ -41,7 +42,7 @@ export function AuditTrail({ incidentId }: { incidentId: number }) {
                   <span className="font-mono text-micro text-text-faint">{formatDateTime(event.created_at)}</span>
                 </span>
               }
-              accentColor="#3b82f6"
+              accentColor={ACCENT.primary}
             />
           ))}
         </Timeline>

@@ -78,12 +78,12 @@ export function HeatmapGrid({
                   onClick={() => onSelectTactic?.(tactic)}
                   disabled={!onSelectTactic}
                   className={clsx(
-                    'flex flex-col justify-center rounded-chip border px-1.5 py-1.5 text-left transition-colors duration-200',
+                    'flex flex-col justify-center rounded-chip border px-1.5 py-1.5 text-left transition-all duration-200',
                     compact ? 'min-h-[40px]' : 'min-h-[52px]',
                     selected
-                      ? 'border-accent-blue/50 bg-accent-blue/15'
+                      ? 'border-accent-primary/50 bg-accent-primary/15 shadow-glow-primary'
                       : observed
-                        ? 'border-line bg-surface-2/50 hover:border-accent-blue/30'
+                        ? 'border-line bg-surface-2/50 hover:border-accent-primary/35 hover:bg-surface-2/80'
                         : 'border-line-soft bg-surface-2/20',
                     !onSelectTactic && 'cursor-default',
                   )}
@@ -124,6 +124,7 @@ export function HeatmapGrid({
                         />
                       )
                     }
+                    const color = heatColor(cell.count)
                     return (
                       <FloatingTooltip
                         key={cell.techniqueId}
@@ -132,10 +133,25 @@ export function HeatmapGrid({
                       >
                         <div
                           className={clsx(
-                            'w-full rounded-[5px] border border-white/5 transition-transform duration-150 hover:scale-[1.04]',
+                            'w-full origin-center rounded-[5px] border border-white/5 will-change-transform',
+                            'transition-[transform,box-shadow,border-color] duration-150 ease-out',
+                            'hover:z-10 hover:scale-[1.18] hover:border-white/20',
+                            // Only intense cells earn a glow on hover -- a
+                            // near-black "0" cell brightening would read as a
+                            // bug, not a feature. `--cell-glow` is this cell's
+                            // own colour, so the glow always matches its heat.
+                            cell.count > 0 && 'hover:shadow-[0_0_14px_-2px_var(--cell-glow)]',
                             compact ? 'h-4' : 'h-6',
                           )}
-                          style={{ background: heatColor(cell.count) }}
+                          style={{
+                            background: color,
+                            '--cell-glow': color,
+                            animationName: 'rise',
+                            animationDuration: '0.3s',
+                            animationTimingFunction: 'ease-out',
+                            animationFillMode: 'both',
+                            animationDelay: `${Math.min(index, 10) * 18}ms`,
+                          } as React.CSSProperties}
                         >
                           {!compact && (
                             <span className="flex h-full items-center justify-center font-mono text-[9px] text-white/85 tabular-nums">

@@ -1,6 +1,6 @@
 import { Bell, Server, ShieldAlert, Siren } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import type { EventLogRow, IncidentSummary } from '../../api'
+import type { AlertRow, IncidentSummary } from '../../api'
 import type { IncidentsMeta } from '../../context/incidents/IncidentsDataContext'
 import { bucketCounts, distinctHosts, periodDelta } from '../../lib/aggregations'
 import { StatCard } from '../ui'
@@ -24,7 +24,7 @@ export function KpiRow({
 }: {
   incidents: IncidentSummary[]
   meta: IncidentsMeta
-  alerts: EventLogRow[]
+  alerts: AlertRow[]
   alertTotal: number
 }) {
   const navigate = useNavigate()
@@ -39,7 +39,7 @@ export function KpiRow({
         label="Total incidents"
         value={meta.totalAll}
         icon={<ShieldAlert className="h-4 w-4" />}
-        accent="blue"
+        accent="primary"
         delta={periodDelta(incidentTimes)}
         trend={bucketCounts(incidentTimes)}
         onClick={() => navigate('/incidents')}
@@ -51,19 +51,20 @@ export function KpiRow({
         accent="red"
         delta={periodDelta(criticalTimes)}
         trend={bucketCounts(criticalTimes)}
+        pulse={meta.totalCritical > 0}
         onClick={() => navigate('/incidents?severity=critical')}
       />
-      {/* Distinct EVENTS with >=1 rule match (GET /events?alert_only=true's
-          total -- see event_service.py's EXISTS filter), not raw Alert-table
-          rows. An event that trips 2 rules at once counts once here but
-          twice in Demo Mode's Live Replay "Rule matches" stat
-          (ReplayControlCard.tsx) -- both are correct, they measure
-          different things, so don't "fix" one to match the other. */}
+      {/* Real alert-row total from GET /alerts (see routes_alerts.py) --
+          the same un-collapsed count every incident's own evidence list
+          uses, so this figure can never disagree with "N alerts in this
+          incident" the way the old GET /events?alert_only=true-backed
+          total (which silently collapsed an event matched by two rules to
+          one) used to. */}
       <StatCard
         label="Alerts raised"
         value={alertTotal}
         icon={<Bell className="h-4 w-4" />}
-        accent="amber"
+        accent="magenta"
         delta={periodDelta(alertTimes)}
         trend={bucketCounts(alertTimes)}
         onClick={() => navigate('/alerts')}
@@ -72,7 +73,7 @@ export function KpiRow({
         label="Hosts affected"
         value={distinctHosts(incidents).length}
         icon={<Server className="h-4 w-4" />}
-        accent="green"
+        accent="primary"
         note="Distinct hosts with at least one incident"
         onClick={() => navigate('/incidents')}
       />

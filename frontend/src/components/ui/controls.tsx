@@ -9,7 +9,7 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react
  */
 
 const FIELD =
-  'h-9 w-full rounded-control border border-line bg-surface-2/60 px-3 text-meta text-text placeholder:text-text-faint transition-colors duration-200 focus:border-accent-blue/50 focus:outline-none'
+  'h-9 w-full rounded-control border border-line bg-bg-deep/80 px-3 text-meta text-text backdrop-blur-md placeholder:text-text-faint transition-all duration-200 focus:border-accent-violet/65 focus:shadow-glow-primary focus:outline-none'
 
 export function TextInput({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={clsx(FIELD, className)} {...rest} />
@@ -77,7 +77,7 @@ export function Select({ label, value, options, onChange, className, ...rest }: 
         className={clsx(FIELD, 'cursor-pointer appearance-none pr-8')}
         style={{
           backgroundImage:
-            'url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%236b7fa4%27 stroke-width=%272%27><path d=%27M6 9l6 6 6-6%27/></svg>")',
+            'url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%238b849d%27 stroke-width=%272%27><path d=%27M6 9l6 6 6-6%27/></svg>")',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'right 8px center',
           backgroundSize: '14px',
@@ -111,7 +111,7 @@ export function FilterBar({
   return (
     <div
       className={clsx(
-        'flex flex-wrap items-end gap-3 rounded-card border border-line bg-surface-1/70 px-4 py-3 shadow-card backdrop-blur-[2px]',
+        'flex flex-wrap items-end gap-3 rounded-card border border-line bg-surface-1/70 px-4 py-3 shadow-card backdrop-blur-xl',
         className,
       )}
     >
@@ -145,7 +145,7 @@ export function SegmentedControl<T extends string>({
           className={clsx(
             'rounded-[7px] px-2.5 py-1 text-micro font-semibold tracking-wide uppercase transition-colors duration-200',
             value === option.value
-              ? 'bg-accent-blue/20 text-accent-blue'
+              ? 'bg-accent-primary/20 text-accent-primary'
               : 'text-text-muted hover:text-text',
           )}
         >
@@ -180,14 +180,16 @@ export function Toggle({
       onClick={() => onChange?.(!checked)}
       className={clsx(
         'relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-200',
-        checked ? 'border-accent-green/40 bg-accent-green/30' : 'border-line bg-surface-3',
+        // On-state is violet, not green: a switch being on is UI state, not a
+        // security "healthy" signal, and green is reserved for the latter.
+        checked ? 'border-accent-violet/55 bg-accent-primary/35 shadow-glow-primary' : 'border-line bg-surface-3',
         disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer',
       )}
     >
       <span
         className={clsx(
           'absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all duration-200',
-          checked ? 'left-4.5 bg-accent-green' : 'left-0.5 bg-text-muted',
+          checked ? 'left-4.5 bg-accent-violet' : 'left-0.5 bg-text-muted',
         )}
       />
     </button>

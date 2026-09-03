@@ -1,4 +1,5 @@
 import type {
+  AlertListResponse,
   AuditLogResponse,
   DemoResetResponse,
   EventDetailResponse,
@@ -12,9 +13,7 @@ import type {
   IncidentStatusUpdateResponse,
   IngestResponse,
   MitreTechniquesResponse,
-  ReplayStatusResponse,
   RuleListResponse,
-  ScenarioListResponse,
   Severity,
 } from './types'
 
@@ -193,6 +192,31 @@ export function getEvent(id: number) {
   return apiFetch<EventDetailResponse>(`/events/${id}`)
 }
 
+export interface ListAlertsParams {
+  host?: string
+  start_date?: string
+  end_date?: string
+  /** Only alerts of this severity. Server-side, so a filtered page's
+   *  `total` is the real total for that filter. */
+  severity?: Severity
+  /** Case-insensitive substring match on process, command line, user, host. */
+  q?: string
+  limit?: number
+  offset?: number
+}
+
+/** Every real rule match, one row per Alert record -- see
+ *  backend/app/api/routes_alerts.py for why this is a distinct endpoint
+ *  from GET /events?alert_only=true rather than the same query reused. */
+export function getAlerts(params: ListAlertsParams = {}) {
+  const qs = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) qs.set(key, String(value))
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return apiFetch<AlertListResponse>(`/alerts${suffix}`)
+}
+
 export interface ListRulesParams {
   technique_id?: string
   level?: string
@@ -226,26 +250,7 @@ export async function pingHealth(): Promise<{ ok: boolean; latencyMs: number; th
 }
 
 
-// --- Live SOC replay ------------------------------------------------------
-
-export function getDemoScenarios() {
-  return apiFetch<ScenarioListResponse>('/demo/scenarios')
-}
-
-export function startReplay(scenarioId: string, resetFirst = true) {
-  return apiFetch<ReplayStatusResponse>('/demo/replay/start', {
-    method: 'POST',
-    body: JSON.stringify({ scenario_id: scenarioId, reset_first: resetFirst }),
-  })
-}
-
-export function getReplayStatus() {
-  return apiFetch<ReplayStatusResponse>('/demo/replay/status')
-}
-
-export function stopReplay() {
-  return apiFetch<ReplayStatusResponse>('/demo/replay/stop', { method: 'POST' })
-}
+// --- Demo reset -------------------------------------------------------
 
 export function resetDemoData() {
   return apiFetch<DemoResetResponse>('/demo/reset', { method: 'POST' })

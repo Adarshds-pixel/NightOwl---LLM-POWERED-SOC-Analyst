@@ -3,55 +3,71 @@
 /* ---------------------------------------------------------------------------
    NightOwl design tokens.
 
-   One source of truth for the whole UI (Phase 3 redesign). Severity tokens
-   keep the exact vocabulary of backend/app/services/severity_service.py, so
-   a badge, a heatmap cell and a chart series can never disagree about what
-   "high" looks like. Everything else is grouped by role -- surface, border,
-   accent, glow -- rather than by hue, so a component asks for
-   `border-line-soft`, never for "blue-ish 10% white".
+   One source of truth for the whole UI (Phase 4 "violet nocturne" redesign).
+   The palette is black + deep violet + electric purple + magenta: violet is
+   the brand/primary channel, magenta the secondary accent, and warm hues
+   (amber/orange/red) are reserved exclusively for security severity so a
+   colour never means two things at once.
+
+   Severity tokens keep the exact vocabulary of
+   backend/app/services/severity_service.py, so a badge, a heatmap cell and a
+   chart series can never disagree about what "high" looks like.
+
+   Everything else is grouped by role -- surface, border, accent, glow --
+   rather than by hue, so a component asks for `border-line-soft`, never for
+   "violet-ish 10% white".
 
    JS-side consumers that can't read CSS variables (recharts, inline SVG
    fills) mirror these values in src/lib/tokens.ts -- change both together.
 --------------------------------------------------------------------------- */
 @theme {
-  /* Surfaces: a deep navy base, not flat black, so translucent cards have
-     something to sit on and the ambient glows below have room to read. */
-  --color-bg: #060a14;
-  --color-bg-deep: #04070f;
-  --color-surface: #0b1220;
-  --color-surface-1: #0d1526;
-  --color-surface-2: #111b30;
-  --color-surface-3: #16223c;
-  --color-elevated: #131d33;
+  /* Surfaces: near-black with a violet undertone, not flat grey, so
+     translucent cards have something to sit on and the ambient purple glows
+     below have room to read. */
+  --color-bg: #05030a;
+  --color-bg-deep: #030108;
+  --color-surface: #0b0715;
+  --color-surface-1: #0f091c;
+  --color-surface-2: #170e2d;
+  --color-surface-3: #23123a;
+  --color-elevated: #1a0f2e;
 
-  /* Hairlines. Thin and luminous -- never a solid grey rule. */
-  --color-line: rgba(120, 160, 255, 0.10);
-  --color-line-soft: rgba(120, 160, 255, 0.07);
-  --color-line-strong: rgba(125, 180, 255, 0.22);
-  --color-border: rgba(120, 160, 255, 0.10);
+  /* Hairlines. Thin and luminous violet -- never a solid grey rule. */
+  --color-line: rgba(139, 92, 246, 0.18);
+  --color-line-soft: rgba(139, 92, 246, 0.10);
+  --color-line-strong: rgba(168, 85, 247, 0.38);
+  --color-border: rgba(139, 92, 246, 0.18);
+  /* The lit edge of a hovered/focused surface. */
+  --color-border-active: rgba(168, 85, 247, 0.65);
 
-  --color-text: #e8eefc;
-  --color-text-dim: #9fb0d0;
-  --color-text-muted: #6b7fa4;
-  --color-text-faint: #55658a;
+  --color-text: #f5f3ff;
+  --color-text-dim: #c4b5fd;
+  --color-text-muted: #8b849d;
+  --color-text-faint: #6b647d;
 
-  /* Severity -- vocabulary locked to severity_service.py. */
-  --color-severity-informational: #7c8db3;
-  --color-severity-low: #22c55e;
-  --color-severity-medium: #eab308;
+  /* Severity -- vocabulary locked to severity_service.py. Low is lavender
+     rather than green: green would read as "healthy" and compete with the
+     violet UI, and severity must stay a warm-to-cool ramp of its own. */
+  --color-severity-informational: #8b849d;
+  --color-severity-low: #a78bfa;
+  --color-severity-medium: #f59e0b;
   --color-severity-high: #f97316;
   --color-severity-critical: #ef4444;
 
-  /* Accents. Blue is the neutral/technical default, violet marks every
-     AI/RAG surface, green/amber/red echo severity semantics. */
-  --color-accent-blue: #3b82f6;
-  --color-accent-cyan: #22d3ee;
-  --color-accent-violet: #8b5cf6;
-  --color-accent-purple: #a855f7;
+  /* Accents = channels. `primary` (violet) is the neutral/technical default,
+     `magenta` marks telemetry/live surfaces, `violet` (electric purple) marks
+     every AI/RAG surface, and amber/red echo severity semantics. `green` is
+     deliberately restrained -- success ticks only, never a UI theme colour. */
+  --color-accent-primary: #8b5cf6;
+  --color-accent-violet-deep: #7c3aed;
+  --color-accent-magenta: #ec4899;
+  --color-accent-violet: #a855f7;
+  --color-accent-pink: #f472b6;
   --color-accent-green: #22c55e;
   --color-accent-amber: #f59e0b;
+  --color-accent-orange: #f97316;
   --color-accent-red: #ef4444;
-  --color-accent-neutral: #64748b;
+  --color-accent-neutral: #8b849d;
 
   --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
@@ -73,18 +89,37 @@
   --text-page: 1.625rem;
   --text-page--line-height: 2rem;
 
-  --radius-card: 14px;
-  --radius-control: 10px;
-  --radius-chip: 8px;
+  --radius-card: 18px;
+  --radius-control: 12px;
+  --radius-chip: 9px;
+
+  /* ---- Glass ----------------------------------------------------------
+     One definition of "what glass is here", so a panel never invents its
+     own blur radius. Saturate lifts the violet behind the panel instead of
+     letting the blur wash it to grey. */
+  --blur-glass: 20px;
+  --blur-glass-heavy: 28px;
+
+  /* ---- Depth scale ----------------------------------------------------
+     e1 (resting surface) -> e5 (critical/overlay). Each step raises both
+     the ambient shadow and the perceived elevation, which is what makes
+     the UI read as layered rather than flat. Violet-tinted rather than
+     pure black so shadows belong to the environment's lighting. */
+  --shadow-e1: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 2px 8px -4px rgba(0, 0, 0, 0.7);
+  --shadow-e2: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 8px 28px -14px rgba(0, 0, 0, 0.85);
+  --shadow-e3: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset, 0 16px 44px -20px rgba(0, 0, 0, 0.9), 0 0 32px -18px rgba(124, 58, 237, 0.5);
+  --shadow-e4: 0 1px 0 0 rgba(255, 255, 255, 0.07) inset, 0 24px 60px -24px rgba(0, 0, 0, 0.92), 0 0 48px -20px rgba(124, 58, 237, 0.55);
+  --shadow-e5: 0 1px 0 0 rgba(255, 255, 255, 0.09) inset, 0 32px 80px -28px rgba(0, 0, 0, 0.95), 0 0 64px -22px rgba(168, 85, 247, 0.6);
 
   /* Card lift: ambient shadow + a hairline top highlight, no big blur. */
-  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8);
-  --shadow-elevated: 0 24px 60px -24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(125, 180, 255, 0.10);
-  --shadow-glow-blue: 0 0 18px -6px var(--color-accent-blue);
-  --shadow-glow-cyan: 0 0 18px -6px var(--color-accent-cyan);
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 8px 28px -14px rgba(0, 0, 0, 0.9);
+  --shadow-elevated: 0 28px 68px -28px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(168, 85, 247, 0.16);
+  --shadow-glow-primary: 0 0 18px -6px var(--color-accent-primary);
+  --shadow-glow-magenta: 0 0 18px -6px var(--color-accent-magenta);
   --shadow-glow-violet: 0 0 18px -6px var(--color-accent-violet);
   --shadow-glow-green: 0 0 18px -6px var(--color-accent-green);
   --shadow-glow-amber: 0 0 18px -6px var(--color-accent-amber);
+  --shadow-glow-orange: 0 0 18px -6px var(--color-accent-orange);
   --shadow-glow-red: 0 0 18px -6px var(--color-accent-red);
   --shadow-glow-neutral: none;
 
@@ -92,16 +127,39 @@
      `accent` prop marks them as belonging to a channel (KPIs, the AI panel,
      live feeds). Wider/softer spread than --shadow-glow-* above, which is
      sized for a small icon chip, not a whole card's perimeter. */
-  --shadow-card-blue: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-blue);
-  --shadow-card-cyan: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-cyan);
-  --shadow-card-violet: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-violet);
-  --shadow-card-green: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-green);
-  --shadow-card-amber: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-amber);
-  --shadow-card-red: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.8), 0 0 24px -10px var(--color-accent-red);
+  --shadow-card-primary: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 8px 28px -14px rgba(0, 0, 0, 0.9), 0 0 26px -10px var(--color-accent-primary);
+  --shadow-card-magenta: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 8px 28px -14px rgba(0, 0, 0, 0.9), 0 0 26px -10px var(--color-accent-magenta);
+  --shadow-card-violet: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 8px 28px -14px rgba(0, 0, 0, 0.9), 0 0 26px -10px var(--color-accent-violet);
+  --shadow-card-green: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 8px 28px -14px rgba(0, 0, 0, 0.9), 0 0 26px -10px var(--color-accent-green);
+  --shadow-card-amber: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 8px 28px -14px rgba(0, 0, 0, 0.9), 0 0 26px -10px var(--color-accent-amber);
+  --shadow-card-orange: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 8px 28px -14px rgba(0, 0, 0, 0.9), 0 0 26px -10px var(--color-accent-orange);
+  --shadow-card-red: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 8px 28px -14px rgba(0, 0, 0, 0.9), 0 0 26px -10px var(--color-accent-red);
+
+  /* Hover lift for interactive cards -- a touch more bloom, same geometry so
+     nothing reflows on hover. */
+  --shadow-card-hover: 0 1px 0 0 rgba(255, 255, 255, 0.07) inset, 0 16px 40px -18px rgba(0, 0, 0, 0.95), 0 0 32px -12px var(--color-accent-primary);
 
   --animate-pulse-dot: pulse-dot 2.4s ease-in-out infinite;
   --animate-sweep: sweep 2.6s linear infinite;
   --animate-rise: rise 0.22s ease-out;
+  --animate-glow-pulse: glow-pulse 3.2s ease-in-out infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-ai-pulse: ai-pulse 1.6s ease-in-out infinite;
+
+  /* Atmosphere. Deliberately very slow -- the brief asks for something the
+     user notices subconsciously, not consciously. Only transform/opacity
+     move, so these stay on the compositor. */
+  --animate-aurora-a: aurora-a 22s ease-in-out infinite;
+  --animate-aurora-b: aurora-b 28s ease-in-out infinite;
+  --animate-particle: particle-drift 18s linear infinite;
+  /* Energy travelling along a pipeline connector. */
+  --animate-flow: flow 1.6s linear infinite;
+  /* One-shot ring that expands out of a node when a stage completes. */
+  --animate-ripple: ripple 0.9s ease-out;
+  /* Stroke draw-in for small hand-drawn SVGs (sparklines, gauges). Pair
+     with `pathLength={1}` + `strokeDasharray: 1` on the <path>/<circle> so
+     this works without computing each instance's real geometry. */
+  --animate-draw: draw-line 900ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
 @keyframes pulse-dot {
@@ -119,10 +177,67 @@
   to { opacity: 1; transform: none; }
 }
 
+/* Ambient violet breathing, used by the login mark and the AI panel. */
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Three-dot "assistant is thinking" indicator. Skeletons use `sweep`
+   above, which already travels a violet sheen across a dark block. */
+@keyframes ai-pulse {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* Aurora orbs. Two different paths so the two lights never move in
+   lockstep, which is what would make the drift obvious. */
+@keyframes aurora-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.85; }
+  33% { transform: translate3d(6%, 4%, 0) scale(1.12); opacity: 1; }
+  66% { transform: translate3d(-4%, 7%, 0) scale(0.94); opacity: 0.7; }
+}
+
+@keyframes aurora-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); opacity: 0.6; }
+  40% { transform: translate3d(-7%, -5%, 0) scale(0.9); opacity: 0.85; }
+  75% { transform: translate3d(5%, -3%, 0) scale(1.15); opacity: 0.5; }
+}
+
+/* Particles rise and fade; each span offsets its own delay/duration. */
+@keyframes particle-drift {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translate3d(12px, -120px, 0); opacity: 0; }
+}
+
+/* Energy pulse travelling left-to-right along a pipeline connector. */
+@keyframes flow {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+@keyframes ripple {
+  0% { transform: scale(0.75); opacity: 0.7; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+@keyframes draw-line {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
 /* ---------------------------------------------------------------------------
-   Global atmosphere. Two fixed radial glows (blue top-left, violet
-   bottom-right) plus a faint technical grid, all behind the content and all
-   dark enough that card text keeps full contrast.
+   Global atmosphere. Layered violet/magenta radial glows plus a faint
+   technical grid, all behind the content and all dark enough that card text
+   keeps full contrast. This is the "cinematic ambient lighting" of the login
+   reference, applied app-wide so every page shares one sky.
 --------------------------------------------------------------------------- */
 html, body, #root {
   height: 100%;
@@ -136,38 +251,76 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-body::before {
-  content: '';
+/* The atmosphere itself lives in components/ui/AmbientBackground.tsx rather
+   than on body::before/::after: it needs several independently-animated
+   layers (two drifting aurora orbs, a grid, a particle field, a vignette),
+   and pseudo-elements only give us two. The classes below are the contract
+   between that component and this stylesheet. */
+
+.ambient-root {
   position: fixed;
   inset: 0;
   z-index: 0;
+  overflow: hidden;
   pointer-events: none;
-  background:
-    /* Scattered point-lights, mirroring the reference mockup's faint
-       circuit/constellation texture -- small, soft, static. */
-    radial-gradient(2px 2px at 6% 88%, rgba(180, 210, 255, 0.5), transparent 70%),
-    radial-gradient(2px 2px at 11% 95%, rgba(140, 190, 255, 0.4), transparent 70%),
-    radial-gradient(1.5px 1.5px at 4% 78%, rgba(180, 210, 255, 0.35), transparent 70%),
-    radial-gradient(2px 2px at 16% 82%, rgba(150, 200, 255, 0.3), transparent 70%),
-    radial-gradient(1.5px 1.5px at 88% 14%, rgba(200, 170, 255, 0.4), transparent 70%),
-    radial-gradient(2px 2px at 94% 20%, rgba(160, 220, 255, 0.35), transparent 70%),
-    radial-gradient(900px 520px at 12% -6%, rgba(37, 99, 235, 0.21), transparent 62%),
-    radial-gradient(760px 520px at 92% 108%, rgba(139, 92, 246, 0.18), transparent 60%),
-    radial-gradient(620px 420px at 78% 8%, rgba(34, 211, 238, 0.10), transparent 65%);
+  /* Its own stacking/paint context, so drifting orbs never trigger layout
+     or repaint work in the application above it. */
+  contain: strict;
 }
 
-body::after {
-  content: '';
+.ambient-orb {
+  position: absolute;
+  border-radius: 9999px;
+  /* One static blur, never animated -- animating filter is the single most
+     expensive thing this effect could do. */
+  filter: blur(90px);
+  will-change: transform, opacity;
+}
+
+.ambient-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.3;
+  background-image:
+    linear-gradient(to right, rgba(139, 92, 246, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(139, 92, 246, 0.055) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black, transparent 75%);
+}
+
+.ambient-particle {
+  position: absolute;
+  border-radius: 9999px;
+  background: rgba(196, 181, 253, 0.75);
+  will-change: transform, opacity;
+}
+
+/* Vignette: pulls the eye to the centre and keeps card edges legible
+   against the orbs behind them. */
+.ambient-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 75% 65% at 50% 45%, transparent 40%, rgba(5, 3, 10, 0.72) 100%);
+}
+
+/* Cursor spotlight. Position comes from --mouse-x/--mouse-y, written by
+   CursorGlow.tsx on an rAF tick. Pointer-coarse devices never mount it,
+   and the media query below is a second guard. */
+.cursor-glow {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.35;
-  background-image:
-    linear-gradient(to right, rgba(120, 160, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(120, 160, 255, 0.05) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(circle at 50% 0%, black, transparent 78%);
+  background: radial-gradient(
+    520px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(139, 92, 246, 0.075),
+    transparent 62%
+  );
+  transition: opacity 0.3s ease;
+}
+
+@media (pointer: coarse) {
+  .cursor-glow { display: none; }
 }
 
 #root {
@@ -176,14 +329,14 @@ body::after {
 }
 
 ::selection {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(139, 92, 246, 0.38);
 }
 
 /* Scrollbars styled to disappear into the surface rather than punching a
    bright grey channel through every panel. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(125, 180, 255, 0.18) transparent;
+  scrollbar-color: rgba(168, 85, 247, 0.28) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -196,17 +349,17 @@ body::after {
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: rgba(125, 180, 255, 0.18);
+  background-color: rgba(168, 85, 247, 0.28);
   border-radius: 999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(125, 180, 255, 0.32);
+  background-color: rgba(168, 85, 247, 0.48);
 }
 
 /* Keyboard focus is always visible; pointer focus never draws a ring. */
 :focus-visible {
-  outline: 2px solid var(--color-accent-blue);
+  outline: 2px solid var(--color-accent-violet);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -228,9 +381,25 @@ body::after {
 
 /* Preference-driven chrome (see context/preferences/PreferencesProvider).
    Kept in CSS rather than threaded through every component's props. */
-html[data-ambient='off'] body::before,
-html[data-ambient='off'] body::after {
+html[data-ambient='off'] .ambient-root,
+html[data-ambient='off'] .cursor-glow {
   display: none;
+}
+
+/* Reduced motion keeps the atmosphere -- it is lighting, not movement --
+   but freezes every layer of it in place. The global rule below already
+   caps animation-duration and sets iteration-count to 1, which is what
+   stops an infinite drift from turning into a fast flicker. */
+html[data-motion='reduced'] .ambient-orb,
+html[data-motion='reduced'] .ambient-particle {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-orb,
+  .ambient-particle {
+    animation: none !important;
+  }
 }
 
 html[data-motion='reduced'] *,

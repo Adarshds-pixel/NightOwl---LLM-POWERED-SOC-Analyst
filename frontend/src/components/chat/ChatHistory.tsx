@@ -3,7 +3,7 @@ import { Bot, ChevronDown, User } from 'lucide-react'
 import { useState } from 'react'
 import type { ChatTurn } from '../../hooks/useIncidentChat'
 import { formatPercent, formatTimeOfDay } from '../../lib/format'
-import { EmptyState, LoadingState, Markdown, TypingDots } from '../ui'
+import { AIThinking, EmptyState, LoadingState, Markdown } from '../ui'
 
 /**
  * The conversation. Assistant turns carry the retrieval sources the answer
@@ -29,12 +29,10 @@ export function ChatHistory({ turns, loading, sending }: { turns: ChatTurn[]; lo
         <AIMessage key={turn.key} turn={turn} />
       ))}
       {sending && (
-        <li className="flex items-center gap-2 text-meta text-text-muted">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-violet/15 text-accent-violet">
-            <Bot className="h-3.5 w-3.5" />
-          </span>
-          <TypingDots />
-          <span>NightOwl AI is thinking</span>
+        <li>
+          {/* One real POST /chat is in flight, so this states that plainly
+              rather than narrating invented sub-steps. */}
+          <AIThinking label="NightOwl AI is reasoning over this incident" />
         </li>
       )}
     </ul>
@@ -52,7 +50,7 @@ export function AIMessage({ turn }: { turn: ChatTurn }) {
         className={clsx(
           'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1',
           isUser
-            ? 'bg-accent-blue/15 text-accent-blue ring-accent-blue/25'
+            ? 'bg-accent-primary/15 text-accent-primary ring-accent-primary/25'
             : 'bg-accent-violet/15 text-accent-violet ring-accent-violet/25',
         )}
       >
@@ -62,7 +60,7 @@ export function AIMessage({ turn }: { turn: ChatTurn }) {
       <div
         className={clsx(
           'max-w-[86%] min-w-0 rounded-card border px-3.5 py-2.5',
-          isUser ? 'border-accent-blue/25 bg-accent-blue/8' : 'border-line bg-surface-2/50',
+          isUser ? 'border-accent-primary/25 bg-accent-primary/8' : 'border-line bg-surface-2/50',
           turn.pending && 'opacity-60',
         )}
       >
@@ -82,7 +80,7 @@ export function AIMessage({ turn }: { turn: ChatTurn }) {
             <button
               type="button"
               onClick={() => setShowSources((open) => !open)}
-              className="flex items-center gap-1 text-micro font-semibold tracking-wide text-accent-cyan uppercase"
+              className="flex items-center gap-1 text-micro font-semibold tracking-wide text-accent-magenta uppercase"
             >
               {turn.sources.length} source{turn.sources.length === 1 ? '' : 's'}
               <ChevronDown className={clsx('h-3 w-3 transition-transform', showSources && 'rotate-180')} />
@@ -92,7 +90,7 @@ export function AIMessage({ turn }: { turn: ChatTurn }) {
                 {turn.sources.map((source) => (
                   <li key={source.chunk_id} className="flex items-start justify-between gap-2 text-micro">
                     <span className="line-clamp-2 text-text-muted">{source.document}</span>
-                    <span className="shrink-0 font-mono text-accent-cyan tabular-nums">
+                    <span className="shrink-0 font-mono text-accent-magenta tabular-nums">
                       {formatPercent(source.score * 100, 1)}
                     </span>
                   </li>

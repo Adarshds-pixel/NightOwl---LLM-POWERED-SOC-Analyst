@@ -65,7 +65,7 @@ export function Pagination({
                   'h-7 min-w-7 rounded-md border px-2 font-mono text-micro tabular-nums transition-colors duration-200',
                   entry === page
                     ? 'border-accent-violet/50 bg-accent-violet/25 text-text'
-                    : 'border-line bg-surface-2/50 text-text-muted hover:border-accent-blue/40 hover:text-text',
+                    : 'border-line bg-surface-2/50 text-text-muted hover:border-accent-primary/40 hover:text-text',
                 )}
               >
                 {entry + 1}
@@ -116,7 +116,7 @@ function PageButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="flex h-7 w-7 items-center justify-center rounded-md border border-line bg-surface-2/50 text-text-muted transition-colors duration-200 hover:border-accent-blue/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-line bg-surface-2/50 text-text-muted transition-colors duration-200 hover:border-accent-primary/40 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
     >
       {icon}
     </button>

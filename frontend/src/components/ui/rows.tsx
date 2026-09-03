@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Severity } from '../../api'
 import { SEVERITY_HEX } from '../../lib/severity'
+import { ACCENT } from '../../lib/tokens'
 import { severityDot } from './Badge'
 
 /**
@@ -85,7 +86,7 @@ export function TimelineItem({
   severity?: Severity
   accentColor?: string
 }) {
-  const color = accentColor ?? (severity ? SEVERITY_HEX[severity] : '#3b82f6')
+  const color = accentColor ?? (severity ? SEVERITY_HEX[severity] : ACCENT.primary)
   return (
     <li className="relative pl-4">
       <span
@@ -128,7 +129,7 @@ export function ViewAllLink({ to, label = 'View all' }: { to: string; label?: st
   return (
     <Link
       to={to}
-      className="flex items-center gap-0.5 text-micro font-semibold tracking-wide text-accent-blue uppercase transition-colors hover:text-accent-cyan"
+      className="flex items-center gap-0.5 text-micro font-semibold tracking-wide text-accent-primary uppercase transition-colors hover:text-accent-magenta"
     >
       {label}
       <ChevronRight className="h-3 w-3" />

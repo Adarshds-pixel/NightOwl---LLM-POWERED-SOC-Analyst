@@ -1,10 +1,17 @@
 import clsx from 'clsx'
-import type { ReactNode } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
+import { useId, type ReactNode } from 'react'
+import { usePreferences } from '../../context/preferences/usePreferences'
 
 /**
  * Underlined tab bar (MITRE page, incident detail). Rendered as real
  * buttons with the ARIA tab roles so arrow-key navigation and screen
  * readers behave; panels are rendered by the caller.
+ *
+ * The underline slides between tabs via `motion`'s shared-layout animation
+ * (`layoutId`) rather than jumping -- the same library already used for
+ * overlays/toasts. `useId` scopes the layoutId per instance so two Tabs bars
+ * on one page never fight over the same animated element.
  */
 export interface TabItem<T extends string> {
   value: T
@@ -24,6 +31,11 @@ export function Tabs<T extends string>({
   onChange: (value: T) => void
   className?: string
 }) {
+  const instanceId = useId()
+  const systemReduced = useReducedMotion()
+  const { prefs } = usePreferences()
+  const slide = !(systemReduced || prefs.reduceMotion)
+
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = items.findIndex((item) => item.value === value)
     if (event.key === 'ArrowRight') onChange(items[(index + 1) % items.length].value)
@@ -54,7 +66,16 @@ export function Tabs<T extends string>({
                 {item.count}
               </span>
             )}
-            {active && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent-blue shadow-glow-blue" />}
+            {active &&
+              (slide ? (
+                <motion.span
+                  layoutId={`${instanceId}-underline`}
+                  transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                  className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent-primary shadow-glow-primary"
+                />
+              ) : (
+                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent-primary shadow-glow-primary" />
+              ))}
           </button>
         )
       })}

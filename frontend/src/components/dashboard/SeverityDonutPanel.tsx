@@ -21,7 +21,7 @@ export function SeverityDonutPanel({ incidents }: { incidents: IncidentSummary[]
   }))
 
   return (
-    <Card title="Incidents by severity" icon={<PieChart className="h-3.5 w-3.5" />} accent="blue">
+    <Card title="Incidents by severity" icon={<PieChart className="h-3.5 w-3.5" />} accent="primary">
       {slices.length === 0 ? (
         <EmptyState message="No incidents to break down yet" />
       ) : (

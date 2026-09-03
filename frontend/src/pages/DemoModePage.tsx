@@ -1,38 +1,15 @@
-import clsx from 'clsx'
-import { Play, RotateCcw, TerminalSquare } from 'lucide-react'
+import { DatabaseZap, Play, RotateCcw, TerminalSquare } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { resetDemoData } from '../api'
 import { DemoTerminal } from '../components/demo/DemoTerminal'
-import { ReplayControlCard } from '../components/demo/ReplayControlCard'
-import { Button, Card, EmptyState, MiniStat, PageHeader } from '../components/ui'
-import { type DemoStageId, useDemoMode } from '../hooks/useDemoMode'
+import { PipelineFlow } from '../components/demo/PipelineFlow'
+import { Button, Card, EmptyState, MiniStat, Modal, PageHeader } from '../components/ui'
+import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
+import { useToast } from '../context/toast/useToast'
+import { useDemoMode } from '../hooks/useDemoMode'
+import { invalidateRulesCache } from '../hooks/useRules'
 import { DEMO_CHAT_QUESTION } from '../lib/constants'
-
-const STAGES: { id: DemoStageId; label: string }[] = [
-  { id: 'ingest', label: 'Ingest' },
-  { id: 'resolve', label: 'Resolve' },
-  { id: 'explain', label: 'Explain' },
-  { id: 'chat', label: 'Chat' },
-]
-
-function StageDot({
-  stageId,
-  currentStage,
-  status,
-}: {
-  stageId: DemoStageId
-  currentStage: DemoStageId | null
-  status: string
-}) {
-  const stageIndex = STAGES.findIndex((stage) => stage.id === stageId)
-  const currentIndex = currentStage ? STAGES.findIndex((stage) => stage.id === currentStage) : -1
-
-  let tone = 'bg-line-strong'
-  if (status === 'error' && stageIndex === currentIndex) tone = 'bg-accent-red'
-  else if (stageIndex < currentIndex || status === 'success') tone = 'bg-accent-green'
-  else if (stageIndex === currentIndex && status === 'running') tone = 'bg-accent-cyan animate-pulse-dot'
-
-  return <span className={clsx('h-2.5 w-2.5 rounded-full', tone)} />
-}
 
 /**
  * Demo Mode runs the real pipeline end to end against a bundled Sysmon
@@ -43,43 +20,78 @@ function StageDot({
 function DemoModePage() {
   const { status, currentStage, log, ingestResult, explainResult, chatResult, primaryIncidentId, activeFixture, run, reset } =
     useDemoMode()
+  const { refresh: refreshIncidents } = useIncidentsSnapshot()
+  const { push } = useToast()
   const running = status === 'running'
+
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false)
+  const [resettingData, setResettingData] = useState(false)
+
+  async function handleResetData() {
+    setConfirmResetOpen(false)
+    setResettingData(true)
+    try {
+      await resetDemoData()
+      reset()
+      // A reset changes both the incident snapshot and every rule's match
+      // count, so the session-cached rule set has to be dropped too -- same
+      // reasoning as useLogIngest.ts's upload() -- otherwise Rules Engine,
+      // Reports, MITRE and the other useRules() readers keep showing
+      // pre-reset counts until something else happens to invalidate it.
+      invalidateRulesCache()
+      refreshIncidents()
+      push({ tone: 'success', title: 'Demo data cleared', description: 'Every event, alert and incident was removed.' })
+    } catch {
+      push({ tone: 'error', title: 'Reset failed' })
+    } finally {
+      setResettingData(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4 p-5">
       <PageHeader
         title="Demo Mode"
         subtitle="Ingest, detect, explain and chat -- every step is a real backend call against a bundled fixture."
-        icon={<TerminalSquare className="h-5 w-5 text-accent-cyan" />}
+        icon={<TerminalSquare className="h-5 w-5 text-accent-magenta" />}
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'Demo Mode' }]}
+        actions={
+          <Button
+            variant="secondary"
+            onClick={() => setConfirmResetOpen(true)}
+            disabled={running || resettingData}
+            icon={<DatabaseZap className="h-3.5 w-3.5" />}
+          >
+            {resettingData ? 'Resetting...' : 'Reset demo data'}
+          </Button>
+        }
       />
 
-      <ReplayControlCard />
-
       <Card
-        title="Pipeline run (one-shot)"
+        title="Pipeline run"
         subtitle={activeFixture ? `Scenario: ${activeFixture.label}` : 'Rotates through 7 real attack scenarios each run'}
-        accent="cyan"
+        accent="magenta"
       >
-        <div className="flex flex-wrap items-center gap-6">
+        <div className="flex flex-wrap items-center gap-4">
           <Button variant="primary" onClick={run} disabled={running} icon={<Play className="h-3.5 w-3.5" />}>
             {running ? 'Running...' : status === 'idle' ? 'Run demo' : 'Run again'}
           </Button>
-
-          <div className="flex flex-wrap items-center gap-4">
-            {STAGES.map((stage) => (
-              <div key={stage.id} className="flex items-center gap-2">
-                <StageDot stageId={stage.id} currentStage={currentStage} status={status} />
-                <span className="text-micro tracking-[0.12em] text-text-muted uppercase">{stage.label}</span>
-              </div>
-            ))}
-          </div>
 
           {status !== 'idle' && (
             <Button variant="ghost" size="sm" onClick={reset} disabled={running} icon={<RotateCcw className="h-3.5 w-3.5" />}>
               Reset
             </Button>
           )}
+        </div>
+
+        <div className="mt-5">
+          <PipelineFlow
+            status={status}
+            currentStage={currentStage}
+            ingestResult={ingestResult}
+            explainResult={explainResult}
+            incidentCount={ingestResult?.incident_ids.length ?? 0}
+          />
         </div>
 
         <div className="mt-4">
@@ -92,7 +104,7 @@ function DemoModePage() {
       </Card>
 
       {status === 'success' && ingestResult && (
-        <Card title="Results" accent="green">
+        <Card title="Results" accent="primary">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MiniStat label="Events ingested" value={ingestResult.events_ingested.toLocaleString()} />
             <MiniStat label="Rule matches" value={ingestResult.rule_matches} />
@@ -124,13 +136,31 @@ function DemoModePage() {
           {primaryIncidentId && (
             <Link
               to={`/incidents/${primaryIncidentId}`}
-              className="mt-4 inline-flex items-center gap-1 text-meta font-semibold tracking-wide text-accent-cyan uppercase"
+              className="mt-4 inline-flex items-center gap-1 text-meta font-semibold tracking-wide text-accent-magenta uppercase"
             >
               Open the full incident
             </Link>
           )}
         </Card>
       )}
+
+      <Modal open={confirmResetOpen} onClose={() => setConfirmResetOpen(false)} title="Reset demo data">
+        <div className="flex flex-col gap-4 p-5">
+          <p className="text-body text-text-dim">
+            This permanently deletes every event, alert, incident, chat message and audit entry currently in the
+            database. This cannot be undone -- use it to start a clean test run rather than piling new uploads onto
+            whatever is already there.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmResetOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleResetData} icon={<DatabaseZap className="h-3.5 w-3.5" />}>
+              Delete everything
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

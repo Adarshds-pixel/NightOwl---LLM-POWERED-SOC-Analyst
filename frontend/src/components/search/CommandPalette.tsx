@@ -203,7 +203,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                     onClick={() => select(result)}
                     className={clsx(
                       'flex w-full items-center gap-3 px-4 py-2 text-left transition-colors',
-                      active ? 'bg-accent-blue/12' : 'hover:bg-white/4',
+                      active ? 'bg-accent-primary/12' : 'hover:bg-white/4',
                     )}
                   >
                     <Icon className="h-4 w-4 shrink-0 text-text-faint" />

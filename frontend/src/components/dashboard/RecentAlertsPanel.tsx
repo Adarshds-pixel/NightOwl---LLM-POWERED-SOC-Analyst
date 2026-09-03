@@ -1,13 +1,13 @@
 import { Bell } from 'lucide-react'
-import type { EventLogRow } from '../../api'
+import type { AlertRow } from '../../api'
 import { formatTimeOfDay } from '../../lib/format'
 import { eventMessage } from '../../lib/events'
 import { Card, EmptyState, ErrorState, ListRow, SeverityDotMarker, SkeletonRows, ViewAllLink } from '../ui'
 
 /**
- * The newest rule matches. These are real alerts: events that tripped a
- * Sigma rule, read from GET /events?alert_only=true, with the matched rule
- * title and severity the detection engine assigned.
+ * The newest rule matches -- real alerts, read from GET /alerts, one row
+ * per Alert record with the matched rule title and severity the detection
+ * engine assigned.
  */
 export function RecentAlertsPanel({
   alerts,
@@ -15,7 +15,7 @@ export function RecentAlertsPanel({
   error,
   onRetry,
 }: {
-  alerts: EventLogRow[]
+  alerts: AlertRow[]
   loading: boolean
   error: string | null
   onRetry: () => void
@@ -38,7 +38,7 @@ export function RecentAlertsPanel({
         <div className="flex flex-col">
           {alerts.slice(0, 6).map((alert) => (
             <ListRow
-              key={alert.id}
+              key={alert.alert_id}
               to={alert.incident_id ? `/incidents/${alert.incident_id}` : '/alerts'}
               marker={alert.severity ? <SeverityDotMarker severity={alert.severity} /> : undefined}
               title={alert.rule_title ?? eventMessage(alert)}

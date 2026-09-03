@@ -1,12 +1,11 @@
 import clsx from 'clsx'
-import { Bell, Bot, Clock, Menu, Radio, Search, Settings, Sparkles, UserRound } from 'lucide-react'
+import { Bell, Bot, Clock, Menu, Search, Settings, Sparkles, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { NotificationPanel } from '../components/notifications/NotificationPanel'
 import { Popover, StatusDot, Tooltip } from '../components/ui'
 import { useHealth } from '../context/health/useHealth'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
-import { useReplay } from '../context/replay/useReplay'
 import { usePreferences } from '../context/preferences/usePreferences'
 import { useClock } from '../hooks/useClock'
 import { useUnseenIncidents } from '../hooks/useUnseenIncidents'
@@ -24,7 +23,6 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
   const { status } = useHealth()
   const { incidents } = useIncidentsSnapshot()
   const { unseen, unseenCount, markAllSeen, markSeen } = useUnseenIncidents(incidents)
-  const { status: replayStatus } = useReplay()
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const now = useClock()
@@ -35,7 +33,12 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
   const apiOnline = status === 'healthy'
 
   return (
-    <header className="relative z-30 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line bg-surface/70 px-5 py-3 backdrop-blur-md">
+    <header className="relative z-30 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line bg-gradient-to-b from-surface-2/70 to-surface/60 px-5 py-3 backdrop-blur-[var(--blur-glass-heavy)] backdrop-saturate-[1.2]">
+      {/* Lit underline, brightest under the page title. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-accent-violet/45 via-accent-magenta/20 to-transparent"
+      />
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
@@ -53,7 +56,7 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
 
       <div className="flex items-center gap-2">
         <div className="hidden items-center gap-2.5 rounded-control border border-line bg-surface-2/50 px-3 py-1.5 md:flex">
-          <Clock className="h-4 w-4 text-accent-cyan" />
+          <Clock className="h-4 w-4 text-accent-magenta" />
           <div className="leading-tight">
             <p className="font-mono text-meta text-text tabular-nums">
               {now.toLocaleTimeString('en-US', { hour12: !prefs.clock24h })}
@@ -62,27 +65,17 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
           </div>
         </div>
 
-        {replayStatus?.state === 'running' && (
-          <Link
-            to="/demo"
-            className="hidden items-center gap-2 rounded-control border border-accent-cyan/40 bg-accent-cyan/10 px-3 py-1.5 transition-colors hover:border-accent-cyan/60 md:flex"
-          >
-            <Radio className="h-3.5 w-3.5 animate-pulse-dot text-accent-cyan" />
-            <span className="leading-tight">
-              <span className="block text-meta font-medium text-text">Replay running</span>
-              <span className="block font-mono text-micro text-text-muted tabular-nums">
-                {Math.round(replayStatus.elapsed_seconds)}s / {Math.round(replayStatus.duration_seconds)}s
-              </span>
-            </span>
-          </Link>
-        )}
-
         <Link
           to="/assistant"
-          className="hidden items-center gap-2.5 rounded-control border border-accent-violet/35 bg-gradient-to-r from-accent-violet/18 to-accent-blue/10 px-3 py-1.5 transition-colors hover:border-accent-violet/60 sm:flex"
+          className="group relative hidden items-center gap-2.5 overflow-hidden rounded-control border border-accent-violet/35 bg-gradient-to-r from-accent-violet/18 to-accent-primary/10 px-3 py-1.5 transition-all duration-200 hover:-translate-y-px hover:border-accent-violet/60 hover:shadow-glow-violet sm:flex"
         >
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-violet/20 text-accent-violet ring-1 ring-accent-violet/30">
-            <Bot className="h-3.5 w-3.5" />
+          <span className="relative flex h-7 w-7 items-center justify-center rounded-full bg-accent-violet/20 text-accent-violet ring-1 ring-accent-violet/30">
+            {/* The AI capsule breathes while the API is reachable -- this is
+                the "intelligence layer is awake" cue, not a generic badge. */}
+            {apiOnline && (
+              <span aria-hidden className="absolute inset-0 rounded-full bg-accent-violet/30 blur-md animate-glow-pulse" />
+            )}
+            <Bot className="relative h-3.5 w-3.5" />
           </span>
           <span className="leading-tight">
             <span className="block text-meta font-medium text-text">AI Assistant</span>
@@ -99,7 +92,7 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
             type="button"
             onClick={onOpenSearch}
             aria-label="Open global search"
-            className="flex h-10 w-10 items-center justify-center rounded-control border border-line bg-surface-2/50 text-text-dim transition-colors hover:border-accent-blue/40 hover:text-text"
+            className="flex h-10 w-10 items-center justify-center rounded-control border border-line bg-surface-2/50 text-text-dim transition-colors hover:border-accent-primary/40 hover:text-text"
           >
             <Search className="h-4 w-4" />
           </button>
@@ -113,7 +106,7 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
             aria-expanded={notificationsOpen}
             className={clsx(
               'relative flex h-10 w-10 items-center justify-center rounded-control border bg-surface-2/50 transition-colors',
-              notificationsOpen ? 'border-accent-blue/50 text-text' : 'border-line text-text-dim hover:text-text',
+              notificationsOpen ? 'border-accent-primary/50 text-text' : 'border-line text-text-dim hover:text-text',
             )}
           >
             <Bell className="h-4 w-4" />
@@ -141,7 +134,7 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
             aria-expanded={profileOpen}
             className={clsx(
               'flex h-10 w-10 items-center justify-center rounded-control border bg-surface-2/50 transition-colors',
-              profileOpen ? 'border-accent-blue/50 text-text' : 'border-line text-text-dim hover:text-text',
+              profileOpen ? 'border-accent-primary/50 text-text' : 'border-line text-text-dim hover:text-text',
             )}
           >
             <UserRound className="h-4 w-4" />

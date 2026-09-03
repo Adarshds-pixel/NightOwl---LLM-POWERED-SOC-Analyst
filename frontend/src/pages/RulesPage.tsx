@@ -81,14 +81,14 @@ function RulesPage() {
       header: 'Category',
       hideBelow: 'md',
       sortValue: (rule) => rule.category ?? '',
-      cell: (rule) => <Badge accent="blue">{(rule.category ?? 'uncategorised').replace(/_/g, ' ')}</Badge>,
+      cell: (rule) => <Badge accent="primary">{(rule.category ?? 'uncategorised').replace(/_/g, ' ')}</Badge>,
     },
     {
       key: 'technique',
       header: 'Technique',
       hideBelow: 'sm',
       sortValue: (rule) => rule.technique_id ?? '',
-      cell: (rule) => <span className="font-mono text-meta text-accent-cyan">{rule.technique_id ?? '--'}</span>,
+      cell: (rule) => <span className="font-mono text-meta text-accent-magenta">{rule.technique_id ?? '--'}</span>,
     },
     {
       key: 'level',
@@ -151,10 +151,10 @@ function RulesPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Rules loaded" value={rules.length} icon={<FileCode2 className="h-4 w-4" />} accent="violet" note="Sigma rules parsed at startup" />
-        <StatCard label="Enabled" value={rules.filter((rule) => rule.enabled).length} icon={<Zap className="h-4 w-4" />} accent="green" note="Every loaded rule is active" />
+        <StatCard label="Enabled" value={rules.filter((rule) => rule.enabled).length} icon={<Zap className="h-4 w-4" />} accent="magenta" note="Every loaded rule is active" />
         <StatCard label="Triggered 24h" value={triggeredToday} icon={<Target className="h-4 w-4" />} accent="amber" note="Matches in the last day" />
         <StatCard label="Never fired" value={rules.filter((rule) => rule.match_count === 0).length} icon={<CircleSlash className="h-4 w-4" />} accent="neutral" note="No match in the ingested data" />
-        <StatCard label="Categories" value={categories.length} icon={<Layers className="h-4 w-4" />} accent="blue" note="Log source categories covered" />
+        <StatCard label="Categories" value={categories.length} icon={<Layers className="h-4 w-4" />} accent="primary" note="Log source categories covered" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -246,7 +246,7 @@ function RulesPage() {
                     <p className="text-micro font-medium tracking-[0.1em] text-text-faint uppercase">References</p>
                     <ul className="mt-1 flex flex-col gap-1">
                       {selected.references.map((reference) => (
-                        <li key={reference} className="truncate text-micro text-accent-cyan">
+                        <li key={reference} className="truncate text-micro text-accent-magenta">
                           {reference}
                         </li>
                       ))}
@@ -259,7 +259,7 @@ function RulesPage() {
             )}
           </Card>
 
-          <Card title="Rules by category" accent="blue">
+          <Card title="Rules by category" accent="primary">
             {categoryCounts.length > 0 ? (
               <Donut slices={categoryCounts} totalLabel="Rules" height={168} />
             ) : (

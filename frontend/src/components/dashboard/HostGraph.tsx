@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import type { HostEdge, HostNode } from '../../lib/aggregations'
 import { SEVERITY_HEX } from '../../lib/severity'
+import { ACCENT, LINE } from '../../lib/tokens'
 import { EmptyState, Tooltip } from '../ui'
 
 const WIDTH = 380
@@ -62,12 +63,12 @@ export function HostGraph({ nodes, edges }: { nodes: HostNode[]; edges: HostEdge
     <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" style={{ maxHeight: HEIGHT }} role="img" aria-label="Host activity graph">
       <defs>
         <radialGradient id={glowId}>
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+          <stop offset="0%" stopColor={ACCENT.primary} stopOpacity="0.18" />
+          <stop offset="100%" stopColor={ACCENT.primary} stopOpacity="0" />
         </radialGradient>
       </defs>
       <circle cx={CENTER_X} cy={CENTER_Y} r={LAYOUT_RADIUS + 40} fill={`url(#${glowId})`} />
-      <circle cx={CENTER_X} cy={CENTER_Y} r={LAYOUT_RADIUS} fill="none" stroke="rgba(120,160,255,0.10)" strokeDasharray="3 5" />
+      <circle cx={CENTER_X} cy={CENTER_Y} r={LAYOUT_RADIUS} fill="none" stroke={LINE.base} strokeDasharray="3 5" />
 
       {edges.map((edge) => {
         const a = positions.get(edge.a)
@@ -80,7 +81,7 @@ export function HostGraph({ nodes, edges }: { nodes: HostNode[]; edges: HostEdge
             y1={a.y}
             x2={b.x}
             y2={b.y}
-            stroke="#22d3ee"
+            stroke={ACCENT.magenta}
             strokeOpacity={0.22}
             strokeWidth={edgeWidth(edge.sharedTechniqueCount)}
             strokeLinecap="round"
@@ -125,7 +126,7 @@ export function HostGraphLegend() {
         Size = incident count
       </li>
       <li className="flex items-center gap-1.5">
-        <span className="h-0.5 w-4 rounded-full bg-accent-cyan/60" />
+        <span className="h-0.5 w-4 rounded-full bg-accent-magenta/60" />
         Shared MITRE technique
       </li>
       <Tooltip label="Hosts are joined when the same technique appears on both, which is what lateral movement looks like in this data.">

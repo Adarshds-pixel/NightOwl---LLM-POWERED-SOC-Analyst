@@ -1,4 +1,5 @@
-import { Crosshair, Network } from 'lucide-react'
+import clsx from 'clsx'
+import { Crosshair, Network, ShieldAlert } from 'lucide-react'
 import { ActiveIncidentsPanel } from '../components/dashboard/ActiveIncidentsPanel'
 import { AiAssistantPanel } from '../components/dashboard/AiAssistantPanel'
 import { AttackVectorPanel } from '../components/dashboard/AttackVectorPanel'
@@ -15,7 +16,55 @@ import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
 import { useAlerts } from '../hooks/useAlerts'
 import { useEventTotals } from '../hooks/useEventTotals'
-import { hostActivity, selectMostActionableIncident } from '../lib/aggregations'
+import { computeThreatLevel, hostActivity, selectMostActionableIncident, type ThreatLevel } from '../lib/aggregations'
+
+/** Visual language per computed threat level -- reuses the same
+ *  `computeThreatLevel` the sidebar's status block already shows, just given
+ *  the visual weight the brief asks the dashboard's top-of-hierarchy
+ *  "threat situation" to carry. Nothing here is a second source of truth. */
+const THREAT_STYLES: Record<ThreatLevel, { text: string; border: string; dot: string; glow?: string }> = {
+  NOMINAL: { text: 'text-accent-green', border: 'border-line', dot: 'bg-accent-green' },
+  LOW: { text: 'text-accent-violet', border: 'border-accent-violet/25', dot: 'bg-accent-violet' },
+  MODERATE: { text: 'text-accent-amber', border: 'border-accent-amber/30', dot: 'bg-accent-amber' },
+  ELEVATED: {
+    text: 'text-accent-orange',
+    border: 'border-accent-orange/35',
+    dot: 'bg-accent-orange animate-pulse-dot',
+    glow: 'shadow-glow-orange',
+  },
+  CRITICAL: {
+    text: 'text-accent-red',
+    border: 'border-accent-red/45',
+    dot: 'bg-accent-red animate-pulse-dot',
+    glow: 'shadow-glow-red',
+  },
+}
+
+function ThreatBanner({ level, activeCount }: { level: ThreatLevel; activeCount: number }) {
+  const style = THREAT_STYLES[level]
+  return (
+    <div
+      className={clsx(
+        'flex items-center gap-3 rounded-card border bg-surface-1/60 px-4 py-2.5 backdrop-blur-[var(--blur-glass)] backdrop-saturate-[1.2] transition-colors duration-300',
+        style.border,
+        style.glow,
+      )}
+    >
+      <span className="relative flex h-2.5 w-2.5 shrink-0">
+        <span className={clsx('absolute inset-0 rounded-full opacity-60', style.dot)} />
+        <span className={clsx('relative h-2.5 w-2.5 rounded-full', style.dot.split(' ')[0])} />
+      </span>
+      <ShieldAlert className={clsx('h-4 w-4 shrink-0', style.text)} />
+      <p className="text-meta text-text-dim">
+        Threat level <span className={clsx('font-semibold tracking-wide', style.text)}>{level}</span>
+        <span className="text-text-faint">
+          {' '}
+          -- {activeCount} active incident{activeCount === 1 ? '' : 's'} require attention
+        </span>
+      </p>
+    </div>
+  )
+}
 
 /**
  * The Overview. Layout mirrors the reference mockup, minus its world
@@ -35,6 +84,7 @@ function DashboardPage() {
 
   const graph = hostActivity(incidents)
   const focusIncident = selectMostActionableIncident(incidents)
+  const threat = computeThreatLevel(incidents)
 
   if (loading) {
     return (
@@ -70,6 +120,8 @@ function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4 p-5">
+      <ThreatBanner level={threat.level} activeCount={threat.activeCount} />
+
       <KpiRow incidents={incidents} meta={meta} alerts={alertsQuery.alerts} alertTotal={alertsQuery.total} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -80,7 +132,7 @@ function DashboardPage() {
           title="MITRE ATT&CK heatmap"
           subtitle="Observed techniques by tactic"
           icon={<Crosshair className="h-3.5 w-3.5" />}
-          accent="cyan"
+          accent="magenta"
           action={<ViewAllLink to="/mitre" label="Full matrix" />}
           className="xl:col-span-5"
         >
@@ -116,7 +168,7 @@ function DashboardPage() {
           title="Host activity"
           subtitle="Hosts linked by shared techniques"
           icon={<Network className="h-3.5 w-3.5" />}
-          accent="cyan"
+          accent="magenta"
           className="xl:col-span-3"
         >
           <HostGraph nodes={graph.nodes} edges={graph.edges} />

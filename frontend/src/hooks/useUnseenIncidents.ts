@@ -32,7 +32,7 @@ const CLEARED_EVENT = 'nightowl:seen-incident-ids-cleared'
 /**
  * Clears the seen-incident set. Needed because a demo reset restarts the
  * backend's identity sequences (see services/demo_service.py), so the next
- * replay's incidents are again #1, #2, #3 -- ids already in this browser's
+ * run's incidents are again #1, #2, #3 -- ids already in this browser's
  * seen set from the previous run. Without this, the notification bell
  * would show zero unread for a run that just created three incidents.
  */
