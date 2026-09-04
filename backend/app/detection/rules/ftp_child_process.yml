@@ -1,0 +1,23 @@
+title: Suspicious Child Process of ftp.exe
+id: 21146539-1b4d-459f-81aa-2545a1445e27
+status: experimental
+description: >
+  Detects a process spawned by ftp.exe. The built-in Windows FTP client
+  supports a scripted "-s:" command file, which attackers use as a LOLBin
+  to fetch a payload and then hand off execution to a shell -- a
+  legitimate-looking alternative to certutil/bitsadmin for staging tools.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1105/
+tags:
+  - attack.command_and_control
+  - attack.t1105
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection:
+    ParentImage|endswith: '\ftp.exe'
+  condition: selection
+level: medium

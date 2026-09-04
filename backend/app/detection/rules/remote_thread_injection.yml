@@ -1,0 +1,37 @@
+title: Remote Thread Creation from Scripting Engine or Web Server Process
+id: 034c5169-8d14-43af-9061-b7417bc636ca
+status: experimental
+description: >
+  Detects a CreateRemoteThread call whose source process is a scripting
+  engine (powershell.exe, wscript.exe, cscript.exe, mshta.exe, rundll32.exe)
+  or an IIS/web-server worker process. Neither legitimately injects threads
+  into other processes, so this is a strong process-injection indicator
+  (e.g. unmanaged PowerShell/CLR injection, or a webshell pivoting to
+  in-memory execution).
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1055/
+tags:
+  - attack.defense_evasion
+  - attack.privilege_escalation
+  - attack.t1055
+logsource:
+  category: create_remote_thread
+  service: sysmon
+detection:
+  selection_scripting:
+    SourceImage|contains:
+      - powershell.exe
+      - wscript.exe
+      - cscript.exe
+      - mshta.exe
+      - rundll32.exe
+  selection_webserver:
+    SourceImage|contains:
+      - w3wp.exe
+      - httpd.exe
+      - nginx.exe
+      - tomcat
+  condition: selection_scripting or selection_webserver
+level: high

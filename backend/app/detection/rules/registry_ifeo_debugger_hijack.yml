@@ -17,6 +17,7 @@ tags:
   - attack.t1546.012
 logsource:
   category: registry_event
+  service: sysmon
 detection:
   selection:
     TargetObject|contains: '\Image File Execution Options\'

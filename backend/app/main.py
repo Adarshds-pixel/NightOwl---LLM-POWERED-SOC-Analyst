@@ -16,6 +16,7 @@ POST /demo/reset (behind require_demo_mode in addition to the usual API key).
 from fastapi import Depends, FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from app.api.routes_ai_opinions import router as ai_opinions_router
 from app.api.routes_alerts import router as alerts_router
 from app.api.routes_chat import router as chat_router
 from app.api.routes_demo import require_demo_mode
@@ -54,6 +55,7 @@ app.include_router(events_router, dependencies=[Depends(require_api_key)])
 app.include_router(alerts_router, dependencies=[Depends(require_api_key)])
 app.include_router(rules_router, dependencies=[Depends(require_api_key)])
 app.include_router(demo_router, dependencies=[Depends(require_api_key), Depends(require_demo_mode)])
+app.include_router(ai_opinions_router, dependencies=[Depends(require_api_key)])
 
 
 @app.get("/health")

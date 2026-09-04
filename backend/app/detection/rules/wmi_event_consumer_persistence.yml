@@ -1,0 +1,25 @@
+title: WMI CommandLineEventConsumer Persistence
+id: 5d2c48bd-17f6-4633-83f8-491ef1ee0b87
+status: experimental
+description: >
+  Detects a WMI permanent event consumer of type "Command Line" being
+  created -- WMI event subscriptions (filter + consumer + binding) are a
+  well-known fileless persistence mechanism that survives reboots and
+  runs without a scheduled task or registry Run key.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1546/003/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1546.003
+logsource:
+  category: wmi_event
+  service: sysmon
+detection:
+  selection:
+    EventType: WmiConsumerEvent
+    Type: 'Command Line'
+  condition: selection
+level: high

@@ -15,9 +15,19 @@ never for an unrecognized-but-well-formed event ID.
 """
 
 from collections.abc import Callable, Iterable, Iterator
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.schemas.event import NormalizedEvent
+
+# Timestomping (T1070.006) is detected by comparing a Sysmon Event ID 2's
+# new CreationUtcTime against the file's PreviousCreationUtcTime -- but
+# engine.py's rule matcher only supports literal string modifiers
+# (contains/startswith/endswith), not cross-field comparison. So the
+# comparison is done here, once, at normalize time, and exposed as a
+# synthetic event_data key ("TimestompSuspected") a rule can match on
+# directly. 5 minutes tolerates normal clock jitter/reordering while still
+# catching real backdating, which is measured in hours/days/years.
+_TIMESTOMP_THRESHOLD = timedelta(minutes=5)
 
 
 class EventNormalizationError(Exception):
@@ -29,6 +39,39 @@ def _extract_host(system: dict) -> str:
     if not isinstance(host, str) or not host:
         raise EventNormalizationError("record missing 'System.Computer'")
     return host
+
+
+def _extract_channel(system: dict) -> str | None:
+    """Non-raising, unlike host/event_id/timestamp: channel is used for
+    scoping/coverage honesty, not required to build a valid Event row, so
+    its absence must never fail an otherwise-good record."""
+    channel = system.get("Channel")
+    return channel if isinstance(channel, str) and channel else None
+
+
+# The single source of truth for "which channel is this," in scoping terms:
+# canonical token -> the lowercase substring of the raw `System.Channel`
+# string that identifies it. Real observed values (verified against actual
+# sample files, not assumed): Sysmon -> 'Microsoft-Windows-Sysmon/Operational'
+# (contains "sysmon"), Security -> 'Security' (contains "security"). Every
+# call site that needs a channel-scoping decision (rule_loader.py, engine.py,
+# this module's own Security-channel dispatch, event_service.py's SQL-level
+# coverage filter) must derive from this one table rather than re-hardcoding
+# a channel string comparison independently.
+CHANNEL_TOKEN_SUBSTRINGS: dict[str, str] = {
+    "sysmon": "sysmon",
+    "security": "security",
+}
+
+
+def canonical_channel(raw_channel: str | None) -> str | None:
+    if not raw_channel:
+        return None
+    lowered = raw_channel.lower()
+    for token, substring in CHANNEL_TOKEN_SUBSTRINGS.items():
+        if substring in lowered:
+            return token
+    return None
 
 
 def _extract_event_id(system: dict) -> int:
@@ -116,6 +159,22 @@ def _normalize_network_connection(data: dict[str, str | None]) -> dict:
     }
 
 
+def _parse_sysmon_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S.%f")
+    except ValueError:
+        return None
+
+
+def _flag_timestomp(data: dict[str, str | None]) -> dict[str, str | None]:
+    created = _parse_sysmon_utc(data.get("CreationUtcTime"))
+    previous = _parse_sysmon_utc(data.get("PreviousCreationUtcTime"))
+    backdated = created is not None and previous is not None and (previous - created) > _TIMESTOMP_THRESHOLD
+    return {**data, "TimestompSuspected": "true" if backdated else "false"}
+
+
 def _normalize_file_create(data: dict[str, str | None]) -> dict:
     return {
         "process": data.get("Image"),
@@ -124,10 +183,43 @@ def _normalize_file_create(data: dict[str, str | None]) -> dict:
     }
 
 
-_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]] = {
+_SYSMON_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]] = {
     1: _normalize_process_creation,
     3: _normalize_network_connection,
     11: _normalize_file_create,
+}
+
+# Security-channel field names for the same concepts Sysmon calls
+# Image/ParentImage/CommandLine/User -- confirmed against real captured
+# Security-channel field values (`sample_logs/real_world_fixtures/`), not
+# assumed from public schema docs alone. Only applied for `channel ==
+# "security"` (see normalize_event()), so a Sysmon record's own `Image`
+# etc. is never touched. `NewProcessName`/`ProcessCommandLine` only
+# populate on 4688; the other two are common across most Security event
+# IDs but only ever consulted here for the one ID this module dispatches
+# on (4688) -- adding more Security event IDs to `_SECURITY_EVENT_ID_DISPATCH`
+# is what would put the rest of this table to use.
+_SECURITY_FIELD_ALIASES: dict[str, str] = {
+    "NewProcessName": "Image",
+    "ParentProcessName": "ParentImage",
+    "ProcessCommandLine": "CommandLine",
+    "SubjectUserName": "User",
+}
+
+
+def _apply_security_aliases(data: dict[str, str | None]) -> dict[str, str | None]:
+    aliased = dict(data)
+    for security_name, sysmon_name in _SECURITY_FIELD_ALIASES.items():
+        if security_name in data and sysmon_name not in aliased:
+            aliased[sysmon_name] = data[security_name]
+    return aliased
+
+
+_SECURITY_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]] = {
+    # 4688 (process creation): reuses the Sysmon extractor verbatim -- the
+    # aliasing above has already renamed the Security fields onto the
+    # Image/CommandLine/User vocabulary it reads.
+    4688: _normalize_process_creation,
 }
 
 
@@ -142,13 +234,27 @@ def normalize_event(record: dict) -> NormalizedEvent:
     host = _extract_host(system)
     timestamp = _extract_timestamp(system)
     event_id = _extract_event_id(system)
+    channel = _extract_channel(system)
 
     data = _data_dict(event.get("EventData"))
-    extractor = _EVENT_ID_DISPATCH.get(event_id)
+    if event_id == 2:
+        data = _flag_timestomp(data)
+
+    if canonical_channel(channel) == "security":
+        data = _apply_security_aliases(data)
+        extractor = _SECURITY_EVENT_ID_DISPATCH.get(event_id)
+    else:
+        extractor = _SYSMON_EVENT_ID_DISPATCH.get(event_id)
     type_fields = extractor(data) if extractor else {}
 
     return NormalizedEvent(
-        host=host, timestamp=timestamp, event_id=event_id, raw=record, event_data=data, **type_fields
+        host=host,
+        timestamp=timestamp,
+        event_id=event_id,
+        channel=channel,
+        raw=record,
+        event_data=data,
+        **type_fields,
     )
 
 

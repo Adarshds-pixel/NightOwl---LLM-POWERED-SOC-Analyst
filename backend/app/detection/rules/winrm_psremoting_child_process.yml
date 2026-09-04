@@ -1,0 +1,26 @@
+title: Process Spawned by WinRM/PSRemoting Host
+id: 3b54bcb6-7ed4-45d7-b20d-3266cac8e942
+status: experimental
+description: >
+  Detects a process created by wsmprovhost.exe or winrshost.exe, the host
+  processes for a PowerShell Remoting / WinRM (Windows Remote Shell)
+  session. Any command execution under these parents means it arrived over
+  a remote-management session -- expected on jump boxes, notable
+  everywhere else, and a common lateral-movement vector.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1021/006/
+tags:
+  - attack.lateral_movement
+  - attack.t1021.006
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection:
+    ParentImage|endswith:
+      - '\wsmprovhost.exe'
+      - '\winrshost.exe'
+  condition: selection
+level: medium

@@ -1,0 +1,23 @@
+title: Security Audit Log Cleared
+id: 8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21
+status: experimental
+description: >
+  Detects Windows Security Event ID 1102, "The audit log was cleared" --
+  a common anti-forensic step after an intrusion to remove evidence of
+  prior activity. This event carries no EventData on real samples, so
+  the rule matches on event_id alone.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1685/005/
+tags:
+  - attack.defense_evasion
+  - attack.t1685.005
+logsource:
+  category: audit_log_cleared
+  service: security
+detection:
+  selection:
+    event_id: 1102
+  condition: selection
+level: high

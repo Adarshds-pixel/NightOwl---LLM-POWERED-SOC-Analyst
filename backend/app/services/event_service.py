@@ -10,11 +10,15 @@ drift out of sync on their filters.
 """
 
 import logging
+from collections import defaultdict
 from datetime import datetime
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import and_, exists, false, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.detection.engine import covered_event_ids
+from app.detection.rule_loader import get_loaded_rules
+from app.ingestion.normalizer import CHANNEL_TOKEN_SUBSTRINGS
 from app.models.alert import Alert
 from app.models.event import Event
 from app.schemas.event import NormalizedEvent
@@ -34,6 +38,7 @@ def create_event(db: Session, normalized: NormalizedEvent) -> Event:
         host=normalized.host,
         timestamp=normalized.timestamp,
         event_id=normalized.event_id,
+        channel=normalized.channel,
         process=normalized.process,
         command_line=normalized.command_line,
         user=normalized.user,
@@ -53,6 +58,39 @@ def save_events(db: Session, events: list[NormalizedEvent]) -> list[Event]:
     return rows
 
 
+def _covered_predicate():
+    """SQL expression matching the `Event.channel`/`Event.event_id`
+    combinations at least one currently loaded rule covers -- the
+    query-time mirror of engine.py's covered_event_ids() +
+    normalizer.canonical_channel(). Grouped by channel token rather than a
+    flat event_id list, for the same reason covered_event_ids() itself is
+    keyed that way: event IDs collide across channels, so "event_id in
+    {...}" alone would misclassify a same-numbered event from an
+    unrelated channel. `Event.channel` is coalesced to '' before matching
+    so a NULL channel (unrecognized/never set) reliably evaluates to
+    False rather than SQL's NULL, which would otherwise silently drop
+    those rows from *both* `covered=True` and `covered=False` queries.
+    """
+    pairs = covered_event_ids(get_loaded_rules())
+    by_token: dict[str | None, set[int]] = defaultdict(set)
+    for token, event_id in pairs:
+        by_token[token].add(event_id)
+
+    channel_col = func.coalesce(Event.channel, "")
+    clauses = []
+    for token, event_ids in by_token.items():
+        if not event_ids:
+            continue
+        if token is None:
+            channel_match = and_(
+                *(~channel_col.ilike(f"%{substr}%") for substr in CHANNEL_TOKEN_SUBSTRINGS.values())
+            )
+        else:
+            channel_match = channel_col.ilike(f"%{CHANNEL_TOKEN_SUBSTRINGS[token]}%")
+        clauses.append(and_(channel_match, Event.event_id.in_(event_ids)))
+    return or_(*clauses) if clauses else false()
+
+
 def _filtered_events_stmt(
     host: str | None,
     start_date: datetime | None,
@@ -60,6 +98,7 @@ def _filtered_events_stmt(
     alert_only: bool | None,
     q: str | None = None,
     severity: str | None = None,
+    covered: bool | None = None,
 ):
     """Shared by list_events and count_events so the two never drift out of
     sync -- every filter is optional and additive (AND'd together).
@@ -76,6 +115,13 @@ def _filtered_events_stmt(
     than full-text: the dataset is a single analyst's ingested EVTX files,
     not a multi-tenant log lake, so an index-free scan is fine and it works
     identically on Postgres and the SQLite used in tests.
+    `covered` is the store-wide twin of `alert_only`: True restricts to
+    events whose channel+type at least one loaded rule could ever
+    evaluate (matched or not), False restricts to events no loaded rule
+    could ever have looked at, None applies no filter -- see
+    `_covered_predicate()`. Never conflate this with `alert_only=False`:
+    an event can be covered and simply not match anything (genuinely
+    clean), or uncovered because nothing could evaluate it at all.
     """
     stmt = select(Event)
     if host is not None:
@@ -100,6 +146,10 @@ def _filtered_events_stmt(
         stmt = stmt.where(~exists().where(Alert.event_id == Event.id))
     if severity is not None:
         stmt = stmt.where(exists().where((Alert.event_id == Event.id) & (Alert.severity == severity)))
+    if covered is True:
+        stmt = stmt.where(_covered_predicate())
+    elif covered is False:
+        stmt = stmt.where(~_covered_predicate())
     return stmt
 
 
@@ -113,13 +163,14 @@ def list_events(
     limit: int | None = None,
     offset: int = 0,
     severity: str | None = None,
+    covered: bool | None = None,
 ) -> list[Event]:
     """Newest-first raw event list for `GET /events`, the full ingested
     timeline -- unlike `GET /incidents`, this includes events that never
     triggered a rule, so the frontend can show the real signal-to-noise
     ratio (e.g. "64,558 events processed, 8 flagged").
     """
-    stmt = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity).order_by(
+    stmt = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity, covered).order_by(
         Event.timestamp.desc()
     )
     if limit is not None:
@@ -135,12 +186,13 @@ def count_events(
     alert_only: bool | None = None,
     q: str | None = None,
     severity: str | None = None,
+    covered: bool | None = None,
 ) -> int:
     """Total events matching the same filters as list_events, ignoring
     limit/offset -- lets `GET /events` report a page-independent `total`
     alongside the page of results.
     """
-    subq = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity).subquery()
+    subq = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity, covered).subquery()
     return db.scalar(select(func.count()).select_from(subq)) or 0
 
 

@@ -23,6 +23,14 @@ class NormalizedEvent(BaseModel):
     command_line: str | None = None
     user: str | None = None
 
+    # Raw `Event.System.Channel` (e.g. "Microsoft-Windows-Sysmon/Operational",
+    # "Security"), unmodified. Event IDs are not unique across channels --
+    # see normalizer.py's `canonical_channel()` for the classifier that
+    # reduces this to a small set of known tokens for scoping/coverage
+    # purposes; this field itself stays raw so nothing about the source is
+    # lost for display/debugging.
+    channel: str | None = None
+
     # Event ID 3 -- network connection
     protocol: str | None = None
     source_ip: str | None = None

@@ -13,6 +13,7 @@ tags:
   - attack.t1003.002
 logsource:
   category: process_creation
+  service: sysmon
 detection:
   selection:
     Image|contains: reg.exe

@@ -58,6 +58,11 @@ def get_events(
     alert_only: bool | None = Query(default=None, description="true = only alert-triggering events, false = only normal events"),
     severity: str | None = Query(default=None, description="only events with an alert of this severity, e.g. 'critical'"),
     q: str | None = Query(default=None, description="case-insensitive substring match on process, command line, user or host"),
+    covered: bool | None = Query(
+        default=None,
+        description="true = event's channel/type has rule coverage (matched or not), "
+        "false = no loaded rule could ever evaluate this event -- never conflate with alert_only",
+    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -72,9 +77,17 @@ def get_events(
         limit=limit,
         offset=offset,
         severity=severity,
+        covered=covered,
     )
     total = count_events(
-        db, host=host, start_date=start_date, end_date=end_date, alert_only=alert_only, q=q, severity=severity
+        db,
+        host=host,
+        start_date=start_date,
+        end_date=end_date,
+        alert_only=alert_only,
+        q=q,
+        severity=severity,
+        covered=covered,
     )
 
     alerts_by_event_id = get_alerts_for_event_ids(db, [event.id for event in events])

@@ -1,0 +1,24 @@
+title: LOLBin Execution via Program Compatibility Assistant (pcalua.exe)
+id: 4d59ab68-48ad-4201-8946-3dfcfadc0eee
+status: experimental
+description: >
+  Detects pcalua.exe (Program Compatibility Assistant) being invoked with
+  its -a flag to launch another program. This LOLBin technique runs a
+  target executable as a child of a trusted Microsoft-signed binary, which
+  can bypass application allowlisting rules keyed on the parent process.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1218/
+tags:
+  - attack.defense_evasion
+  - attack.t1218
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection:
+    Image|endswith: '\pcalua.exe'
+    CommandLine|contains: '-a '
+  condition: selection
+level: medium

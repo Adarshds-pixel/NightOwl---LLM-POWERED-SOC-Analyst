@@ -24,19 +24,42 @@ import re
 from dataclasses import dataclass
 
 from app.detection.rule_loader import LoadedRule
+from app.ingestion.normalizer import canonical_channel
 from app.schemas.event import NormalizedEvent
 from app.services import severity_service
 
 logger = logging.getLogger(__name__)
 
-CATEGORY_TO_EVENT_ID: dict[str, int] = {
-    "process_creation": 1,
-    "network_connection": 3,
-    "file_event": 11,
-    # Sysmon Event ID 13, "RegistryEvent (Value Set)" -- Day 9. Only
-    # value-set is covered (v1 scope), not key create/delete (12) or
-    # rename (14); see docs/decisions.md.
-    "registry_event": 13,
+CATEGORY_TO_EVENT_ID: dict[str, frozenset[int]] = {
+    # 1 = Sysmon process creation, 4688 = Security process creation. Safe to
+    # list side by side: evaluate_event()'s channel guard means a
+    # `service: sysmon` rule never sees a 4688 event and vice versa, even
+    # though both IDs sit in this one category's set.
+    "process_creation": frozenset({1, 4688}),
+    "file_change": frozenset({2}),
+    "network_connection": frozenset({3}),
+    "image_load": frozenset({7}),
+    "create_remote_thread": frozenset({8}),
+    # 10 = Sysmon process access, 4656/4663 = Security object (incl.
+    # process handle) access -- same channel-guard safety as above.
+    "process_access": frozenset({10, 4656, 4663}),
+    "file_event": frozenset({11}),
+    "registry_add": frozenset({12}),
+    # Sysmon Event ID 13, "RegistryEvent (Value Set)" -- Day 9.
+    "registry_event": frozenset({13}),
+    "registry_rename": frozenset({14}),
+    "pipe_event": frozenset({17, 18}),
+    "wmi_event": frozenset({19, 20, 21}),
+    "dns_query": frozenset({22}),
+    "file_delete": frozenset({23}),
+    # Security Event ID 1102, "The audit log was cleared" -- carries no
+    # EventData at all on real samples, so its rule matches on event_id
+    # alone (see security_audit_log_cleared.yml).
+    "audit_log_cleared": frozenset({1102}),
+    # Security Event ID 4662, "An operation was performed on an object" --
+    # used here specifically for DCSync-style directory-replication rights
+    # abuse (see dcsync_replication_rights.yml).
+    "directory_service_access": frozenset({4662}),
 }
 
 _SUPPORTED_MODIFIERS = {None, "contains", "startswith", "endswith"}
@@ -175,13 +198,47 @@ def _build_match_dict(event: NormalizedEvent) -> dict[str, object]:
     return {**event.model_dump(mode="json", exclude={"event_data"}), **event.event_data}
 
 
+def covered_event_ids(rules: list[LoadedRule]) -> frozenset[tuple[str | None, int]]:
+    """The (rule.channel, event_id) pairs at least one *currently loaded*
+    rule actually covers -- computed from `rules`, not the static
+    CATEGORY_TO_EVENT_ID table, so a category with zero loaded rules
+    correctly reads as uncovered and this never goes stale as rules are
+    added/removed.
+
+    Keyed by channel, not just event_id: Windows event IDs are not
+    globally unique across providers (Sysmon vs. Security vs. others can
+    reuse the same small integer for unrelated things), so a flat
+    frozenset[int] would silently misreport coverage the moment a second
+    channel's event IDs entered the mix. `rule.channel is None` (a rule
+    declaring no channel constraint) is recorded as covering `(None, id)`
+    -- an event only matches that pair if its own canonical channel is
+    also unrecognized/None, not "any channel", keeping this set honest.
+    """
+    pairs: set[tuple[str | None, int]] = set()
+    for rule in rules:
+        if not rule.category:
+            continue
+        event_ids = CATEGORY_TO_EVENT_ID.get(rule.category)
+        if not event_ids:
+            continue
+        pairs.update((rule.channel, event_id) for event_id in event_ids)
+    return frozenset(pairs)
+
+
 def evaluate_event(event: NormalizedEvent, rules: list[LoadedRule]) -> list[RuleMatch]:
     match_dict = _build_match_dict(event)
     matches: list[RuleMatch] = []
+    event_channel = canonical_channel(event.channel)
 
     for rule in rules:
-        expected_event_id = CATEGORY_TO_EVENT_ID.get(rule.category) if rule.category else None
-        if expected_event_id is not None and expected_event_id != event.event_id:
+        expected_event_ids = CATEGORY_TO_EVENT_ID.get(rule.category) if rule.category else None
+        if expected_event_ids is not None and event.event_id not in expected_event_ids:
+            continue
+        # A rule scoped to a channel must never evaluate against a
+        # different channel's event, even when its event_id happens to be
+        # in the category's set (e.g. Sysmon 1 vs. Security 4688 both
+        # under `process_creation`) -- see covered_event_ids()'s docstring.
+        if rule.channel is not None and rule.channel != event_channel:
             continue
 
         selection_results = {name: _selection_matches(match_dict, body) for name, body in rule.detections.items()}

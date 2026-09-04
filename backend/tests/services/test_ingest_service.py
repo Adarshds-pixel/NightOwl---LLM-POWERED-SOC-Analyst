@@ -24,11 +24,16 @@ FAKE_RULE = LoadedRule(
 )
 
 
-def _record(system_time: str, command_line: str | None = "-enc AAA", computer: str = "WORKSTATION01") -> dict:
+def _record(
+    system_time: str, command_line: str | None = "-enc AAA", computer: str = "WORKSTATION01", channel: str | None = None
+) -> dict:
     data = [] if command_line is None else [{"@Name": "CommandLine", "#text": command_line}]
+    system = {"EventID": 1, "TimeCreated": {"@SystemTime": system_time}, "Computer": computer}
+    if channel is not None:
+        system["Channel"] = channel
     return {
         "Event": {
-            "System": {"EventID": 1, "TimeCreated": {"@SystemTime": system_time}, "Computer": computer},
+            "System": system,
             "EventData": {"Data": data},
         }
     }
@@ -119,3 +124,55 @@ def test_malformed_record_is_skipped_and_counted(api_client):
         assert outcome.records_read == 2
         assert outcome.events_skipped == 1
         assert outcome.events_ingested == 1
+
+
+# -- coverage honesty (covered_events / uncovered_events / breakdown) ------
+
+_SYSMON_ONLY_RULE = LoadedRule(
+    rule_id="fake-sysmon-rule",
+    title="Fake Sysmon-Only Rule",
+    level="high",
+    category="process_creation",
+    detections={"selection": {"CommandLine|contains": "-enc"}},
+    condition="selection",
+    yaml_path="<test>",
+    technique_id="T1059.001",
+    channel="sysmon",
+)
+
+
+def test_covered_and_uncovered_events_classified_across_two_channels_with_same_event_id(api_client):
+    """The regression this fix exists for: an event_id shared by two
+    channels (here, both records use event_id=1, one Sysmon-channel, one
+    Security-channel) must be classified independently -- coverage from
+    the Sysmon-scoped rule must not "leak" onto the Security event just
+    because the numeric event_id matches."""
+    _client, SessionLocal = api_client
+    covered = _record("2026-08-28T09:00:00+00:00", channel="Microsoft-Windows-Sysmon/Operational")
+    uncovered = _record("2026-08-28T09:00:01+00:00", channel="Security", command_line=None)
+    records = [covered, uncovered]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[_SYSMON_ONLY_RULE], matched_at=None)
+
+        assert outcome.covered_events == 1
+        assert outcome.uncovered_events == 1
+        assert len(outcome.uncovered_breakdown) == 1
+        assert outcome.uncovered_breakdown[0].channel == "Security"
+        assert outcome.uncovered_breakdown[0].event_id == 1
+        assert outcome.uncovered_breakdown[0].count == 1
+
+
+def test_uncovered_breakdown_groups_by_channel_and_event_id(api_client):
+    _client, SessionLocal = api_client
+    records = [
+        _record(f"2026-08-28T09:00:0{i}+00:00", channel="Application", command_line=None) for i in range(3)
+    ]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[_SYSMON_ONLY_RULE], matched_at=None)
+
+        assert outcome.covered_events == 0
+        assert outcome.uncovered_events == 3
+        assert len(outcome.uncovered_breakdown) == 1  # all 3 grouped into one (channel, event_id) entry
+        assert outcome.uncovered_breakdown[0].count == 3

@@ -10,6 +10,7 @@ import pytest
 from app.detection import rule_loader
 from app.detection.engine import (
     ConditionSyntaxError,
+    covered_event_ids,
     evaluate_condition,
     evaluate_event,
 )
@@ -22,6 +23,10 @@ def _event(event_id=1, event_data=None, **overrides):
         host="WORKSTATION01",
         timestamp=datetime(2026, 8, 16, tzinfo=timezone.utc),
         event_id=event_id,
+        # Default to a real Sysmon channel string since every seed rule is
+        # `service: sysmon`-scoped -- pass channel=None (or another value)
+        # via **overrides for a test that specifically needs otherwise.
+        channel="Microsoft-Windows-Sysmon/Operational",
         raw={},
         event_data=event_data or {},
     )
@@ -62,7 +67,7 @@ def test_evaluate_condition_empty_raises():
 
 # -- evaluate_event: field modifiers + category scoping ------------------
 
-def _process_rule(selection, condition="selection", category="process_creation"):
+def _process_rule(selection, condition="selection", category="process_creation", channel=None):
     return LoadedRule(
         rule_id="test-rule",
         title="Test Rule",
@@ -71,6 +76,7 @@ def _process_rule(selection, condition="selection", category="process_creation")
         detections={"selection": selection},
         condition=condition,
         yaml_path="<test>",
+        channel=channel,
     )
 
 
@@ -109,6 +115,63 @@ def test_evaluate_event_skips_rule_when_category_does_not_match_event_id():
     event = _event(event_id=1, event_data={"Image": "powershell.exe"})
 
     assert evaluate_event(event, [rule]) == []
+
+
+def test_evaluate_event_channel_mismatch_skips_even_when_event_id_matches_category():
+    # process_access maps to both Sysmon 10 and Security 4656/4663 -- a
+    # `channel="sysmon"` rule must not fire against a Security-channel
+    # event just because 4663 is in that category's event-id set.
+    rule = _process_rule({"ObjectName|endswith": "lsass.exe"}, category="process_access", channel="sysmon")
+    event = _event(event_id=4663, event_data={"ObjectName": "C:\\Windows\\system32\\lsass.exe"}, channel="Security")
+
+    assert evaluate_event(event, [rule]) == []
+
+
+def test_evaluate_event_channel_match_fires():
+    rule = _process_rule({"ObjectName|endswith": "lsass.exe"}, category="process_access", channel="security")
+    event = _event(event_id=4663, event_data={"ObjectName": "C:\\Windows\\system32\\lsass.exe"}, channel="Security")
+
+    assert len(evaluate_event(event, [rule])) == 1
+
+
+def test_evaluate_event_no_channel_declared_matches_any_channel():
+    rule = _process_rule({"Image|contains": "powershell"}, category="process_creation", channel=None)
+    event = _event(event_id=1, event_data={"Image": "powershell.exe"}, channel="Security")
+
+    assert len(evaluate_event(event, [rule])) == 1
+
+
+# -- covered_event_ids ------------------------------------------------------
+
+
+def test_covered_event_ids_empty_rules_returns_empty_set():
+    assert covered_event_ids([]) == frozenset()
+
+
+def test_covered_event_ids_excludes_unmapped_category():
+    rule = _process_rule({"Image|contains": "x"}, category="not_a_real_category")
+    assert covered_event_ids([rule]) == frozenset()
+
+
+def test_covered_event_ids_keys_by_channel_not_just_event_id():
+    """The regression this whole fix exists for: covered_event_ids() must
+    return (channel, event_id) pairs, not a flat frozenset[int] that
+    discards which channel a rule actually applies to. A Sysmon rule and
+    a Security rule sharing the same category's event-id set produce
+    distinct entries per channel -- coverage for one channel is never
+    silently merged into or mistaken for coverage of the other, which is
+    what a plain int-keyed set would have done."""
+    sysmon_rule = _process_rule({"x": "y"}, category="process_access", channel="sysmon")
+    security_rule = _process_rule({"x": "y"}, category="process_access", channel="security")
+
+    sysmon_only_pairs = covered_event_ids([sysmon_rule])
+    both_pairs = covered_event_ids([sysmon_rule, security_rule])
+
+    assert ("sysmon", 10) in sysmon_only_pairs
+    assert ("security", 10) not in sysmon_only_pairs  # no Security rule loaded yet
+    assert ("sysmon", 10) in both_pairs
+    assert ("security", 10) in both_pairs  # now covered once the Security rule loads too
+    assert all(channel is not None for channel, _ in both_pairs)  # every entry carries its real channel
 
 
 def test_evaluate_event_startswith_and_endswith():

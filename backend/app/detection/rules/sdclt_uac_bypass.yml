@@ -1,0 +1,25 @@
+title: UAC Bypass via sdclt.exe IsolatedCommand Registry Hijack
+id: c6a9d1ae-1cf0-4af4-a912-12201b5bd2bd
+status: experimental
+description: >
+  Detects a value being set under
+  ...\exefile\shell\runas\command\IsolatedCommand, the registry key
+  sdclt.exe's auto-elevated "runas" verb reads from. Pointing it at an
+  attacker payload makes sdclt.exe launch that payload elevated without a
+  UAC prompt.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1548/002/
+tags:
+  - attack.defense_evasion
+  - attack.privilege_escalation
+  - attack.t1548.002
+logsource:
+  category: registry_event
+  service: sysmon
+detection:
+  selection:
+    TargetObject|contains: '\exefile\shell\runas\command\IsolatedCommand'
+  condition: selection
+level: high

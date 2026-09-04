@@ -1,0 +1,26 @@
+title: Rogue Spoolss Named Pipe (SeImpersonate Privilege Escalation)
+id: 01a199bd-19b8-46ac-a89a-ece738b3a5e5
+status: experimental
+description: >
+  Detects a named pipe ending in "spoolss" created or connected to by a
+  process other than the real print spooler service (spoolsv.exe) --
+  the signature of PrintSpoofer/RottenPotato-family SeImpersonate abuse,
+  where a rogue pipe impersonating the spooler's is used to coerce a
+  SYSTEM-privileged connection.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1134/001/
+tags:
+  - attack.privilege_escalation
+  - attack.t1134.001
+logsource:
+  category: pipe_event
+  service: sysmon
+detection:
+  selection_pipe:
+    PipeName|endswith: '\spoolss'
+  filter_legit:
+    Image|endswith: '\spoolsv.exe'
+  condition: selection_pipe and not filter_legit
+level: high

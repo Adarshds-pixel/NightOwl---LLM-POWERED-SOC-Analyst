@@ -37,10 +37,10 @@ interface TechniqueRow {
  *
  * Two very different numbers live on this page and the labels keep them
  * apart: the catalog holds hundreds of techniques (what exists), while
- * NightOwl has 15 detection rules and has observed a handful of techniques
- * (what this deployment can actually see). Coverage is stated against the
- * rule set, never against the whole catalog, because 15/800 would be a
- * meaningless denominator for a student SOC.
+ * NightOwl has a few dozen detection rules and has observed a handful of
+ * techniques (what this deployment can actually see). Coverage is stated
+ * against the rule set, never against the whole catalog, because a rule
+ * count over 800 would be a meaningless denominator for a student SOC.
  */
 function MitrePage() {
   const [searchParams] = useSearchParams()

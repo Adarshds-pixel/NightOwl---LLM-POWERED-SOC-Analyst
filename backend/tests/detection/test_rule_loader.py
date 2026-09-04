@@ -38,8 +38,20 @@ logsource:
   category: process_creation
 """
 
-EXPECTED_RULE_COUNT = 15
-EXPECTED_CATEGORIES = {"process_creation", "network_connection", "file_event", "registry_event"}
+EXPECTED_RULE_COUNT = 29
+EXPECTED_CATEGORIES = {
+    "process_creation",
+    "network_connection",
+    "file_event",
+    "registry_event",
+    "process_access",
+    "create_remote_thread",
+    "pipe_event",
+    "wmi_event",
+    "file_change",
+    "audit_log_cleared",
+    "directory_service_access",
+}
 
 
 # -- Day 7: loading/validation/caching -----------------------------------
@@ -112,12 +124,12 @@ def test_seed_rule_directory_loads_at_least_one_real_rule():
 
 # -- Day 9/12: rule count/category growth + tag-parsing --------------------
 
-def test_load_rules_returns_fifteen_rules():
+def test_load_rules_returns_expected_rule_count():
     rules = rule_loader.load_rules()
     assert len(rules) == EXPECTED_RULE_COUNT
 
 
-def test_load_rules_covers_four_categories_including_registry():
+def test_load_rules_covers_eleven_categories_including_registry():
     rules = rule_loader.load_rules()
     categories = {r.category for r in rules}
     assert categories == EXPECTED_CATEGORIES
@@ -235,6 +247,61 @@ def test_revoked_technique_id_warns_but_rule_still_loads(tmp_path, monkeypatch, 
 
     assert len(rules) == 1
     assert "revoked MITRE technique id" in caplog.text
+
+
+# -- channel scoping: logsource.service -> LoadedRule.channel -------------
+
+def _rule_with_service(service: str) -> str:
+    return f"""
+title: Test Rule With Service
+id: 33333333-3333-3333-3333-333333333333
+status: experimental
+logsource:
+  category: process_creation
+  service: {service}
+detection:
+  selection:
+    Image|contains: powershell
+  condition: selection
+level: high
+"""
+
+
+def test_logsource_service_parses_into_loaded_rule_channel(tmp_path):
+    (tmp_path / "svc.yml").write_text(_rule_with_service("sysmon"), encoding="utf-8")
+
+    rules = rule_loader.load_rules(tmp_path)
+
+    assert rules[0].channel == "sysmon"
+
+
+def test_unrecognized_service_warns_but_rule_still_loads(tmp_path, caplog):
+    (tmp_path / "svc.yml").write_text(_rule_with_service("splunk"), encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING):
+        rules = rule_loader.load_rules(tmp_path)
+
+    assert len(rules) == 1
+    assert rules[0].channel is None
+    assert "not a recognized channel" in caplog.text
+
+
+def test_no_service_declared_leaves_channel_none(tmp_path):
+    (tmp_path / "valid.yml").write_text(VALID_RULE, encoding="utf-8")
+
+    rules = rule_loader.load_rules(tmp_path)
+
+    assert rules[0].channel is None
+
+
+def test_real_seed_rules_have_a_channel_matching_their_field_vocabulary():
+    """Every real rule should declare a channel now -- an unscoped rule is
+    exactly the bug this pass fixed, so a real seed rule silently missing
+    `service:` would be a regression, not a legitimate 'no constraint'
+    case."""
+    rules = rule_loader.load_rules()
+    missing = [r.title for r in rules if r.channel is None]
+    assert missing == []
 
 
 def test_real_seed_rules_all_have_valid_technique_ids():

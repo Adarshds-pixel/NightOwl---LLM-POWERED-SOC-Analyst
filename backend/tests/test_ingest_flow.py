@@ -23,6 +23,7 @@ def _record(event_id, command_line, computer="WORKSTATION01"):
                 "EventID": event_id,
                 "TimeCreated": {"@SystemTime": "2026-08-19T10:00:00.000000+00:00"},
                 "Computer": computer,
+                "Channel": "Microsoft-Windows-Sysmon/Operational",
             },
             "EventData": {"Data": [{"@Name": "CommandLine", "#text": command_line}, {"@Name": "Image", "#text": "C:\\Windows\\System32\\powershell.exe"}]},
         }
@@ -35,7 +36,7 @@ def test_sample_file_in_incidents_and_techniques_out(api_client, monkeypatch):
     # Sanity check: this test is only meaningful against the real, full
     # rule set -- fail loudly if that ever drifts instead of silently
     # passing against fewer rules.
-    assert len(get_loaded_rules()) == 15
+    assert len(get_loaded_rules()) == 29
 
     monkeypatch.setattr(
         "app.api.routes_ingest.read_records_as_dicts",

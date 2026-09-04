@@ -1,0 +1,25 @@
+title: User Account Control Disabled via Registry
+id: 02df3fee-40fa-49aa-8303-c9ed04cf3bd8
+status: experimental
+description: >
+  Detects the EnableLUA registry value under
+  Software\Microsoft\Windows\CurrentVersion\Policies\System being set to 0,
+  which turns UAC off system-wide -- a common privilege-escalation /
+  defense-evasion step before running further unelevated-looking payloads.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1548/002/
+tags:
+  - attack.defense_evasion
+  - attack.privilege_escalation
+  - attack.t1548.002
+logsource:
+  category: registry_event
+  service: sysmon
+detection:
+  selection:
+    TargetObject|endswith: '\EnableLUA'
+    Details|contains: '0x00000000'
+  condition: selection
+level: high

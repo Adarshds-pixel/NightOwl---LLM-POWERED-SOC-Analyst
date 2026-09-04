@@ -15,20 +15,34 @@ means those tests still patch the thing that actually runs.
 """
 
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Iterable
 
 from sqlalchemy.orm import Session
 
-from app.detection.engine import evaluate_event
+from app.detection.engine import covered_event_ids, evaluate_event
 from app.detection.rule_loader import LoadedRule
-from app.ingestion.normalizer import EventNormalizationError, normalize_event
+from app.ingestion.normalizer import EventNormalizationError, canonical_channel, normalize_event
 from app.services.detection_service import save_alerts
 from app.services.event_service import save_events
 from app.services.incident_service import find_or_create_incident
 
 logger = logging.getLogger(__name__)
+
+# Cap on how many uncovered Event ids are carried in IngestOutcome for a
+# downstream consumer (e.g. an LLM second-opinion pass) to sample from --
+# bounds memory/payload size on a very large file without needing the full
+# list; the counts/breakdown below stay exact regardless of this cap.
+MAX_UNCOVERED_SAMPLE = 25
+
+
+@dataclass(frozen=True)
+class UncoveredEventGroup:
+    channel: str | None
+    event_id: int
+    count: int
 
 
 @dataclass(frozen=True)
@@ -40,6 +54,10 @@ class IngestOutcome:
     matched_rule_titles: list[str] = field(default_factory=list)
     alerts_created: int = 0
     incident_ids: list[int] = field(default_factory=list)
+    covered_events: int = 0
+    uncovered_events: int = 0
+    uncovered_breakdown: list[UncoveredEventGroup] = field(default_factory=list)
+    uncovered_event_ids: list[int] = field(default_factory=list)
 
 
 def ingest_records(
@@ -105,8 +123,23 @@ def ingest_records(
     rule_matches = 0
     alert_data = []
     incident_ids: list[int] = []
+    covered_pairs = covered_event_ids(rules)
+    covered_count = 0
+    # Counter key uses the raw channel string (not the canonical token) so
+    # the breakdown stays human-readable -- e.g. two different unrecognized
+    # channels both canonicalize to None but should still list separately.
+    uncovered_counter: Counter[tuple[str | None, int]] = Counter()
+    uncovered_event_ids: list[int] = []
 
     for event_row, normalized_event in zip(saved, normalized_events, strict=True):
+        pair = (canonical_channel(normalized_event.channel), normalized_event.event_id)
+        if pair in covered_pairs:
+            covered_count += 1
+        else:
+            uncovered_counter[(normalized_event.channel, normalized_event.event_id)] += 1
+            if len(uncovered_event_ids) < MAX_UNCOVERED_SAMPLE:
+                uncovered_event_ids.append(event_row.id)
+
         matches = evaluate_event(normalized_event, rules)
         if not matches:
             continue
@@ -122,6 +155,11 @@ def ingest_records(
 
     alerts = save_alerts(db, alert_data)
 
+    uncovered_breakdown = [
+        UncoveredEventGroup(channel=channel, event_id=event_id, count=count)
+        for (channel, event_id), count in sorted(uncovered_counter.items(), key=lambda item: -item[1])
+    ]
+
     return IngestOutcome(
         records_read=records_read,
         events_ingested=len(saved),
@@ -130,4 +168,8 @@ def ingest_records(
         matched_rule_titles=matched_titles,
         alerts_created=len(alerts),
         incident_ids=incident_ids,
+        covered_events=covered_count,
+        uncovered_events=sum(uncovered_counter.values()),
+        uncovered_breakdown=uncovered_breakdown,
+        uncovered_event_ids=uncovered_event_ids,
     )

@@ -1,0 +1,37 @@
+title: Accessibility Tool Launched by Utilman or Winlogon
+id: 7653de6e-fb41-40be-8ba1-349444409b4a
+status: experimental
+description: >
+  Detects an accessibility-feature binary (osk.exe, sethc.exe, utilman.exe,
+  magnify.exe, narrator.exe, displayswitch.exe, atbroker.exe) whose parent
+  is Utilman.exe or winlogon.exe, the process tree produced by the classic
+  "sticky keys" / accessibility-feature replacement persistence and
+  pre-authentication privilege-escalation technique invoked from the lock
+  screen.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1546/008/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1546.008
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection_image:
+    Image|endswith:
+      - '\osk.exe'
+      - '\sethc.exe'
+      - '\utilman.exe'
+      - '\magnify.exe'
+      - '\narrator.exe'
+      - '\displayswitch.exe'
+      - '\atbroker.exe'
+  selection_parent:
+    ParentImage|endswith:
+      - '\Utilman.exe'
+      - '\winlogon.exe'
+  condition: selection_image and selection_parent
+level: medium

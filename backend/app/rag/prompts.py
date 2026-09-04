@@ -224,6 +224,95 @@ def build_critique_prompt(draft: str, chunks: list[dict], incident: dict) -> lis
     )
 
 
+UNCOVERED_OPINION_SYSTEM_PROMPT = """You are NightOwl's advisory second-opinion assistant. You are being \
+shown raw Windows telemetry that NO detection rule was able to evaluate -- either because it came from a \
+channel/event type this deployment has no rule for, or because it fell outside every loaded rule's scope. \
+This is fundamentally different from every other role you might play in this system: you are NOT a \
+detector, you cannot create alerts or incidents, and your output must never be presented or treated as a \
+confirmed detection.
+
+Rules you must follow:
+1. Base your opinion ONLY on the sample events and retrieved context below. Do not invent facts, hosts, \
+users, IPs, or techniques that are not present in the input.
+2. If nothing in the samples looks unusual, say that plainly -- do not manufacture concern just to seem \
+useful. An honest "nothing stands out" is more valuable than false urgency.
+3. If you are genuinely unsure because the sample is too thin or ambiguous to judge, say so explicitly \
+rather than guessing either way.
+4. Keep your reasoning short and concrete: 2-4 sentences citing the specific process, command line, \
+channel, or event type that drove your judgment (or the lack of one).
+5. End your response with EXACTLY one of these three headings, on its own line, verbatim (needed so \
+callers can parse your verdict programmatically) -- choose the one that matches your judgment:
+   - "## Assessment: Worth reviewing" -- something in the sample is unusual enough that a human analyst \
+should look at it.
+   - "## Assessment: Nothing unusual noted" -- nothing in the sample stands out as suspicious.
+   - "## Assessment: Uncertain -- insufficient information" -- the sample is too limited to judge either way.
+6. Never use the word "alert", "incident", or "detected" to describe your own output -- you are giving an \
+opinion for a human to weigh, not raising a detection."""
+
+UNCOVERED_OPINION_HUMAN_PROMPT = """## File
+{filename}
+
+## Sample events (no loaded rule could evaluate these)
+{event_samples}
+
+## Retrieved knowledge base context
+{retrieved_context}
+
+## Task
+Give your advisory opinion on these sample events, following the system instructions."""
+
+UNCOVERED_OPINION_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        ("system", UNCOVERED_OPINION_SYSTEM_PROMPT),
+        ("human", UNCOVERED_OPINION_HUMAN_PROMPT),
+    ]
+)
+
+
+def format_event_samples(samples: list[dict]) -> str:
+    """Render the bounded list of uncovered-event summaries
+    (ai_opinion_service._event_summary's shape: channel, event_id, host,
+    timestamp, process, command_line, user) as numbered blocks."""
+    if not samples:
+        return "(no sample events available)"
+    blocks = []
+    for i, sample in enumerate(samples, start=1):
+        lines = [f"- {key}: {value}" for key, value in sample.items() if value not in (None, "", [])]
+        blocks.append(f"[{i}]\n" + "\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+def build_uncovered_opinion_prompt(filename: str, samples: list[dict], chunks: list[dict]) -> list[BaseMessage]:
+    """Render the full system+human message pair ready for llm_client.generate()."""
+    return UNCOVERED_OPINION_PROMPT.format_messages(
+        filename=filename,
+        event_samples=format_event_samples(samples),
+        retrieved_context=format_chunks(chunks),
+    )
+
+
+ASSESSMENT_HEADINGS: dict[str, str] = {
+    "## Assessment: Worth reviewing": "worth_reviewing",
+    "## Assessment: Nothing unusual noted": "nothing_unusual",
+    "## Assessment: Uncertain": "uncertain",  # matches the "-- insufficient information" variant too
+}
+
+
+def extract_assessment_label(response: str) -> str:
+    """Pull the required "## Assessment: ..." heading out of a generated
+    opinion and map it to a stable label for AiOpinion.assessment_label.
+
+    Defaults to "uncertain" if no recognized heading is present (e.g. the
+    LLM didn't follow the requested format) -- the safer default, since
+    silently treating an unparseable response as "nothing_unusual" could
+    hide something the model actually flagged.
+    """
+    for heading, label in ASSESSMENT_HEADINGS.items():
+        if heading in response:
+            return label
+    return "uncertain"
+
+
 RECOMMENDED_STEPS_HEADING = "## Recommended next steps"
 
 

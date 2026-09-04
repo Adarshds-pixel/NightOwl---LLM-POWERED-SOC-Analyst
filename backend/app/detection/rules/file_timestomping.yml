@@ -1,0 +1,26 @@
+title: File Creation Timestamp Backdated (Timestomping)
+id: 49c6ddee-506c-4b31-9370-57437f62a3cf
+status: experimental
+description: >
+  Detects a file's creation timestamp being changed to a value earlier
+  than its previous creation time (Sysmon Event ID 2). Malware commonly
+  "timestomps" dropped files to blend in with legitimate system files or
+  to defeat timeline-based forensic analysis. The comparison itself is
+  done in the normalizer (app/ingestion/normalizer.py::_flag_timestomp),
+  since this rule engine only supports literal-value matching, not
+  cross-field comparison -- this rule just checks the resulting flag.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1070/006/
+tags:
+  - attack.defense_evasion
+  - attack.t1070.006
+logsource:
+  category: file_change
+  service: sysmon
+detection:
+  selection:
+    TimestompSuspected: 'true'
+  condition: selection
+level: medium

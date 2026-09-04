@@ -1,0 +1,36 @@
+title: Suspicious Access to Protected System Process
+id: 806ea242-4d35-4cc6-8888-deb768d55aed
+status: experimental
+description: >
+  Detects a process opening a handle to LSASS or another protected system
+  process (smss.exe/csrss.exe/winlogon.exe/wininit.exe) with an access mask
+  commonly used for credential dumping (Mimikatz-style sekurlsa) or for
+  process injection/migration (e.g. Meterpreter migrating into a system
+  process).
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+tags:
+  - attack.credential_access
+  - attack.t1003.001
+logsource:
+  category: process_access
+  service: sysmon
+detection:
+  selection_target:
+    TargetImage|endswith:
+      - '\lsass.exe'
+      - '\smss.exe'
+      - '\csrss.exe'
+      - '\winlogon.exe'
+      - '\wininit.exe'
+  selection_access:
+    # Sysmon zero-pads GrantedAccess to 8 hex digits (e.g. 0x00001010), so
+    # match on the low 16 bits rather than the full literal value.
+    GrantedAccess|endswith:
+      - '1010'
+      - '1410'
+      - '143a'
+  condition: selection_target and selection_access
+level: high

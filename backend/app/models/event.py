@@ -20,6 +20,13 @@ class Event(Base):
     host: Mapped[str] = mapped_column(String(255))
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     event_id: Mapped[int]
+    # Raw `Event.System.Channel` (e.g. "Microsoft-Windows-Sysmon/Operational",
+    # "Security"). A queryable column, not just part of raw_json, because
+    # `event_id` alone is not unique across channels/providers -- any query
+    # that needs to know "does this event have rule coverage" (see
+    # event_service.list_events(covered=...)) has to filter on channel too,
+    # not event_id alone. See detection/engine.py's covered_event_ids().
+    channel: Mapped[str | None] = mapped_column(String(255))
     process: Mapped[str | None] = mapped_column(String(500))
     command_line: Mapped[str | None] = mapped_column(String)
     user: Mapped[str | None] = mapped_column(String(255))

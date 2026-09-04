@@ -1,0 +1,28 @@
+title: LSASS Handle Access via Security Auditing
+id: 6d2b8f43-1e9c-4a7d-8b3f-2c6e9a1d4f75
+status: experimental
+description: >
+  Detects a handle being opened to lsass.exe via Windows Security object-
+  access auditing (Event ID 4656/4663), the Security-channel counterpart
+  to Sysmon's process-access detection -- catches the same credential-
+  dumping behavior on hosts where Sysmon isn't installed but object-access
+  auditing is enabled. `ObjectName` is matched directly rather than
+  aliased onto Sysmon's TargetImage/GrantedAccess vocabulary: Security's
+  AccessMask uses different raw values than Sysmon's, so reusing that
+  rule's access-mask filter would silently fail to match real Security
+  events.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+tags:
+  - attack.credential_access
+  - attack.t1003.001
+logsource:
+  category: process_access
+  service: security
+detection:
+  selection:
+    ObjectName|endswith: '\lsass.exe'
+  condition: selection
+level: high

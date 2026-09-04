@@ -1,0 +1,26 @@
+title: DCSync -- Directory Replication Rights Abused
+id: 3a7e9c14-6b2d-4f8a-9e1c-5d3a7b9c2f64
+status: experimental
+description: >
+  Detects Windows Security Event ID 4662 (an operation was performed on
+  an object) carrying the DS-Replication-Get-Changes or
+  DS-Replication-Get-Changes-All extended-right GUID, the signature of a
+  DCSync attack -- an attacker impersonating a domain controller to pull
+  password hashes via directory replication.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1003/006/
+tags:
+  - attack.credential_access
+  - attack.t1003.006
+logsource:
+  category: directory_service_access
+  service: security
+detection:
+  selection:
+    Properties|contains:
+      - '{1131f6aa-9c07-11d1-f79f-00c04fc2dcd2}'
+      - '{1131f6ad-9c07-11d1-f79f-00c04fc2dcd2}'
+  condition: selection
+level: high

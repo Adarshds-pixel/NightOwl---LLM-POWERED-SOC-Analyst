@@ -33,6 +33,7 @@ import yaml
 from sigma.exceptions import SigmaError
 from sigma.rule import SigmaRule
 
+from app.ingestion.normalizer import canonical_channel
 from app.mitre.validator import validate_technique_id
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,14 @@ class LoadedRule:
     # unchanged. This is tag *extraction*, not MITRE-dataset validation --
     # that stays Day 11's job (mitre/validator.py).
     technique_id: str | None = None
+    # Parsed from `logsource.service` (Sigma-standard field), reduced to a
+    # canonical token ("sysmon", "security") via normalizer.canonical_channel
+    # -- see engine.py's evaluate_event() scoping guard. None means the rule
+    # declares no channel constraint (matches any channel that satisfies its
+    # category's event-ID set); every current rule declares one after the
+    # Day-N channel-scoping pass, so this is a safety default, not a path
+    # any real rule relies on.
+    channel: str | None = None
     tactics: list[str] = field(default_factory=list)
     # Descriptive metadata straight off the YAML front matter. Defaulted
     # like technique_id/tactics above so existing LoadedRule(...) calls in
@@ -74,6 +83,41 @@ class LoadedRule:
     date: str = ""
     references: list[str] = field(default_factory=list)
     status: str = ""
+
+
+def _validate_category(path: Path, category: str | None) -> None:
+    """Warns when a rule's `logsource.category` isn't one engine.py knows how
+    to scope to an event ID. Without this, a typo'd or unmapped category
+    silently means `expected_event_ids is None`, and evaluate_event() runs
+    the rule against *every* event instead of skipping it -- warn-only,
+    matching this loader's existing tolerance policy, since the rule may
+    still be intentionally unscoped.
+    """
+    if category is None:
+        return
+    # Deferred import: engine.py imports LoadedRule from this module, so a
+    # top-level import here would be circular.
+    from app.detection.engine import CATEGORY_TO_EVENT_ID
+
+    if category not in CATEGORY_TO_EVENT_ID:
+        logger.warning("%s: logsource.category %r is not scoped to any event ID in engine.py "
+                        "-- this rule will run unscoped against every event", path, category)
+
+
+def _parse_channel(path: Path, service: object) -> str | None:
+    """Reduces `logsource.service` to the canonical token engine.py's
+    scoping guard compares against. Warn-only (not RuleLoadError) on an
+    unrecognized value -- matching this loader's existing tolerance
+    policy -- since the rule still loads and detects; only its channel
+    scoping is untrustworthy.
+    """
+    if not isinstance(service, str) or not service:
+        return None
+    token = canonical_channel(service)
+    if token is None:
+        logger.warning("%s: logsource.service %r is not a recognized channel -- "
+                        "this rule will run unscoped by channel", path, service)
+    return token
 
 
 def _validate_technique(path: Path, technique_id: str | None) -> None:
@@ -151,6 +195,8 @@ def _load_one(path: Path) -> LoadedRule:
     logsource = raw.get("logsource") or {}
     technique_id, tactics = _parse_tags(raw.get("tags"))
     _validate_technique(path, technique_id)
+    _validate_category(path, logsource.get("category"))
+    channel = _parse_channel(path, logsource.get("service"))
 
     return LoadedRule(
         rule_id=str(sigma_rule.id) if sigma_rule.id else path.stem,
@@ -161,6 +207,7 @@ def _load_one(path: Path) -> LoadedRule:
         condition=condition,
         yaml_path=str(path),
         technique_id=technique_id,
+        channel=channel,
         tactics=tactics,
         description=str(raw.get("description") or "").strip(),
         author=str(raw.get("author") or "").strip(),
