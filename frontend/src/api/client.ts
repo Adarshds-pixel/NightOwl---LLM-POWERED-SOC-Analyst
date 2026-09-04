@@ -1,4 +1,5 @@
 import type {
+  AiOpinionResponse,
   AlertListResponse,
   AuditLogResponse,
   DemoResetResponse,
@@ -165,11 +166,105 @@ export function ingestEvtxFile(file: File) {
   return apiFetch<IngestResponse>('/ingest', { method: 'POST', body: form })
 }
 
+// `xhr.timeout` covers the whole request lifecycle (upload transfer +
+// waiting for the response), not just the transfer -- and the response
+// only comes back once the server has finished parsing/normalizing/
+// detecting the whole file server-side, which is the slow part. A real
+// 10.5MB/29k-record sample in this project's own benchmark corpus
+// (CA_PetiPotam) takes ~234s end to end (see docs/pending.md's perf
+// note) -- a shorter default (90s was tried and measured too short
+// against that exact file) would abort a genuinely slow-but-successful
+// ingest and misreport it as failed. 5 minutes clears the known worst
+// case with real margin while still catching a genuine hang.
+const DEFAULT_UPLOAD_TIMEOUT_MS = 300_000
+
+/**
+ * XMLHttpRequest-based upload, not fetch(): fetch has no reliable
+ * cross-browser upload-progress event, and `xhr.upload.onprogress` is the
+ * only way to show real transfer percentage during a large on-spot EVTX
+ * upload rather than a static "Uploading..." with no feedback for
+ * however long the transfer takes. Once the transfer itself hits 100%,
+ * there is nothing left to report -- server-side parse/normalize/detect
+ * has no progress channel -- so `onProgress` only ever covers the upload
+ * phase; callers show a distinct "Processing..." label for what happens
+ * after, never a fabricated percentage for it.
+ *
+ * Mirrors rawFetch's error-shape conventions (429 -> RATE_LIMIT_MESSAGE,
+ * non-2xx -> ApiError) so error handling doesn't diverge between the two
+ * upload paths.
+ *
+ * A timeout here only means the *client* gave up waiting -- aborting the
+ * XHR does not reliably stop the server mid-request, so a very slow
+ * ingest can still complete and commit after the client has already
+ * shown an error (see ontimeout's message below, and this session's
+ * established "never assume a client-side timeout means the server
+ * stopped" rule). Retrying blindly risks a duplicate ingest of the same
+ * file; check the Incidents/Logs page for it before re-uploading.
+ */
+export function ingestEvtxFileWithProgress(
+  file: File,
+  onProgress: (fraction: number) => void,
+  timeoutMs: number = DEFAULT_UPLOAD_TIMEOUT_MS,
+): Promise<IngestResponse> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData()
+    form.append('file', file)
+
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${API_BASE_URL}/ingest`)
+    if (API_KEY) xhr.setRequestHeader('X-API-Key', API_KEY)
+    xhr.timeout = timeoutMs
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded / event.total)
+    }
+
+    xhr.onload = () => {
+      if (xhr.status === 429) {
+        reject(new ApiError(429, RATE_LIMIT_MESSAGE))
+        return
+      }
+      let body: unknown = null
+      try {
+        body = JSON.parse(xhr.responseText)
+      } catch {
+        // non-JSON body -- fall through to the statusText-based error below
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(body as IngestResponse)
+        return
+      }
+      const detail =
+        body && typeof body === 'object' && 'detail' in body
+          ? String((body as { detail: unknown }).detail)
+          : xhr.statusText || `upload failed with status ${xhr.status}`
+      reject(new ApiError(xhr.status, detail))
+    }
+
+    xhr.onerror = () => reject(new ApiError(0, 'Network error during upload'))
+    xhr.ontimeout = () =>
+      reject(
+        new ApiError(
+          0,
+          `Upload timed out after ${Math.round(timeoutMs / 1000)}s -- the server may still be processing it in ` +
+            'the background even though this timed out. Check Incidents/Logs for it before re-uploading, to ' +
+            'avoid ingesting the same file twice.',
+        ),
+      )
+
+    xhr.send(form)
+  })
+}
+
 export interface ListEventsParams {
   host?: string
   start_date?: string
   end_date?: string
   alert_only?: boolean
+  /** true = event's channel/type has rule coverage (matched or not), false =
+   *  no loaded rule could ever evaluate it. Never conflate with alert_only:
+   *  a covered event can simply not match anything (genuinely clean). */
+  covered?: boolean
   /** Only events carrying an alert of this severity. Server-side, so a
    *  filtered page's `total` is the real total for that filter. */
   severity?: Severity
@@ -190,6 +285,10 @@ export function getEvents(params: ListEventsParams = {}) {
 
 export function getEvent(id: number) {
   return apiFetch<EventDetailResponse>(`/events/${id}`)
+}
+
+export function getAiOpinion(id: number) {
+  return apiFetch<AiOpinionResponse>(`/ai-opinions/${id}`)
 }
 
 export interface ListAlertsParams {

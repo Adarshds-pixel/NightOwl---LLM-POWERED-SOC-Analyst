@@ -1,8 +1,9 @@
-import { AlertTriangle, Database, FileText, List, ScrollText, TriangleAlert } from 'lucide-react'
+import { AlertTriangle, Database, EyeOff, FileText, List, ScrollText, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import type { EventLogRow } from '../api'
+import type { EventLogRow, IngestResponse } from '../api'
 import { LogUploadControl } from '../components/ingest/LogUploadControl'
+import { AiOpinionPanel } from '../components/logs/AiOpinionPanel'
 import { EventDetailDrawer } from '../components/logs/EventDetailDrawer'
 import {
   Button,
@@ -56,7 +57,14 @@ function LogsPage() {
     { ...filters, search: debouncedSearch },
     pageSize,
   )
-  const { eventTotal, alertTotal } = useEventTotals()
+  const { eventTotal, alertTotal, uncoveredTotal } = useEventTotals()
+  const verifiedCleanTotal = Math.max(eventTotal - alertTotal - uncoveredTotal, 0)
+  const [aiOpinionId, setAiOpinionId] = useState<number | null>(null)
+
+  function handleUploadSuccess(res: IngestResponse) {
+    setAiOpinionId(res.ai_opinion_id)
+    refresh()
+  }
 
   const detectionRatePercent = eventTotal > 0 ? (alertTotal / eventTotal) * 100 : 0
   const counts = levelCounts(rawEvents)
@@ -129,10 +137,12 @@ function LogsPage() {
         title="Logs"
         icon={<ScrollText className="h-5 w-5 text-accent-magenta" />}
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'Logs' }]}
-        actions={<LogUploadControl onSuccess={refresh} />}
+        actions={<LogUploadControl onSuccess={handleUploadSuccess} />}
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <AiOpinionPanel opinionId={aiOpinionId} />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label="Events ingested"
           value={eventTotal}
@@ -147,18 +157,31 @@ function LogsPage() {
           accent="amber"
           note={eventTotal > 0 ? `${((alertTotal / eventTotal) * 100).toFixed(2)}% of all events` : 'No events yet'}
         />
-        {/* All four tiles are whole-dataset totals. Anything scoped to the
+        {/* Split from a single "Clean events" tile on purpose: "0 alerts"
+            only means "verified clean" for an event a loaded rule actually
+            evaluated. An event whose channel/type no loaded rule covers at
+            all is a different, honest thing -- collapsing the two made
+            zero-coverage telemetry (e.g. a Security-only file before Phase 2
+            rules exist for it) look identical to a genuinely clean scan. */}
+        <StatCard
+          label="Verified clean"
+          value={verifiedCleanTotal}
+          icon={<FileText className="h-4 w-4" />}
+          accent="primary"
+          note="Evaluated by a rule, no match"
+        />
+        <StatCard
+          label="No rule coverage"
+          value={uncoveredTotal}
+          icon={<EyeOff className="h-4 w-4" />}
+          accent="red"
+          note="No loaded rule could evaluate this event type"
+        />
+        {/* All five tiles are whole-dataset totals. Anything scoped to the
             visible page lives in the side panels below, which say
             "Current page" on their own headings -- mixing a page-scoped
             number into this row made "0 errors" sit beside "37 alerting
             events" and read like a contradiction. */}
-        <StatCard
-          label="Clean events"
-          value={eventTotal - alertTotal}
-          icon={<FileText className="h-4 w-4" />}
-          accent="primary"
-          note="Matched no detection rule"
-        />
         <StatCard
           label="Detection rate"
           value={detectionRatePercent}

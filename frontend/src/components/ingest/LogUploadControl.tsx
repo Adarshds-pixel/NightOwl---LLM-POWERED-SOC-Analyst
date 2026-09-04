@@ -20,7 +20,7 @@ export function LogUploadControl({
   variant?: 'primary' | 'secondary' | 'ghost'
   label?: string
 }) {
-  const { pending, result, error, upload } = useLogIngest()
+  const { pending, phase, progress, result, error, upload } = useLogIngest()
   const inputRef = useRef<HTMLInputElement>(null)
   const { push } = useToast()
   const reported = useRef<IngestResponse | null>(null)
@@ -28,10 +28,22 @@ export function LogUploadControl({
   useEffect(() => {
     if (result && reported.current !== result) {
       reported.current = result
+      // Three distinct outcomes, not two: a real detection (warning), a
+      // file with events no loaded rule could evaluate (info -- "0 alerts"
+      // here does NOT mean verified clean, so this must never read as
+      // success), and a file every event of which was actually evaluated
+      // with nothing found (success, the only case that word is honest).
+      const tone = result.alerts_created > 0 ? 'warning' : result.uncovered_events > 0 ? 'info' : 'success'
+      const description =
+        result.alerts_created > 0
+          ? `${result.alerts_created} alert(s), ${result.incident_ids.length} incident(s) from ${result.filename}`
+          : result.uncovered_events > 0
+            ? `${result.covered_events}/${result.events_ingested} events had rule coverage — ${result.uncovered_events} not evaluated by any loaded rule`
+            : `All ${result.events_ingested.toLocaleString()} events were evaluated against loaded rules — no matches`
       push({
-        tone: result.alerts_created > 0 ? 'warning' : 'success',
+        tone,
         title: `${result.events_ingested.toLocaleString()} events ingested`,
-        description: `${result.alerts_created} alert(s), ${result.incident_ids.length} incident(s) from ${result.filename}`,
+        description,
       })
     }
   }, [result, push])
@@ -48,6 +60,13 @@ export function LogUploadControl({
     if (response) onSuccess?.(response)
   }
 
+  // Real transfer percentage while uploading; a distinct label once the
+  // transfer itself is done and the server is parsing/detecting -- never a
+  // fabricated percentage for that phase, since there's no progress signal
+  // for it (see client.ts's ingestEvtxFileWithProgress docstring).
+  const buttonLabel =
+    phase === 'uploading' ? `Uploading... ${Math.round(progress * 100)}%` : phase === 'processing' ? 'Processing...' : label
+
   return (
     <>
       <input ref={inputRef} type="file" accept=".evtx" onChange={handleFileChange} className="hidden" aria-hidden />
@@ -57,7 +76,7 @@ export function LogUploadControl({
         disabled={pending}
         icon={<Upload className="h-3.5 w-3.5" />}
       >
-        {pending ? 'Uploading...' : label}
+        {buttonLabel}
       </Button>
     </>
   )

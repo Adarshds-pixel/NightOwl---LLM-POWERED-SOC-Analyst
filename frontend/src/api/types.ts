@@ -136,6 +136,12 @@ export interface MitreTechniquesResponse {
   count: number
 }
 
+export interface UncoveredEventGroup {
+  channel: string | null
+  event_id: number
+  count: number
+}
+
 export interface IngestResponse {
   filename: string
   records_read: number
@@ -145,6 +151,30 @@ export interface IngestResponse {
   matched_rule_titles: string[]
   alerts_created: number
   incident_ids: number[]
+  // "rule_matches === 0" alone never distinguishes "scanned, genuinely
+  // clean" from "no loaded rule could evaluate this event's channel/type
+  // at all" -- these three fields make that explicit. See routes_ingest.py.
+  covered_events: number
+  uncovered_events: number
+  uncovered_breakdown: UncoveredEventGroup[]
+  // Non-null only when this ingest had zero rule matches AND at least one
+  // uncovered event. Advisory only -- never a detection, never conflate
+  // with alerts_created/incident_ids. Poll GET /ai-opinions/{id}.
+  ai_opinion_id: number | null
+}
+
+export type AiOpinionStatus = 'pending' | 'ready' | 'failed'
+export type AiOpinionAssessment = 'worth_reviewing' | 'nothing_unusual' | 'uncertain'
+
+export interface AiOpinionResponse {
+  id: number
+  filename: string
+  created_at: string
+  status: AiOpinionStatus
+  assessment_label: AiOpinionAssessment | null
+  summary: string | null
+  sample_event_ids: number[]
+  error: string | null
 }
 
 export interface EventLogRow {
