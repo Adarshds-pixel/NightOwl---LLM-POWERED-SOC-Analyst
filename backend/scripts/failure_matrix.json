@@ -1,0 +1,1845 @@
+[
+  {
+    "name": "4799_remote_local_groups_enumeration.evtx",
+    "behavior_hint": "4799 remote local groups enumeration",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 5,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4799": 5
+    },
+    "normalized_count": 5,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 5,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4799,
+        "count": 5
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      3
+    ],
+    "classification_labels": [
+      "event_id_coverage_gap"
+    ],
+    "reason": "Security event ID 4799 ('A security-enabled local group membership was enumerated') has no category mapping at all -- confirmed real content: TargetUserName=Administrators, CallerProcessName=net1.exe, i.e. a real 'net localgroup administrators' enumeration. Genuinely new coverage gap, not previously identified this session.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "bits_openvpn.evtx",
+    "behavior_hint": "bits openvpn",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1537,
+    "channels": [
+      "Microsoft-Windows-Bits-Client/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Bits-Client"
+    ],
+    "event_id_counts": {
+      "3": 254,
+      "4": 125,
+      "5": 84,
+      "59": 162,
+      "60": 129,
+      "61": 492,
+      "209": 101,
+      "306": 150,
+      "310": 40
+    },
+    "normalized_count": 1537,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 1537,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 61,
+        "count": 492
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 3,
+        "count": 254
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 59,
+        "count": 162
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 306,
+        "count": 150
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 60,
+        "count": 129
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 4,
+        "count": 125
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 209,
+        "count": 101
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 5,
+        "count": 84
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 310,
+        "count": 40
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      2
+    ],
+    "classification_labels": [
+      "channel_provider_gap"
+    ],
+    "reason": "Bits-Client/Operational channel, not Sysmon or Security.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "CA_DCSync_4662.evtx",
+    "behavior_hint": "CA DCSync 4662",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 3,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4662": 3
+    },
+    "normalized_count": 3,
+    "skipped_count": 0,
+    "covered_count": 3,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "3a7e9c14-6b2d-4f8a-9e1c-5d3a7b9c2f64"
+    ],
+    "matched_rule_titles": [
+      "DCSync -- Directory Replication Rights Abused"
+    ],
+    "matched_technique_ids": [
+      "T1003.006"
+    ],
+    "alerts_created": 3,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1003.006"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- DCSync -- Directory Replication Rights Abused",
+    "manual_review_needed": false
+  },
+  {
+    "name": "CA_hashdump_4663_4656_lsass_access.evtx",
+    "behavior_hint": "CA hashdump 4663 4656 lsass access",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 2,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4656": 1,
+      "4663": 1
+    },
+    "normalized_count": 2,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "6d2b8f43-1e9c-4a7d-8b3f-2c6e9a1d4f75"
+    ],
+    "matched_rule_titles": [
+      "LSASS Handle Access via Security Auditing"
+    ],
+    "matched_technique_ids": [
+      "T1003.001"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1003.001"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- LSASS Handle Access via Security Auditing",
+    "manual_review_needed": false
+  },
+  {
+    "name": "CA_PetiPotam_etw_rpc_efsr_5_6.evtx",
+    "behavior_hint": "CA PetiPotam etw rpc efsr 5 6",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 29109,
+    "channels": [],
+    "providers": [
+      "Microsoft-Windows-RPC"
+    ],
+    "event_id_counts": {
+      "0": 1,
+      "1": 8,
+      "5": 14508,
+      "6": 14550,
+      "9": 1,
+      "14": 39,
+      "16": 2
+    },
+    "normalized_count": 29109,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 29109,
+    "uncovered_breakdown": [
+      {
+        "channel": null,
+        "event_id": 6,
+        "count": 14550
+      },
+      {
+        "channel": null,
+        "event_id": 5,
+        "count": 14508
+      },
+      {
+        "channel": null,
+        "event_id": 14,
+        "count": 39
+      },
+      {
+        "channel": null,
+        "event_id": 1,
+        "count": 8
+      },
+      {
+        "channel": null,
+        "event_id": 16,
+        "count": 2
+      },
+      {
+        "channel": null,
+        "event_id": 0,
+        "count": 1
+      },
+      {
+        "channel": null,
+        "event_id": 9,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      2
+    ],
+    "classification_labels": [
+      "channel_provider_gap"
+    ],
+    "reason": "ETW/RPC channel (System.Channel is empty/None on these records, not Sysmon or Security) -- PetiPotam/EFSRPC coercion telemetry isn't in either currently-covered channel.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "DE_1102_security_log_cleared.evtx",
+    "behavior_hint": "DE 1102 security log cleared",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 112,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4663": 110,
+      "5156": 1
+    },
+    "normalized_count": 112,
+    "skipped_count": 0,
+    "covered_count": 111,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 5156,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
+    "name": "DE_ProcessHerpaderping_Sysmon_11_10_1_7.evtx",
+    "behavior_hint": "DE ProcessHerpaderping Sysmon 11 10 1 7",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 4,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 1,
+      "7": 1,
+      "10": 1,
+      "11": 1
+    },
+    "normalized_count": 4,
+    "skipped_count": 0,
+    "covered_count": 3,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "event_id": 7,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      8
+    ],
+    "classification_labels": [
+      "requires_sequence"
+    ],
+    "reason": "Process herpaderping requires correlating FileCreate(11) + ImageLoad(7) + ProcessAccess(10) on the same file/process within a short window -- no single event carries the signal; evaluate_event() is strictly per-event today.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "DE_RDP_Tunneling_4624.evtx",
+    "behavior_hint": "DE RDP Tunneling 4624",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 18,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4624": 18
+    },
+    "normalized_count": 18,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 18,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4624,
+        "count": 18
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      3,
+      12
+    ],
+    "classification_labels": [
+      "event_id_coverage_gap",
+      "benchmark_labeling_problem"
+    ],
+    "reason": "Security event ID 4624 has no rule. The filename implies LogonType 10 (RemoteInteractive), but the one record sampled this session showed LogonType 5 (service logon) -- needs more of this file's records inspected before trusting a LogonType-based rule; also flagged as a possible benchmark-labeling mismatch between filename and content.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "DE_UAC_Disabled_Sysmon_12_13.evtx",
+    "behavior_hint": "DE UAC Disabled Sysmon 12 13",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 3,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 1,
+      "12": 1,
+      "13": 1
+    },
+    "normalized_count": 3,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "event_id": 12,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "02df3fee-40fa-49aa-8303-c9ed04cf3bd8"
+    ],
+    "matched_rule_titles": [
+      "User Account Control Disabled via Registry"
+    ],
+    "matched_technique_ids": [
+      "T1548.002"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1548.002"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- User Account Control Disabled via Registry",
+    "manual_review_needed": false
+  },
+  {
+    "name": "de_unmanagedpowershell_psinject_sysmon_7_8_10.evtx",
+    "behavior_hint": "de unmanagedpowershell psinject sysmon 7 8 10",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 84,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "7": 1,
+      "8": 82,
+      "10": 1
+    },
+    "normalized_count": 84,
+    "skipped_count": 0,
+    "covered_count": 83,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "event_id": 7,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "034c5169-8d14-43af-9061-b7417bc636ca"
+    ],
+    "matched_rule_titles": [
+      "Remote Thread Creation from Scripting Engine or Web Server Process"
+    ],
+    "matched_technique_ids": [
+      "T1055"
+    ],
+    "alerts_created": 82,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1055"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Remote Thread Creation from Scripting Engine or Web Server Process",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_bloodhound.evtx",
+    "behavior_hint": "discovery bloodhound",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 10,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "5145": 9
+    },
+    "normalized_count": 10,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 9,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 5145,
+        "count": 9
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_enum_shares_target_sysmon_3_18.evtx",
+    "behavior_hint": "discovery enum shares target sysmon 3 18",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 4,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "3": 2,
+      "18": 2
+    },
+    "normalized_count": 4,
+    "skipped_count": 0,
+    "covered_count": 4,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      8
+    ],
+    "classification_labels": [
+      "requires_sequence"
+    ],
+    "reason": "Share enumeration is a *pattern* of network connections(3) + named-pipe connects(18) to SMB pipes, not any single suspicious event.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_local_user_or_group_windows_security_4799_4798.evtx",
+    "behavior_hint": "discovery local user or group windows security 4799 4798",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 3,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4798": 2,
+      "4799": 1
+    },
+    "normalized_count": 3,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 3,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4798,
+        "count": 2
+      },
+      {
+        "channel": "Security",
+        "event_id": 4799,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      3
+    ],
+    "classification_labels": [
+      "event_id_coverage_gap"
+    ],
+    "reason": "Security event IDs 4798/4799 (local group/user membership enumeration) -- same gap as 4799_remote_local_groups_enumeration.evtx.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_meterpreter_ps_cmd_process_listing_sysmon_10.evtx",
+    "behavior_hint": "discovery meterpreter ps cmd process listing sysmon 10",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 52,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "10": 52
+    },
+    "normalized_count": 52,
+    "skipped_count": 0,
+    "covered_count": 52,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "806ea242-4d35-4cc6-8888-deb768d55aed"
+    ],
+    "matched_rule_titles": [
+      "Suspicious Access to Protected System Process"
+    ],
+    "matched_technique_ids": [
+      "T1003.001"
+    ],
+    "alerts_created": 6,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1003.001"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Suspicious Access to Protected System Process",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_psloggedon.evtx",
+    "behavior_hint": "discovery psloggedon",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 4,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "5145": 3
+    },
+    "normalized_count": 4,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 3,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 5145,
+        "count": 3
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
+    "name": "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
+    "behavior_hint": "Discovery Remote System NamedPipes Sysmon 18",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 20,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "18": 20
+    },
+    "normalized_count": 20,
+    "skipped_count": 0,
+    "covered_count": 20,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      6
+    ],
+    "classification_labels": [
+      "rule_missing"
+    ],
+    "reason": "Event ID 18 (pipe connect) IS covered (pipe_event category), but the only loaded pipe_event rule targets spoolss specifically. Confirmed real content: PipeName=\\lsass, Image=System -- a remote SMB named-pipe connection to \\lsass, not \\spoolss. No rule exists for this pattern; writing one needs care since System connecting to \\lsass/\\srvsvc over SMB is also fairly common legitimate traffic -- likely needs a remote-vs-local or frequency signal to stay low-noise, not a blanket PipeName match.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx",
+    "behavior_hint": "discovery sysmon 18 Invoke UserHunter NetSessionEnum DC-srvsvc",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "18": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      6
+    ],
+    "classification_labels": [
+      "rule_missing"
+    ],
+    "reason": "Same gap as Discovery_Remote_System_NamedPipes_Sysmon_18.evtx. Confirmed real content: PipeName=\\srvsvc, Image=System -- PowerView's Invoke-UserHunter NetSessionEnum technique connects to \\srvsvc, not \\spoolss.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx",
+    "behavior_hint": "discovery sysmon 3 Invoke UserHunter SourceMachine",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 9,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "3": 9
+    },
+    "normalized_count": 9,
+    "skipped_count": 0,
+    "covered_count": 9,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "2a7e9c14-5d3f-4b6a-9e1c-8f4a2d7b6c53"
+    ],
+    "matched_rule_titles": [
+      "Suspicious Network Connection from LOLBin"
+    ],
+    "matched_technique_ids": [
+      "T1071.001"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1071.001"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Suspicious Network Connection from LOLBin",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_UEFI_Settings_rweverything_sysmon_6.evtx",
+    "behavior_hint": "discovery UEFI Settings rweverything sysmon 6",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "6": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "event_id": 6,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      3
+    ],
+    "classification_labels": [
+      "event_id_coverage_gap"
+    ],
+    "reason": "Sysmon event ID 6 (DriverLoaded) has no category mapping at all -- not even attempted this session (CATEGORY_TO_EVENT_ID has no entry covering 6). Confirmed real content: RwDrv.sys (RWEverything), a signed but well-known LOLDriver used for direct hardware/UEFI access and privilege escalation. A 'driver_load' category + a known-LOLDriver-hash/name rule would close this.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "exec_sysmon_1_ftp.evtx",
+    "behavior_hint": "exec sysmon 1 ftp",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 4,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 4
+    },
+    "normalized_count": 4,
+    "skipped_count": 0,
+    "covered_count": 4,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "21146539-1b4d-459f-81aa-2545a1445e27"
+    ],
+    "matched_rule_titles": [
+      "Suspicious Child Process of ftp.exe"
+    ],
+    "matched_technique_ids": [
+      "T1105"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1105"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Suspicious Child Process of ftp.exe",
+    "manual_review_needed": false
+  },
+  {
+    "name": "exec_sysmon_1_lolbin_pcalua.evtx",
+    "behavior_hint": "exec sysmon 1 lolbin pcalua",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 3,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 3
+    },
+    "normalized_count": 3,
+    "skipped_count": 0,
+    "covered_count": 3,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "4d59ab68-48ad-4201-8946-3dfcfadc0eee"
+    ],
+    "matched_rule_titles": [
+      "LOLBin Execution via Program Compatibility Assistant (pcalua.exe)"
+    ],
+    "matched_technique_ids": [
+      "T1218"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1218"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- LOLBin Execution via Program Compatibility Assistant (pcalua.exe)",
+    "manual_review_needed": false
+  },
+  {
+    "name": "Exec_sysmon_meterpreter_reversetcp_msipackage.evtx",
+    "behavior_hint": "Exec sysmon meterpreter reversetcp msipackage",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 8,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 4,
+      "2": 2,
+      "7": 1,
+      "13": 1
+    },
+    "normalized_count": 8,
+    "skipped_count": 0,
+    "covered_count": 7,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "event_id": 7,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "49c6ddee-506c-4b31-9370-57437f62a3cf"
+    ],
+    "matched_rule_titles": [
+      "File Creation Timestamp Backdated (Timestomping)"
+    ],
+    "matched_technique_ids": [
+      "T1070.006"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1070.006"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- File Creation Timestamp Backdated (Timestomping)",
+    "manual_review_needed": false
+  },
+  {
+    "name": "kerberos_pwd_spray_4771.evtx",
+    "behavior_hint": "kerberos pwd spray 4771",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 12,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4768": 9,
+      "4771": 2
+    },
+    "normalized_count": 12,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 11,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4768,
+        "count": 9
+      },
+      {
+        "channel": "Security",
+        "event_id": 4771,
+        "count": 2
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
+    "name": "LM_5145_Remote_FileCopy.evtx",
+    "behavior_hint": "LM 5145 Remote FileCopy",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 869,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "5145": 869
+    },
+    "normalized_count": 869,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 869,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 5145,
+        "count": 869
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      3,
+      7
+    ],
+    "classification_labels": [
+      "event_id_coverage_gap",
+      "rule_too_narrow"
+    ],
+    "reason": "Security event ID 5145 has no rule. It fires on every SMB file-share check (878 real occurrences in this one file), so a real rule needs ShareName/RelativeTargetName filtered to admin shares or abused named pipes, not blanket presence -- writing one without that filter would be unusably noisy, not a missing-coverage problem so much as a not-yet-narrow-enough-safely problem.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "LM_PowershellRemoting_sysmon_1_wsmprovhost.evtx",
+    "behavior_hint": "LM PowershellRemoting sysmon 1 wsmprovhost",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "3b54bcb6-7ed4-45d7-b20d-3266cac8e942"
+    ],
+    "matched_rule_titles": [
+      "Process Spawned by WinRM/PSRemoting Host"
+    ],
+    "matched_technique_ids": [
+      "T1021.006"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1021.006"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Process Spawned by WinRM/PSRemoting Host",
+    "manual_review_needed": false
+  },
+  {
+    "name": "LM_sysmon_psexec_smb_meterpreter.evtx",
+    "behavior_hint": "LM sysmon psexec smb meterpreter",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 10,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 3,
+      "3": 2,
+      "10": 1,
+      "13": 3,
+      "18": 1
+    },
+    "normalized_count": 10,
+    "skipped_count": 0,
+    "covered_count": 10,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "1d9a4e7c-2f6b-4c8a-b3d1-7e9c5a2f4b16",
+      "2a7e9c14-5d3f-4b6a-9e1c-8f4a2d7b6c53"
+    ],
+    "matched_rule_titles": [
+      "PowerShell Execution Policy Bypass",
+      "Suspicious Network Connection from LOLBin"
+    ],
+    "matched_technique_ids": [
+      "T1059.001",
+      "T1071.001"
+    ],
+    "alerts_created": 3,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1059.001",
+      "T1071.001"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- PowerShell Execution Policy Bypass, Suspicious Network Connection from LOLBin",
+    "manual_review_needed": false
+  },
+  {
+    "name": "LM_winrm_exec_sysmon_1_winrshost.evtx",
+    "behavior_hint": "LM winrm exec sysmon 1 winrshost",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 3,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 3
+    },
+    "normalized_count": 3,
+    "skipped_count": 0,
+    "covered_count": 3,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "3b54bcb6-7ed4-45d7-b20d-3266cac8e942"
+    ],
+    "matched_rule_titles": [
+      "Process Spawned by WinRM/PSRemoting Host"
+    ],
+    "matched_technique_ids": [
+      "T1021.006"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1021.006"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Process Spawned by WinRM/PSRemoting Host",
+    "manual_review_needed": false
+  },
+  {
+    "name": "LM_WMIC_4648_rpcss.evtx",
+    "behavior_hint": "LM WMIC 4648 rpcss",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 5,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4648": 3,
+      "4688": 1
+    },
+    "normalized_count": 5,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 4,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4648,
+        "count": 3
+      },
+      {
+        "channel": "Security",
+        "event_id": 4688,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
+    "name": "MSSQL_multiple_failed_logon_EventID_18456.evtx",
+    "behavior_hint": "MSSQL multiple failed logon EventID 18456",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 10,
+    "channels": [
+      "Application"
+    ],
+    "providers": [
+      "MSSQLSERVER"
+    ],
+    "event_id_counts": {
+      "18456": 10
+    },
+    "normalized_count": 10,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 10,
+    "uncovered_breakdown": [
+      {
+        "channel": "Application",
+        "event_id": 18456,
+        "count": 10
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      2
+    ],
+    "classification_labels": [
+      "channel_provider_gap"
+    ],
+    "reason": "Application channel (MSSQLSERVER provider), not Sysmon or Security.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "persistence_accessibility_features_osk_sysmon1.evtx",
+    "behavior_hint": "persistence accessibility features osk sysmon1",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 3,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 2,
+      "12": 1
+    },
+    "normalized_count": 3,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "event_id": 12,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "7653de6e-fb41-40be-8ba1-349444409b4a"
+    ],
+    "matched_rule_titles": [
+      "Accessibility Tool Launched by Utilman or Winlogon"
+    ],
+    "matched_technique_ids": [
+      "T1546.008"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1546.008"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Accessibility Tool Launched by Utilman or Winlogon",
+    "manual_review_needed": false
+  },
+  {
+    "name": "privesc_rotten_potato_from_webshell_metasploit_sysmon_1_8_3.evtx",
+    "behavior_hint": "privesc rotten potato from webshell metasploit sysmon 1 8 3",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 13,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 2,
+      "3": 7,
+      "8": 2,
+      "10": 2
+    },
+    "normalized_count": 13,
+    "skipped_count": 0,
+    "covered_count": 13,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "034c5169-8d14-43af-9061-b7417bc636ca"
+    ],
+    "matched_rule_titles": [
+      "Remote Thread Creation from Scripting Engine or Web Server Process"
+    ],
+    "matched_technique_ids": [
+      "T1055"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1055"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Remote Thread Creation from Scripting Engine or Web Server Process",
+    "manual_review_needed": false
+  },
+  {
+    "name": "privesc_seimpersonate_tosys_spoolsv_sysmon_17_18.evtx",
+    "behavior_hint": "privesc seimpersonate tosys spoolsv sysmon 17 18",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 7,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 3,
+      "5": 1,
+      "17": 1,
+      "18": 2
+    },
+    "normalized_count": 7,
+    "skipped_count": 0,
+    "covered_count": 6,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Sysmon/Operational",
+        "event_id": 5,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "01a199bd-19b8-46ac-a89a-ece738b3a5e5"
+    ],
+    "matched_rule_titles": [
+      "Rogue Spoolss Named Pipe (SeImpersonate Privilege Escalation)"
+    ],
+    "matched_technique_ids": [
+      "T1134.001"
+    ],
+    "alerts_created": 3,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1134.001"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Rogue Spoolss Named Pipe (SeImpersonate Privilege Escalation)",
+    "manual_review_needed": false
+  },
+  {
+    "name": "rogue_msi_url_1040_1042.evtx",
+    "behavior_hint": "rogue msi url 1040 1042",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 351,
+    "channels": [
+      "Application"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-SPP",
+      "MsiInstaller",
+      "Office Software Protection Platform Service"
+    ],
+    "event_id_counts": {
+      "1040": 178,
+      "1042": 173
+    },
+    "normalized_count": 351,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 351,
+    "uncovered_breakdown": [
+      {
+        "channel": "Application",
+        "event_id": 1040,
+        "count": 178
+      },
+      {
+        "channel": "Application",
+        "event_id": 1042,
+        "count": 173
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      2
+    ],
+    "classification_labels": [
+      "channel_provider_gap"
+    ],
+    "reason": "Application channel (MsiInstaller provider), not Sysmon or Security.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "sysmon_10_lsass_mimikatz_sekurlsa_logonpasswords.evtx",
+    "behavior_hint": "sysmon 10 lsass mimikatz sekurlsa logonpasswords",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "10": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "806ea242-4d35-4cc6-8888-deb768d55aed"
+    ],
+    "matched_rule_titles": [
+      "Suspicious Access to Protected System Process"
+    ],
+    "matched_technique_ids": [
+      "T1003.001"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1003.001"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Suspicious Access to Protected System Process",
+    "manual_review_needed": false
+  },
+  {
+    "name": "Sysmon_13_1_UACBypass_SDCLTBypass.evtx",
+    "behavior_hint": "Sysmon 13 1 UACBypass SDCLTBypass",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 5,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 2,
+      "10": 2,
+      "13": 1
+    },
+    "normalized_count": 5,
+    "skipped_count": 0,
+    "covered_count": 5,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "c6a9d1ae-1cf0-4af4-a912-12201b5bd2bd"
+    ],
+    "matched_rule_titles": [
+      "UAC Bypass via sdclt.exe IsolatedCommand Registry Hijack"
+    ],
+    "matched_technique_ids": [
+      "T1548.002"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1548.002"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- UAC Bypass via sdclt.exe IsolatedCommand Registry Hijack",
+    "manual_review_needed": false
+  },
+  {
+    "name": "sysmon_20_21_1_CommandLineEventConsumer.evtx",
+    "behavior_hint": "sysmon 20 21 1 CommandLineEventConsumer",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 17,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 9,
+      "10": 2,
+      "19": 2,
+      "20": 2,
+      "21": 2
+    },
+    "normalized_count": 17,
+    "skipped_count": 0,
+    "covered_count": 17,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "5d2c48bd-17f6-4633-83f8-491ef1ee0b87",
+      "806ea242-4d35-4cc6-8888-deb768d55aed"
+    ],
+    "matched_rule_titles": [
+      "Suspicious Access to Protected System Process",
+      "WMI CommandLineEventConsumer Persistence"
+    ],
+    "matched_technique_ids": [
+      "T1003.001",
+      "T1546.003"
+    ],
+    "alerts_created": 4,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1003.001",
+      "T1546.003"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Suspicious Access to Protected System Process, WMI CommandLineEventConsumer Persistence",
+    "manual_review_needed": false
+  },
+  {
+    "name": "sysmon_2_11_evasion_timestomp_MACE.evtx",
+    "behavior_hint": "sysmon 2 11 evasion timestomp MACE",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 2,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "2": 1,
+      "11": 1
+    },
+    "normalized_count": 2,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "49c6ddee-506c-4b31-9370-57437f62a3cf"
+    ],
+    "matched_rule_titles": [
+      "File Creation Timestamp Backdated (Timestomping)"
+    ],
+    "matched_technique_ids": [
+      "T1070.006"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1070.006"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- File Creation Timestamp Backdated (Timestomping)",
+    "manual_review_needed": false
+  },
+  {
+    "name": "sysmon_mshta_sharpshooter_stageless_meterpreter.evtx",
+    "behavior_hint": "sysmon mshta sharpshooter stageless meterpreter",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 3,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 2,
+      "3": 1
+    },
+    "normalized_count": 3,
+    "skipped_count": 0,
+    "covered_count": 3,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "1a6d3e78-4f9c-4b2e-8a1d-7c5b3f9e6d24"
+    ],
+    "matched_rule_titles": [
+      "Suspicious Mshta Execution"
+    ],
+    "matched_technique_ids": [
+      "T1218.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1218.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Suspicious Mshta Execution",
+    "manual_review_needed": false
+  },
+  {
+    "name": "Sysmon_UACME_32.evtx",
+    "behavior_hint": "Sysmon UACME 32",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 8,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 7,
+      "11": 1
+    },
+    "normalized_count": 8,
+    "skipped_count": 0,
+    "covered_count": 8,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "6f3b8d21-9a1c-4e5f-8b2d-3c7a1e9f5d84"
+    ],
+    "matched_rule_titles": [
+      "Suspicious Executable Written to Public or Temp Directory"
+    ],
+    "matched_technique_ids": [
+      "T1105"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1105"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Suspicious Executable Written to Public or Temp Directory",
+    "manual_review_needed": false
+  }
+]
