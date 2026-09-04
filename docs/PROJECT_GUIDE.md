@@ -87,7 +87,7 @@ A few checks need network or a live database and are excluded from the offline p
 ### Manual end-to-end verification
 
 1. Start the database, backend and frontend as above.
-2. Open http://localhost:5173 and upload `backend/sample_logs/sysmon_malicious_demo.evtx` from the Overview or Logs page. This fixture trips 12 of the 15 rules across 10 techniques.
+2. Open http://localhost:5173 and upload `backend/sample_logs/sysmon_malicious_demo.evtx` from the Overview or Logs page. This fixture trips several of the loaded rules across multiple techniques.
 3. Confirm incidents appear with severities and technique ids, and that Alerts, Logs, MITRE and Rules all populate.
 4. Open an incident, run the AI analysis, and confirm the explanation returns with source chunks and a self-critique result.
 5. Ask a follow-up in the chat panel; confirm it answers and the audit trail records the calls.
@@ -109,25 +109,19 @@ A Postman collection covering every endpoint is in `docs/postman/`.
 
 ## 5. Demonstrating the project live
 
-Uploading the same fixture every time looks nothing like a real SOC and gets repetitive fast in front of a panel. `/demo`'s **Live SOC replay** card instead feeds real captured telemetry in continuously over a few minutes, with realistic pacing -- see [`ARCHITECTURE.md` §10](ARCHITECTURE.md#10-live-soc-replay) for how it works and why nothing in it is fabricated.
-
-**Before the demo:**
-
-- Restart the backend without `--reload` -- a file-watcher reload mid-replay kills the background thread.
-- Confirm the process is single-worker (no `--workers` flag); the replay's in-progress-run state is per-process.
-- In Settings > Data, shorten the incident refresh to 15s and the log stream to 5s so the console visibly updates during the shorter replay window rather than waiting out the longer defaults.
+`/demo` (**Demo Mode**) is the fastest way to show the whole pipeline to a panel without manually driving every page. Each run rotates through a bundled pool of real attack fixtures and drives the exact same calls a real user would trigger by hand -- `POST /ingest`, then `/explain`, then a scripted chat question -- narrated in a terminal-style log as each request completes. See [`ARCHITECTURE.md` §10](ARCHITECTURE.md#10-demo-mode) for why nothing in it is fabricated or pre-recorded.
 
 **During the demo, on `/demo`:**
 
-1. Click **Reset demo data** once (confirm the dialog) so the console starts empty -- "this is a SOC with no telemetry yet."
-2. Click **Start replay**. Narrate as it runs: for the first ~10 seconds only benign noise arrives (Logs page fills, alert count stays zero); then an attack segment lands and an incident forms within seconds; noise resumes; two more segments land at their scheduled offsets, each forming its own incident. The Topbar's "Replay running" pill and the sidebar threat-level ring update live throughout.
-3. Open one of the incident badges the card links to (or the sidebar/notification bell), and walk through its Evidence, MITRE techniques, and AI Analysis tabs exactly as in the one-shot walkthrough above.
-4. Ask a follow-up in chat; show the audit trail.
-5. Close with the honesty framing: every record and every rule match is genuine, drawn from real Sysmon captures in `backend/sample_logs/`; only each record's timestamp was rewritten to place it on the current shift (`app/demo/timeline.py`, `with_rebased_timestamp`). `GET /demo/scenarios` (the segment-provenance list on the card itself) states exactly which capture backed each segment.
+1. Optionally click **Reset demo data** first (confirm the dialog) so the console starts empty -- "this is a SOC with no telemetry yet."
+2. Click **Run demo**. Narration advances through Ingest -> Resolve incident -> Explain -> Chat, each line appearing only once its real backend call returns.
+3. Open the resolved incident badge the card links to, and walk through its Evidence, MITRE techniques, and AI Analysis tabs exactly as in the one-shot walkthrough above.
+4. Point out the chat answer came back live, not canned, and show the audit trail.
+5. Run it again to rotate to the next fixture in the pool if time allows -- each run is independent and safe to repeat.
 
-**If something goes wrong live:** click **Stop replay**, then **Reset demo data**, and start again -- both are safe at any point. A replay that reports `state: "failed"` shows its error inline on the card; the terminal running the backend also logs the full traceback.
+**If something goes wrong live:** click **Reset demo data** and run again -- ingestion is idempotent per fixture and safe to retry. Any failure surfaces inline in the terminal log with the real error text; the backend terminal also logs the full traceback.
 
-**No admin rights / no Sysmon on the demo machine:** the replay needs neither -- it reads pre-built scenario files already committed under `backend/app/demo/scenarios/`. The optional live-capture finale (`backend/scripts/vm_generate_demo_narrative_events.ps1`, run on a Sysmon-capable VM) is a bonus, not a requirement.
+**No admin rights / no Sysmon on the demo machine needed:** Demo Mode reads pre-built `.evtx` fixtures already committed under `frontend/public/demo/`, so it works on any machine that can run the frontend and reach the backend.
 
 ---
 
@@ -162,7 +156,7 @@ A 30-day plan compressed to 26, run by a 4-person team as two rotating pairs (ba
 | Phase | Days | Outcome |
 |---|---|---|
 | Research, planning, design | 1-2 | Stack chosen, free-tier-only LLM policy, wireframes |
-| Backend core and detection | 3-12 | FastAPI, DB models and migrations, EVTX ingestion, normalization, detection engine, 15 rules, alert persistence, incident grouping, severity scoring, MITRE validation, incident endpoints |
+| Backend core and detection | 3-12 | FastAPI, DB models and migrations, EVTX ingestion, normalization, detection engine, 29 rules, alert persistence, incident grouping, severity scoring, MITRE validation, incident endpoints |
 | AI / RAG | 3-12 | ChromaDB and embeddings, ATT&CK loader, knowledge-base build, retrieval, prompts and LLM client, explain with self-critique and source attribution, incident chat |
 | Production hardening | 13 | API key auth, pagination, rate limiting, response caching, audit log, CI pipeline, backend Dockerfile |
 | Frontend | 14-20 | Vite/React scaffold, then the full SOC console redesign |
@@ -170,7 +164,7 @@ A 30-day plan compressed to 26, run by a 4-person team as two rotating pairs (ba
 | Deployment | 23-24 | Containers and compose, clean-machine tests |
 | Demo and report | 25-26 | Final report, presentation |
 
-**Where things actually stand.** Backend, detection, AI/RAG and the console are built and working end to end; the backend suite is 289 tests. The console covers Overview, Incidents, Incident detail, AI Assistant, MITRE ATT&CK, Alerts, Logs, Rules Engine, Reports, Settings and Demo Mode, all bound to live API data.
+**Where things actually stand.** Backend, detection, AI/RAG and the console are built and working end to end; the backend suite is 382 tests. The console covers Overview, Incidents, Incident detail, AI Assistant, MITRE ATT&CK, Alerts, Logs, Rules Engine, Reports, Settings and Demo Mode, all bound to live API data.
 
 Still open: a responsive and accessibility sweep at laptop and tablet widths, a frontend Dockerfile and full-stack compose, and the formal testing report.
 

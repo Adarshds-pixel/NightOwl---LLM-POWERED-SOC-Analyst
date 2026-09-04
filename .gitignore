@@ -29,3 +29,7 @@ frontend/dist/
 # interview preparation notes.
 frontend design images/
 docs/interview-prep.md
+final_plan.md
+
+# Claude Code local session/config state -- machine-local, not project source.
+.claude/
