@@ -43,7 +43,13 @@ function ReportsPage() {
   const { byId } = useMitreCatalog()
   const { rules } = useRules()
   const { push } = useToast()
-  const [window_, setWindow] = useState<ReportWindow>('7d')
+  // Defaults to 'all', not a recent-days window: this project's real
+  // workload is batch-ingesting historical/public EVTX captures (the
+  // benchmark corpus is dated 2019-2021), so a wall-clock-relative default
+  // would show "0 incidents" out of the box for the project's actual
+  // primary use case -- every real incident's own event time is years
+  // before whatever "now" the browser thinks it is.
+  const [window_, setWindow] = useState<ReportWindow>('all')
   const [generatedAt, setGeneratedAt] = useState(() => new Date().toISOString())
 
   const report = useMemo(
@@ -188,7 +194,14 @@ function ReportsPage() {
           {severitySlices.length > 0 ? (
             <Donut slices={severitySlices} total={report.incidentCount} totalLabel="Incidents" height={180} />
           ) : (
-            <EmptyState message="No incidents in this window" />
+            <EmptyState
+              message="No incidents in this window"
+              hint={
+                window_ !== 'all' && meta.totalAll > 0
+                  ? `${meta.totalAll.toLocaleString()} incident(s) exist outside this window -- try "All ingested data"`
+                  : undefined
+              }
+            />
           )}
         </Card>
 
