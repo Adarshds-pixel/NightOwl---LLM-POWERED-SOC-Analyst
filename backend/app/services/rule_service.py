@@ -31,8 +31,30 @@ def get_rule_activity(db: Session, now: datetime | None = None) -> dict[str, Rul
     in the number of rules. Rules that have never fired are simply absent
     from the mapping -- the caller (which already holds the full loaded
     rule set) fills in zeros, so a brand-new rule file still shows up.
+
+    `now` anchors the "last 24h" window and defaults to the most recent
+    `Alert.matched_at` in the whole dataset, not real wall-clock time.
+    Alerts are timestamped from each event's own historical time
+    (ingest_service.py's `matched_at=None` path -- see its docstring), and
+    this project's real workload is batch-ingesting historical/public
+    malware-sample EVTX captures (dated 2019-2021 in practice), not a live
+    forwarder. Anchoring to real `datetime.now()` would make "matches in
+    the last 24h" permanently read 0 for every such import, no matter what
+    was just ingested, since wall-clock "now" is always years ahead of
+    every alert. Anchoring to the dataset's own latest activity keeps the
+    metric meaningful for a historical import while still meaning exactly
+    "the real last 24 hours" the moment there's a genuinely recent alert --
+    which is what an actual live deployment would naturally have.
     """
-    now = now or datetime.now(timezone.utc)
+    if now is None:
+        latest = db.execute(select(func.max(Alert.matched_at))).scalar()
+        now = latest or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            # SQLite (the in-memory test DB) strips tzinfo on round-trip;
+            # every Alert.matched_at is written as UTC (ingest_service.py
+            # always deals in aware UTC datetimes), so this is a display
+            # correction, not a guess.
+            now = now.replace(tzinfo=timezone.utc)
     cutoff = now - timedelta(hours=24)
 
     totals = db.execute(

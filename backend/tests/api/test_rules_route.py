@@ -89,6 +89,31 @@ def test_activity_counts_come_from_the_alerts_table(api_client):
     assert rule["last_triggered"] is not None
 
 
+def test_activity_window_anchors_to_dataset_not_wall_clock(api_client):
+    """The actual bug this test guards: real-world EVTX samples this
+    project ingests are dated 2019-2021 (their own historical event time,
+    per ingest_service.py's matched_at=None docstring), not "now". If
+    matches_24h were computed against real wall-clock time, it would
+    permanently read 0 for every historical import regardless of how
+    tightly clustered the alerts actually are -- exactly the "Triggered
+    24h" KPI showing nothing after ingesting real files.
+    """
+    client, SessionLocal = api_client
+    historical_now = datetime(2019, 5, 8, 12, 0, 0, tzinfo=timezone.utc)
+    with SessionLocal() as db:
+        _insert_alert(db, ENCODED_PS_RULE_ID, historical_now - timedelta(minutes=5))
+        _insert_alert(db, ENCODED_PS_RULE_ID, historical_now - timedelta(hours=2))
+        # Older than 24h before the dataset's own latest alert: counted in
+        # match_count, not matches_24h -- same rule as the wall-clock test.
+        _insert_alert(db, ENCODED_PS_RULE_ID, historical_now - timedelta(days=3))
+
+    rules = client.get("/rules").json()["rules"]
+    rule = next(r for r in rules if r["rule_id"] == ENCODED_PS_RULE_ID)
+
+    assert rule["match_count"] == 3
+    assert rule["matches_24h"] == 2
+
+
 def test_filters_by_technique_level_and_category(api_client):
     client, _ = api_client
 
