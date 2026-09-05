@@ -1,11 +1,15 @@
-import { ArrowLeft, Bot, Crosshair, FileSearch, History, Server, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, Bot, Clock, FileSearch, History, Server, ShieldAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ChatPanel } from '../components/chat/ChatPanel'
+import { AlertEvidenceDrawer } from '../components/incidents/AlertEvidenceDrawer'
 import { AuditTrail } from '../components/incidents/AuditTrail'
 import { EvidenceSourcePanel } from '../components/incidents/EvidenceSourcePanel'
 import { ExplainButton } from '../components/incidents/ExplainButton'
+import { InvestigationTimeline } from '../components/incidents/InvestigationTimeline'
+import { MitreEvidenceLinks } from '../components/incidents/MitreEvidenceLinks'
 import { StatusControl } from '../components/incidents/StatusControl'
+import { EventDetailDrawer } from '../components/logs/EventDetailDrawer'
 import {
   Badge,
   Button,
@@ -25,8 +29,9 @@ import { useIncidentDetail } from '../hooks/useIncidentDetail'
 import type { AlertInfo } from '../api'
 import { formatDateTime, formatDuration, formatRelativeTime, incidentRef } from '../lib/format'
 import { eventTypeLabel } from '../lib/events'
+import { buildIncidentTimeline } from '../lib/timeline'
 
-type TabValue = 'overview' | 'evidence' | 'analysis' | 'chat' | 'audit'
+type TabValue = 'overview' | 'timeline' | 'evidence' | 'analysis' | 'chat' | 'audit'
 
 /**
  * Incident investigation view. Everything an analyst needs about one
@@ -43,6 +48,8 @@ function IncidentDetailPage() {
   const { refresh: refreshList } = useIncidentsSnapshot()
   const explain = useExplain(incidentId)
   const [tab, setTab] = useState<TabValue>('overview')
+  const [selectedAlert, setSelectedAlert] = useState<AlertInfo | null>(null)
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
 
   // Picked up once from the dashboard assistant card, then stripped from
   // history so a refresh or back-nav cannot re-trigger the auto-send.
@@ -66,6 +73,8 @@ function IncidentDetailPage() {
   if (error) return <ErrorState className="py-24" message={error} onRetry={refresh} />
   if (!incident) return <ErrorState className="py-24" message="Incident not found" />
 
+  const timelineEntries = buildIncidentTimeline(incident.alerts)
+
   const alertColumns: Column<AlertInfo>[] = [
     {
       key: 'matched',
@@ -83,6 +92,21 @@ function IncidentDetailPage() {
       key: 'event',
       header: 'Event',
       cell: (alert) => <span className="text-text-dim">{eventTypeLabel(alert.event.event_id)}</span>,
+    },
+    {
+      key: 'rule',
+      header: 'Rule / technique',
+      hideBelow: 'sm',
+      cell: (alert) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate text-meta text-text-dim">{alert.rule_title ?? 'Unknown rule'}</span>
+          {alert.technique_id && (
+            <Badge accent="violet" className="shrink-0">
+              {alert.technique_id}
+            </Badge>
+          )}
+        </div>
+      ),
     },
     {
       key: 'process',
@@ -153,6 +177,7 @@ function IncidentDetailPage() {
         onChange={setTab}
         items={[
           { value: 'overview', label: 'Overview', icon: <ShieldAlert className="h-3.5 w-3.5" /> },
+          { value: 'timeline', label: 'Timeline', icon: <Clock className="h-3.5 w-3.5" />, count: timelineEntries.length },
           { value: 'evidence', label: 'Evidence', icon: <FileSearch className="h-3.5 w-3.5" />, count: incident.alerts.length },
           { value: 'analysis', label: 'AI analysis', icon: <Bot className="h-3.5 w-3.5" /> },
           { value: 'chat', label: 'Chat', icon: <Bot className="h-3.5 w-3.5" /> },
@@ -162,29 +187,15 @@ function IncidentDetailPage() {
 
       {tab === 'overview' && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <Card title="MITRE techniques" icon={<Crosshair className="h-3.5 w-3.5" />} accent="magenta" className="xl:col-span-2">
-            {incident.techniques.length === 0 ? (
-              <p className="text-meta text-text-muted">No techniques resolved for this incident.</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {incident.techniques.map((technique) => (
-                  <li key={technique.id} className="rounded-control border border-line bg-surface-2/40 px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-meta text-accent-magenta">{technique.id}</span>
-                      <span className="text-body text-text-dim">{technique.name}</span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {technique.tactics.map((tactic) => (
-                        <Badge key={tactic} accent="violet">
-                          {tactic.replace(/-/g, ' ')}
-                        </Badge>
-                      ))}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          <MitreEvidenceLinks
+            techniques={incident.techniques}
+            alerts={incident.alerts}
+            onSelectAlert={(alert) => {
+              setSelectedEventId(null)
+              setSelectedAlert(alert)
+            }}
+            className="xl:col-span-2"
+          />
 
           <Card title="Affected asset" icon={<Server className="h-3.5 w-3.5" />} accent="primary">
             <dl className="flex flex-col gap-3">
@@ -211,12 +222,31 @@ function IncidentDetailPage() {
         </div>
       )}
 
+      {tab === 'timeline' && (
+        <InvestigationTimeline
+          entries={timelineEntries}
+          onSelectEvent={(eventId) => {
+            // Only one drawer at a time -- without this, an evidence-row
+            // drawer left open from a previous tab visit would still be
+            // "open" (state never resets on tab change) and stack behind
+            // the event drawer this click is opening.
+            setSelectedAlert(null)
+            setSelectedEventId(eventId)
+          }}
+        />
+      )}
+
       {tab === 'evidence' && (
-        <Card flush divided title={`${incident.alerts.length} alerts in this incident`}>
+        <Card flush divided title={`${incident.alerts.length} alerts in this incident`} subtitle="Click a row for the full evidence package">
           <DataTable
             columns={alertColumns}
             rows={incident.alerts}
             rowKey={(alert) => alert.id}
+            onRowClick={(alert) => {
+              setSelectedEventId(null)
+              setSelectedAlert(alert)
+            }}
+            isRowActive={(alert) => alert.id === selectedAlert?.id}
             emptyMessage="No alerts attached to this incident"
           />
         </Card>
@@ -239,6 +269,9 @@ function IncidentDetailPage() {
       {tab === 'chat' && <ChatPanel incidentId={incident.id} initialMessage={prefillChatMessage} />}
 
       {tab === 'audit' && <AuditTrail incidentId={incident.id} />}
+
+      <AlertEvidenceDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} />
+      <EventDetailDrawer eventId={selectedEventId} onClose={() => setSelectedEventId(null)} />
     </div>
   )
 }

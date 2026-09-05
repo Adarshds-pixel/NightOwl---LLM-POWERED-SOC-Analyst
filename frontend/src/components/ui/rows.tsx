@@ -79,12 +79,18 @@ export function TimelineItem({
   detail,
   severity,
   accentColor,
+  onClick,
 }: {
   title: ReactNode
   timestamp?: ReactNode
   detail?: ReactNode
   severity?: Severity
   accentColor?: string
+  /** Optional -- when set, the whole row becomes a real button (keyboard-
+   *  reachable, not just a mouse hover target) instead of static text.
+   *  AuditTrail's entries have nothing to drill into and omit this;
+   *  InvestigationTimeline's do (each event opens EventDetailDrawer). */
+  onClick?: () => void
 }) {
   const color = accentColor ?? (severity ? SEVERITY_HEX[severity] : ACCENT.primary)
   return (
@@ -95,12 +101,30 @@ export function TimelineItem({
         style={{ background: color }}
       />
       <span aria-hidden className="absolute top-4 bottom-[-0.75rem] left-[3px] w-px bg-line last:hidden" />
+      {onClick ? (
+        <button
+          type="button"
+          onClick={onClick}
+          className="-ml-2 flex w-[calc(100%+0.5rem)] flex-col rounded-control px-2 py-1 text-left transition-colors hover:bg-white/4 focus-visible:bg-white/4"
+        >
+          <TimelineItemBody title={title} timestamp={timestamp} detail={detail} />
+        </button>
+      ) : (
+        <TimelineItemBody title={title} timestamp={timestamp} detail={detail} />
+      )}
+    </li>
+  )
+}
+
+function TimelineItemBody({ title, timestamp, detail }: { title: ReactNode; timestamp?: ReactNode; detail?: ReactNode }) {
+  return (
+    <>
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-body text-text-dim">{title}</span>
         {timestamp && <span className="shrink-0 font-mono text-micro text-text-faint tabular-nums">{timestamp}</span>}
       </div>
       {detail && <div className="mt-1 text-meta text-text-muted">{detail}</div>}
-    </li>
+    </>
   )
 }
 

@@ -173,6 +173,12 @@ RULE_CASES = [
         {"Image": "C:\\Windows\\System32\\cmd.exe", "ParentImage": "C:\\Windows\\System32\\wsmprovhost.exe"},
         {"Image": "C:\\Windows\\System32\\cmd.exe", "ParentImage": "C:\\Windows\\explorer.exe"},
     ),
+    (
+        "Known-Abusable (LOLDriver) Kernel Driver Loaded",
+        6,
+        {"ImageLoaded": "C:\\Windows\\System32\\drivers\\RwDrv.sys", "Signed": "true", "Signature": "ChongKim Chan"},
+        {"ImageLoaded": "C:\\Windows\\System32\\drivers\\ntfs.sys", "Signed": "true", "Signature": "Microsoft Windows"},
+    ),
 ]
 
 
@@ -207,6 +213,96 @@ SECURITY_RULE_CASES = [
         {"ObjectName": "C:\\Windows\\system32\\lsass.exe"},
         {"ObjectName": "C:\\Windows\\System32\\notepad.exe"},
     ),
+    (
+        "Sensitive Local Group/Account Enumeration via net.exe",
+        4799,
+        {"CallerProcessName": "C:\\Windows\\System32\\net1.exe", "TargetUserName": "Administrators"},
+        # Benign look-alike: same enumerating process, but a non-privileged
+        # group -- routine account administration, not discovery targeting
+        # a high-value group.
+        {"CallerProcessName": "C:\\Windows\\System32\\net1.exe", "TargetUserName": "Marketing"},
+    ),
+    (
+        "RDP Logon via Loopback-Tunneled Connection",
+        4624,
+        {"LogonType": "10", "IpAddress": "127.0.0.1"},
+        # Benign look-alike: a real RDP session, same LogonType, but the
+        # real client address rather than loopback.
+        {"LogonType": "10", "IpAddress": "10.0.0.7"},
+    ),
+    (
+        "Executable Payload Written to Admin Share (Remote File Copy)",
+        5145,
+        {
+            "ShareName": "\\\\*\\C$",
+            "RelativeTargetName": "Windows\\Temp\\setup.bat",
+            "AccessList": "%%1537\n%%1538\n%%1539\n%%1541\n%%4416\n%%4417\n%%4418\n%%4419\n%%4420\n%%4423\n%%4424",
+        },
+        # Benign look-alike: same admin share, same executable-shaped
+        # target, but a read-only access grant (no %%4417/WriteData) --
+        # e.g. an AV scanner or backup agent listing the file, not writing
+        # it. Real content: this exact shape (wodCmdTerm.exe) in the
+        # verified sample.
+        {
+            "ShareName": "\\\\*\\C$",
+            "RelativeTargetName": "Windows\\Temp\\wodCmdTerm.exe",
+            "AccessList": "%%1538\n%%1541\n%%4416\n%%4419\n%%4423",
+        },
+    ),
+    (
+        "Well-Known Low-Privilege Account Added to Local Administrators",
+        4732,
+        {"TargetSid": "S-1-5-32-544", "MemberSid": "S-1-5-20"},
+        # Benign look-alike: same target group (Administrators), but the
+        # new member is a real, non-well-known-low-privilege account SID --
+        # routine admin-group membership management.
+        {"TargetSid": "S-1-5-32-544", "MemberSid": "S-1-5-21-111111111-222222222-3333333333-1105"},
+    ),
+    (
+        "Computer Account Created",
+        4720,
+        {"SamAccountName": "WORKSTATION01$"},
+        # Benign look-alike: a human user account, no trailing "$".
+        {"SamAccountName": "jdoe"},
+    ),
+    (
+        "Scheduled Task Created with Hidden Flag",
+        4698,
+        {"TaskContent": "<Task><Settings><Hidden>true</Hidden></Settings></Task>"},
+        {"TaskContent": "<Task><Settings><Hidden>false</Hidden></Settings></Task>"},
+    ),
+]
+
+# PowerShell/Operational-channel rules -- each declares `service:
+# powershell` in its YAML and is scoped to Event ID 4104 (Script Block
+# Logging). Kept separate from SECURITY_RULE_CASES for the same reason
+# that list is kept separate from RULE_CASES: _event()'s channel default
+# doesn't fit a third channel any better than a second.
+# (title, event_id, matching_event_data, benign_event_data_or_None)
+POWERSHELL_RULE_CASES = [
+    (
+        "PowerShell LSASS Memory Dump via Reflection",
+        4104,
+        {"ScriptBlockText": "$Process = Get-Process lsass; $MiniDumpWriteDump = $WERNativeMethods.GetMethod('MiniDumpWriteDump')"},
+        # Benign look-alike: mentions lsass (e.g. a monitoring script
+        # checking it's running) but never MiniDumpWriteDump.
+        {"ScriptBlockText": "Get-Process lsass | Select-Object Id, WorkingSet"},
+    ),
+    (
+        "PowerShell Fake Credential Prompt (Phishing)",
+        4104,
+        {"ScriptBlockText": "$cred = $Host.ui.PromptForCredential('Windows Security', 'msg', '', ''); $DS.ValidateCredentials($u, $p)"},
+        # Benign look-alike: prompts for a credential but never validates
+        # it against anything -- a normal "enter your password to
+        # continue" script, not a phishing harvester.
+        {"ScriptBlockText": "$cred = $Host.ui.PromptForCredential('Enter password', 'msg', '', ''); Connect-Service -Credential $cred"},
+    ),
+    (
+        "Suspicious PowerShell WebClient Instantiation",
+        4104,
+        {"ScriptBlockText": "$wc = New-Object Net.WebClient; $wc.DownloadFile($url, $out)"},
+        {"ScriptBlockText": "Get-Process | Where-Object { $_.CPU -gt 100 }"},
+    ),
 ]
 
 
@@ -226,10 +322,14 @@ def _event(event_id, event_data, channel="Microsoft-Windows-Sysmon/Operational")
     )
 
 
-def test_exactly_twenty_nine_rules_are_covered_by_this_matrix():
-    assert len(RULE_CASES) + len(SECURITY_RULE_CASES) == 29
+def test_exactly_thirty_nine_rules_are_covered_by_this_matrix():
+    assert len(RULE_CASES) + len(SECURITY_RULE_CASES) + len(POWERSHELL_RULE_CASES) == 39
     rules = rule_loader.load_rules()
-    covered_titles = {title for title, *_ in RULE_CASES} | {title for title, *_ in SECURITY_RULE_CASES}
+    covered_titles = (
+        {title for title, *_ in RULE_CASES}
+        | {title for title, *_ in SECURITY_RULE_CASES}
+        | {title for title, *_ in POWERSHELL_RULE_CASES}
+    )
     assert covered_titles == {r.title for r in rules}
 
 
@@ -277,6 +377,64 @@ def test_security_rule_does_not_fire_on_benign_look_alike(title, event_id, match
     matches = evaluate_event(event, rules)
 
     assert not any(m.title == title for m in matches), f"expected {title!r} NOT to fire on benign data"
+
+
+@pytest.mark.parametrize(
+    "title,event_id,matching_data,benign_data", POWERSHELL_RULE_CASES, ids=[c[0] for c in POWERSHELL_RULE_CASES]
+)
+def test_powershell_rule_fires_on_matching_event(title, event_id, matching_data, benign_data):
+    rules = rule_loader.load_rules()
+    event = _event(event_id, matching_data, channel="Microsoft-Windows-PowerShell/Operational")
+
+    matches = evaluate_event(event, rules)
+
+    assert any(m.title == title for m in matches), f"expected {title!r} to fire, matched: {[m.title for m in matches]}"
+
+
+@pytest.mark.parametrize(
+    "title,event_id,matching_data,benign_data", POWERSHELL_RULE_CASES, ids=[c[0] for c in POWERSHELL_RULE_CASES]
+)
+def test_powershell_rule_does_not_fire_on_benign_look_alike(title, event_id, matching_data, benign_data):
+    rules = rule_loader.load_rules()
+    event = _event(event_id, benign_data, channel="Microsoft-Windows-PowerShell/Operational")
+
+    matches = evaluate_event(event, rules)
+
+    assert not any(m.title == title for m in matches), f"expected {title!r} NOT to fire on benign data"
+
+
+def test_sensitive_enumeration_rule_also_fires_on_4798_user_membership_shape():
+    """The rule's category (local_group_enumeration) covers both 4799
+    (group membership enumerated) and 4798 (a user's group membership
+    enumerated) -- confirm the second event ID, not just the one exercised
+    by SECURITY_RULE_CASES, also fires for a sensitive target."""
+    rules = rule_loader.load_rules()
+    event = _event(
+        4798,
+        {"CallerProcessName": "C:\\Windows\\System32\\net1.exe", "TargetUserName": "Administrator"},
+        channel="Security",
+    )
+
+    matches = evaluate_event(event, rules)
+
+    assert any(m.title == "Sensitive Local Group/Account Enumeration via net.exe" for m in matches)
+
+
+def test_sensitive_enumeration_rule_requires_net1_as_the_caller_process():
+    """A sensitive TargetUserName alone must not be enough -- the same
+    group/account can be enumerated by other legitimate tooling (e.g. an
+    AD management console), which this rule intentionally does not cover
+    (net.exe/net1.exe is the specific well-precedented discovery pattern)."""
+    rules = rule_loader.load_rules()
+    event = _event(
+        4799,
+        {"CallerProcessName": "C:\\Windows\\System32\\dsa.msc", "TargetUserName": "Administrators"},
+        channel="Security",
+    )
+
+    matches = evaluate_event(event, rules)
+
+    assert not any(m.title == "Sensitive Local Group/Account Enumeration via net.exe" for m in matches)
 
 
 def test_security_rules_do_not_fire_on_sysmon_channel_event_id_collision():

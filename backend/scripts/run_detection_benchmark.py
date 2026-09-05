@@ -3,19 +3,41 @@ and reports recall on known-malicious samples and false positives on
 known-clean ones.
 
 Runs the pipeline in-process (`read_records_as_dicts` -> `normalize_event` ->
-`evaluate_event`), deliberately skipping HTTP and the database: this measures
-*detection*, not ingestion plumbing, and it stays side-effect free so it can be
-run against a live deployment without polluting its data.
+`evaluate_event`, plus `detect_sequences` for the 2-pattern sequence engine --
+see detection/sequences.py), deliberately skipping HTTP and the database:
+this measures *detection*, not ingestion plumbing, and it stays side-effect
+free so it can be run against a live deployment without polluting its data.
+`detect_sequences` needs an anchor "Event row" with an id/host/timestamp to
+attach a match to; this script builds a throwaway one per normalized event
+(never persisted -- ingest_service.py uses the real, DB-backed row) purely
+so its own detection count reflects the same matches a real ingest would.
 
-Two corpora, both already in the repo:
+Two corpora, both already in the repo, kept in physically separate
+directories (2026-09-05 -- previously mixed by filename convention alone,
+which invited exactly the kind of "which of these is actually safe to
+call clean" confusion this split now makes structurally impossible):
 
-  malicious  sample_logs/real_world_fixtures/     32 real-world attack captures
-             (public ATT&CK sample corpus). EVERY file is malicious, so a file
-             with zero matches is a false negative -- never a correct verdict.
+  malicious  sample_logs/real_world_fixtures/malicious/    real-world
+             attack captures (public ATT&CK sample corpus). EVERY file
+             here is malicious, so a file with zero matches is a false
+             negative -- never a correct verdict.
 
   clean      sample_logs/demo_fixtures/noise_*.evtx    5 slices of ordinary
              workstation activity, verified clean at generation time by
-             build_demo_evtx_fixtures.py. Any match here is a false positive.
+             build_demo_evtx_fixtures.py -- Sysmon-only, so this alone never
+             exercises a Security-channel rule's false-positive behavior.
+             sample_logs/real_world_fixtures/benign/*.evtx -- real
+             (not synthetic) captures from an ordinary PC:
+             nightowl_benign_security.evtx (~32k Security-channel events)
+             and nightowl_benign_powershell.evtx (~1.2k PowerShell-
+             Operational events, 466 real 4104 script blocks + 10 real
+             4103 module-logging records), added 2026-09-05 to close the
+             Security- and PowerShell-channel false-positive-testing gaps
+             respectively. Both contain their owner's real Windows
+             username/hostname -- gitignored rather than committed (see
+             root .gitignore), so a fresh clone simply has fewer clean
+             fixtures rather than failing; nothing in this script requires
+             them to be present.
 
 Run from backend/:
 
@@ -38,12 +60,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 
 from app.detection.engine import evaluate_event  # noqa: E402
 from app.detection.rule_loader import get_loaded_rules  # noqa: E402
+from app.detection.sequences import detect_sequences  # noqa: E402
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts  # noqa: E402
 from app.ingestion.normalizer import EventNormalizationError, normalize_event  # noqa: E402
+from app.models.event import Event  # noqa: E402
 
 SAMPLE_LOGS = Path(__file__).resolve().parents[1] / "sample_logs"
-MALICIOUS_DIR = SAMPLE_LOGS / "real_world_fixtures"
-CLEAN_GLOB = sorted((SAMPLE_LOGS / "demo_fixtures").glob("noise_*.evtx"))
+REAL_WORLD_DIR = SAMPLE_LOGS / "real_world_fixtures"
+MALICIOUS_DIR = REAL_WORLD_DIR / "malicious"
+CLEAN_GLOB = sorted((SAMPLE_LOGS / "demo_fixtures").glob("noise_*.evtx")) + sorted(
+    (REAL_WORLD_DIR / "benign").glob("*.evtx")
+)
 
 
 @dataclass
@@ -77,6 +104,7 @@ def scan(path: Path, rules) -> FileResult:
     normalized_count = 0
     skipped = 0
     matches = 0
+    sequence_rows: list[tuple[Event, object]] = []
 
     for record in records:
         try:
@@ -91,6 +119,29 @@ def scan(path: Path, rules) -> FileResult:
             titles[match.title] += 1
             if match.technique_id:
                 techniques.add(match.technique_id)
+        # Throwaway anchor row (id only needs to be unique within this
+        # scan; never persisted) -- see this module's docstring.
+        sequence_rows.append((
+            Event(
+                id=normalized_count,
+                host=event.host,
+                timestamp=event.timestamp,
+                event_id=event.event_id,
+                channel=event.channel,
+                process=None,
+                command_line=None,
+                user=None,
+                event_record_id=None,
+                raw_json={},
+            ),
+            event,
+        ))
+
+    for _anchor, match in detect_sequences(sequence_rows):
+        matches += 1
+        titles[match.title] += 1
+        if match.technique_id:
+            techniques.add(match.technique_id)
 
     return FileResult(
         name=path.name,

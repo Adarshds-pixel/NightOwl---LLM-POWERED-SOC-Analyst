@@ -1,6 +1,9 @@
-"""LLM second-opinion generation for ingests whose events had zero rule
-coverage -- advisory only, never a detector (see models/ai_opinion.py's
-module docstring for the "not a detection" boundary this module exists to
+"""LLM second-opinion generation, triggered either by an ingest whose events
+had zero rule coverage or by a narrow, verified advisory pattern
+(services/advisory_patterns.py) that a deterministic rule can't safely
+absorb -- see routes_ingest.py for exactly which conditions create one.
+Advisory only, never a detector (see models/ai_opinion.py's module
+docstring for the "not a detection" boundary this module exists to
 preserve, and rag/prompts.py's UNCOVERED_OPINION_SYSTEM_PROMPT for how
 that boundary is enforced at the model level too, not just in the API/UI).
 

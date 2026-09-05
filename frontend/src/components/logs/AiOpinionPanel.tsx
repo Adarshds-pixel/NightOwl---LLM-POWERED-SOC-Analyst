@@ -18,22 +18,37 @@ const ASSESSMENT_META: Record<AiOpinionAssessment, { label: string; accent: Acce
  * detections -- see useAiOpinion.ts and ai_opinion_service.py for the
  * rest of that boundary.
  */
-export function AiOpinionPanel({ opinionId }: { opinionId: number | null }) {
+export function AiOpinionPanel({
+  opinionId,
+  hasUncoveredEvents,
+}: {
+  opinionId: number | null
+  /** Whether this ingest actually had events no loaded rule could ever
+   *  evaluate (IngestResponse.uncovered_events > 0). An opinion can also
+   *  fire purely from a narrow advisory pattern (advisory_patterns.py) on
+   *  a file that's 100% covered -- found live during the 39-file visual QA
+   *  pass (2026-09-05): the old unconditional "no rule could evaluate"
+   *  copy was flatly wrong on a file every event of which a loaded rule
+   *  had genuinely evaluated. Defaults to true so a caller that hasn't
+   *  been updated to pass this keeps today's copy rather than silently
+   *  showing the wrong one. */
+  hasUncoveredEvents?: boolean
+}) {
   const { opinion, error } = useAiOpinion(opinionId)
 
   if (opinionId === null) return null
 
   const assessment = opinion?.assessment_label ? ASSESSMENT_META[opinion.assessment_label] : null
+  const subtitle =
+    hasUncoveredEvents ?? true
+      ? 'Not a verified detection — an AI reading of events no rule could evaluate'
+      : 'Not a verified detection — an AI second look at a narrow pattern worth reviewing'
+  const thinkingLabel = hasUncoveredEvents ?? true ? 'Reviewing uncovered events' : 'Reviewing flagged pattern'
 
   return (
-    <Card
-      title="AI second opinion"
-      subtitle="Not a verified detection — an AI reading of events no rule could evaluate"
-      icon={<Sparkles className="h-4 w-4" />}
-      accent="violet"
-    >
+    <Card title="AI second opinion" subtitle={subtitle} icon={<Sparkles className="h-4 w-4" />} accent="violet">
       {!opinion || opinion.status === 'pending' ? (
-        <AIThinking label="Reviewing uncovered events" />
+        <AIThinking label={thinkingLabel} />
       ) : opinion.status === 'failed' ? (
         <EmptyState
           message="AI opinion unavailable"

@@ -36,7 +36,8 @@ from app.main import app  # noqa: E402
 from app.models.incident import Incident  # noqa: E402
 
 REAL_CAPTURE_PATH = (
-    Path(__file__).resolve().parents[2] / "backend" / "sample_logs" / "sysmon_vm_capture.evtx"
+    Path(__file__).resolve().parents[2]
+    / "backend" / "sample_logs" / "real_world_fixtures" / "benign" / "sysmon_vm_capture.evtx"
 )
 
 _TIMESTAMP = "2026-08-19T12:00:00.000000+00:00"

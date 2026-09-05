@@ -3,6 +3,7 @@ import { useEffect, useRef, type ChangeEvent } from 'react'
 import type { IngestResponse } from '../../api'
 import { useToast } from '../../context/toast/useToast'
 import { useLogIngest } from '../../hooks/useLogIngest'
+import { computeVerdict } from '../../lib/verdict'
 import { Button } from '../ui'
 
 /**
@@ -28,18 +29,42 @@ export function LogUploadControl({
   useEffect(() => {
     if (result && reported.current !== result) {
       reported.current = result
-      // Three distinct outcomes, not two: a real detection (warning), a
-      // file with events no loaded rule could evaluate (info -- "0 alerts"
-      // here does NOT mean verified clean, so this must never read as
-      // success), and a file every event of which was actually evaluated
-      // with nothing found (success, the only case that word is honest).
-      const tone = result.alerts_created > 0 ? 'warning' : result.uncovered_events > 0 ? 'info' : 'success'
+
+      // A file (or a re-export overlapping an earlier upload) NightOwl has
+      // already ingested: every record matched an existing event by its
+      // own (host, channel, Windows EventRecordID) identity, so nothing
+      // new was stored -- no alert/coverage tone applies, since nothing
+      // was actually evaluated this time.
+      if (result.events_ingested === 0 && result.duplicate_events_skipped > 0) {
+        push({
+          tone: 'info',
+          title: 'Already ingested',
+          description: `All ${result.duplicate_events_skipped.toLocaleString()} event(s) in ${result.filename} were already in NightOwl — nothing new to add.`,
+        })
+        return
+      }
+
+      // Same three-way split TelemetryProfilePanel's verdict banner shows
+      // (lib/verdict.ts) -- one shared source of truth for "which of the
+      // three categories applies," not a second, independently-drifting
+      // tone ternary. "0 alerts" here does NOT mean verified clean (an
+      // Inconclusive file must never read as success), so the tone only
+      // ever says success for a genuinely fully-evaluated, clean file.
+      const verdict = computeVerdict(result)
+      const tone = verdict.kind === 'detected' ? 'warning' : verdict.kind === 'inconclusive' ? 'info' : 'success'
+      const duplicateNote =
+        result.duplicate_events_skipped > 0
+          ? ` (${result.duplicate_events_skipped.toLocaleString()} already ingested, skipped)`
+          : ''
+      const totalClassified = result.covered_events + result.uncovered_events
       const description =
-        result.alerts_created > 0
-          ? `${result.alerts_created} alert(s), ${result.incident_ids.length} incident(s) from ${result.filename}`
-          : result.uncovered_events > 0
-            ? `${result.covered_events}/${result.events_ingested} events had rule coverage — ${result.uncovered_events} not evaluated by any loaded rule`
-            : `All ${result.events_ingested.toLocaleString()} events were evaluated against loaded rules — no matches`
+        verdict.kind === 'detected'
+          ? `${result.alerts_created} alert(s), ${result.incident_ids.length} incident(s) from ${result.filename}${duplicateNote}`
+          : verdict.kind === 'inconclusive'
+            ? totalClassified > 0
+              ? `${result.covered_events}/${result.events_ingested} events had rule coverage — ${result.uncovered_events} not evaluated by any loaded rule${duplicateNote}`
+              : verdict.explanation
+            : `All ${result.events_ingested.toLocaleString()} events were evaluated against loaded rules — no matches${duplicateNote}`
       push({
         tone,
         title: `${result.events_ingested.toLocaleString()} events ingested`,

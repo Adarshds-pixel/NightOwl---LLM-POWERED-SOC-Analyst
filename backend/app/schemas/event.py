@@ -20,6 +20,11 @@ class NormalizedEvent(BaseModel):
     timestamp: datetime
     event_id: int
     process: str | None = None
+    # Promoted alongside `process` (pending.md "ParentImage promotion") --
+    # only ever populated for process-creation events, same as `process`
+    # itself. See models/event.py's own field comment for the source
+    # fields (Sysmon ParentImage / Security-aliased ParentProcessName).
+    parent_process: str | None = None
     command_line: str | None = None
     user: str | None = None
 
@@ -30,6 +35,13 @@ class NormalizedEvent(BaseModel):
     # purposes; this field itself stays raw so nothing about the source is
     # lost for display/debugging.
     channel: str | None = None
+
+    # Raw `Event.System.EventRecordID` -- Windows' own per-(host, channel)
+    # monotonic record identity, not something NightOwl invents. Used only
+    # for ingest-time duplicate detection (see event_service.py); None
+    # when a record genuinely lacks it (malformed/legacy), in which case
+    # that event is never deduplicated rather than guessed at.
+    event_record_id: int | None = None
 
     # Event ID 3 -- network connection
     protocol: str | None = None

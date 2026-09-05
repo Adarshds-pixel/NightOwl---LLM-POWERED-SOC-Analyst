@@ -34,13 +34,21 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.errors import not_found
 from app.db.session import get_db
+from app.detection.rule_loader import get_loaded_rules
+from app.detection.sequences import SEQUENCE_PATTERNS
 from app.mitre.loader import load_mitre_techniques
 from app.models.incident import Incident
 from app.rag import cache
 from app.rag.explain_service import generate_explanation
-from app.rag.prompts import extract_recommended_response
+from app.rag.prompts import extract_confidence_breakdown, extract_recommended_response
 from app.services import audit_service
-from app.services.incident_service import count_incidents, get_incident_alerts_with_events, list_incidents
+from app.services.incident_service import (
+    build_incident_evidence,
+    count_incidents,
+    get_incident_alerts_with_events,
+    get_related_events,
+    list_incidents,
+)
 
 router = APIRouter()
 
@@ -58,6 +66,12 @@ class ExplainResponse(BaseModel):
     incident_id: int
     explanation: str
     recommended_response: str
+    # pending.md item 5: the explanation's own "## Confidence breakdown"
+    # section (Fact/Inference/Uncertainty), extracted the same mechanical
+    # way recommended_response already is -- lets the frontend render it
+    # separately from the narrative explanation rather than the analyst
+    # having to find it inside the prose.
+    confidence_breakdown: str
     sources: list[SourceChunk]
 
 
@@ -92,6 +106,20 @@ class EventInfo(BaseModel):
     timestamp: datetime
     event_id: int
     process: str | None
+    parent_process: str | None
+    command_line: str | None
+    user: str | None
+
+
+class RelatedEventInfo(BaseModel):
+    """A neighboring event on the same host, near one alert's own event --
+    investigative context, never itself a detection (see
+    incident_service.get_related_events)."""
+
+    id: int
+    timestamp: datetime
+    event_id: int
+    process: str | None
     command_line: str | None
     user: str | None
 
@@ -99,10 +127,18 @@ class EventInfo(BaseModel):
 class AlertInfo(BaseModel):
     id: int
     rule_id: str
+    # Human-readable counterparts to rule_id (an opaque UUID) -- the same
+    # rule_title/technique_id GET /alerts and GET /events already expose,
+    # brought to incident detail's evidence list for parity (previously
+    # only the incident-level `techniques` rollup carried this, not each
+    # individual alert).
+    rule_title: str | None
+    technique_id: str | None
     matched_at: datetime
     severity: str
     severity_score: int
     event: EventInfo
+    related_events: list[RelatedEventInfo]
 
 
 class IncidentDetailResponse(BaseModel):
@@ -142,26 +178,6 @@ class AuditLogResponse(BaseModel):
     count: int
 
 
-def _incident_to_dict(incident: Incident) -> dict:
-    """Map the (currently sparse) Incident model to the loose dict shape
-    explain_service.generate_explanation expects -- see its docstring on why
-    that's a dict rather than the ORM model directly.
-
-    `technique_id` (singular) stays the *first* technique -- it's what
-    explain_service uses to filter retrieval, which only supports one
-    technique_id. `technique_ids` carries the full list so the LLM prompt
-    context (format_incident_context renders every dict key) still shows
-    every technique on incidents that grouped alerts for more than one.
-    """
-    return {
-        "description": incident.title,
-        "severity": incident.severity,
-        "host": incident.host,
-        "technique_id": incident.mitre_technique_ids[0] if incident.mitre_technique_ids else None,
-        "technique_ids": incident.mitre_technique_ids or [],
-    }
-
-
 @router.post("/incidents/{incident_id}/explain", response_model=ExplainResponse)
 def explain_incident(incident_id: int, db: Session = Depends(get_db)) -> ExplainResponse:
     incident = db.get(Incident, incident_id)
@@ -170,7 +186,7 @@ def explain_incident(incident_id: int, db: Session = Depends(get_db)) -> Explain
 
     result = cache.get_explanation(incident_id) if settings.response_cache_enabled else None
     if result is None:
-        result = generate_explanation(_incident_to_dict(incident))
+        result = generate_explanation(build_incident_evidence(db, incident))
         if settings.response_cache_enabled:
             cache.set_explanation(incident_id, result)
 
@@ -180,6 +196,7 @@ def explain_incident(incident_id: int, db: Session = Depends(get_db)) -> Explain
         incident_id=incident_id,
         explanation=result.explanation,
         recommended_response=extract_recommended_response(result.draft),
+        confidence_breakdown=extract_confidence_breakdown(result.draft),
         sources=[SourceChunk(**chunk) for chunk in result.chunks],
     )
 
@@ -297,25 +314,46 @@ def get_incident_detail(incident_id: int, db: Session = Depends(get_db)) -> Inci
     if incident is None:
         raise not_found("incident", incident_id)
 
-    alerts = [
-        AlertInfo(
-            id=alert.id,
-            rule_id=alert.rule_id,
-            matched_at=alert.matched_at,
-            severity=alert.severity,
-            severity_score=alert.severity_score,
-            event=EventInfo(
-                id=event.id,
-                host=event.host,
-                timestamp=event.timestamp,
-                event_id=event.event_id,
-                process=event.process,
-                command_line=event.command_line,
-                user=event.user,
-            ),
+    # Sequence-detected alerts (detection/sequences.py) carry a rule_id
+    # that was never a loaded YAML rule -- merge in their titles/technique
+    # ids too, or every such alert would show as "Unknown rule".
+    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | SEQUENCE_PATTERNS
+    alerts = []
+    for alert, event in get_incident_alerts_with_events(db, incident_id):
+        rule = rules_by_id.get(alert.rule_id)
+        related = get_related_events(db, host=event.host, around=event.timestamp, exclude_event_id=event.id)
+        alerts.append(
+            AlertInfo(
+                id=alert.id,
+                rule_id=alert.rule_id,
+                rule_title=rule.title if rule else None,
+                technique_id=rule.technique_id if rule else None,
+                matched_at=alert.matched_at,
+                severity=alert.severity,
+                severity_score=alert.severity_score,
+                event=EventInfo(
+                    id=event.id,
+                    host=event.host,
+                    timestamp=event.timestamp,
+                    event_id=event.event_id,
+                    process=event.process,
+                    parent_process=event.parent_process,
+                    command_line=event.command_line,
+                    user=event.user,
+                ),
+                related_events=[
+                    RelatedEventInfo(
+                        id=related_event.id,
+                        timestamp=related_event.timestamp,
+                        event_id=related_event.event_id,
+                        process=related_event.process,
+                        command_line=related_event.command_line,
+                        user=related_event.user,
+                    )
+                    for related_event in related
+                ],
+            )
         )
-        for alert, event in get_incident_alerts_with_events(db, incident_id)
-    ]
 
     return IncidentDetailResponse(
         id=incident.id,

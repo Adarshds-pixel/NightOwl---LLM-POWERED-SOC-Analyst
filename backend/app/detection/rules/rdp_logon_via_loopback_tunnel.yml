@@ -1,0 +1,37 @@
+title: RDP Logon via Loopback-Tunneled Connection
+id: fc643261-3f05-4b96-9fe0-f35e781676b5
+status: experimental
+description: >
+  Detects Windows Security Event ID 4624 (an account was successfully
+  logged on) with LogonType 10 (RemoteInteractive, i.e. RDP) where the
+  logon's IpAddress is the loopback interface (127.0.0.1 or ::1). A
+  genuine RDP session is inherently a network connection from the real
+  client's address -- RDP's own logon telemetry can never legitimately
+  show loopback as the client IP. Seeing it anyway means the RDP traffic
+  actually arrived over a local port-forward/tunnel (SSH -L, stunnel,
+  chisel, ngrok, ...) terminating on the host itself, then relayed to the
+  RDP service -- a well-precedented technique to reach RDP through a
+  restrictive firewall/NAT or to blend traffic with normal loopback
+  activity. Verified against real content: an 18-record sample where 17
+  records are ordinary service/network/interactive logons (LogonTypes
+  5/3/2/0) and exactly one is LogonType 10 with IpAddress 127.0.0.1 --
+  confirming the filename's implication, not assuming it.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1572/
+  - https://attack.mitre.org/techniques/T1021/001/
+tags:
+  - attack.command_and_control
+  - attack.t1572
+logsource:
+  category: rdp_tunneled_logon
+  service: security
+detection:
+  selection:
+    LogonType: '10'
+    IpAddress:
+      - 127.0.0.1
+      - '::1'
+  condition: selection
+level: high

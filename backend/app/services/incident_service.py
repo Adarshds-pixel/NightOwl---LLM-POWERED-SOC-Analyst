@@ -20,14 +20,23 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.detection.engine import RuleMatch
+from app.detection.rule_loader import get_loaded_rules
+from app.detection.sequences import SEQUENCE_PATTERNS
 from app.models.alert import Alert
 from app.models.event import Event
 from app.models.incident import Incident
-from app.services import severity_service
+from app.services import event_service, severity_service
 
 logger = logging.getLogger(__name__)
 
 GROUPING_WINDOW = timedelta(hours=1)
+
+# Evidence-first alerts (pending.md item 5): a narrow window around an
+# alert's own event, not the full 1h GROUPING_WINDOW incidents are grouped
+# on -- "what else happened right around this" is investigative context,
+# not every event this incident's grouping window happens to span.
+RELATED_EVENTS_WINDOW = timedelta(minutes=5)
+RELATED_EVENTS_LIMIT = 5
 
 
 def find_or_create_incident(db: Session, host: str, matched_at: datetime, match: RuleMatch) -> Incident:
@@ -147,3 +156,85 @@ def get_incident_alerts_with_events(db: Session, incident_id: int) -> list[tuple
         .order_by(Alert.matched_at)
     )
     return [(alert, event) for alert, event in db.execute(stmt)]
+
+
+def get_related_events(db: Session, host: str, around: datetime, exclude_event_id: int) -> list[Event]:
+    """Up to RELATED_EVENTS_LIMIT other events on `host` within
+    RELATED_EVENTS_WINDOW of `around` (an alert's own event timestamp) --
+    the investigative context an analyst would otherwise only get by
+    switching to the Logs page and filtering by hand. Reuses
+    event_service.list_events() (the same query GET /events runs) rather
+    than a new query shape, per this item's "no new subsystem" scope.
+    """
+    window_start = around - RELATED_EVENTS_WINDOW
+    window_end = around + RELATED_EVENTS_WINDOW
+    # +1 so excluding the alert's own event (almost always inside the
+    # window) still leaves up to RELATED_EVENTS_LIMIT real neighbors.
+    candidates = event_service.list_events(
+        db, host=host, start_date=window_start, end_date=window_end, limit=RELATED_EVENTS_LIMIT + 1
+    )
+    return [event for event in candidates if event.id != exclude_event_id][:RELATED_EVENTS_LIMIT]
+
+
+def build_incident_evidence(db: Session, incident: Incident) -> dict:
+    """The bounded evidence package rag/explain_service.py's and
+    rag/chat_service.py's LLM prompts are built from (pending.md item 5:
+    "extend the evidence input beyond {title, severity, host,
+    technique_id}"). Reuses get_incident_alerts_with_events/
+    get_related_events above -- the exact same lookups `GET
+    /incidents/{id}` already runs to build its own per-alert evidence
+    list -- rather than a new query shape, so this is wiring the LLM
+    prompt to data that already exists, not a new lookup.
+
+    Bounded to the incident's FIRST alert (earliest matched_at), not
+    every alert it has: some incidents carry dozens of near-duplicate
+    alerts from the same rule (e.g. "Remote Thread Creation" firing once
+    per CreateRemoteThread event in a file) -- dumping all of them into
+    the prompt would balloon its size without adding real signal, so any
+    additional alerts are only counted, not individually detailed.
+    """
+    evidence: dict = {
+        "description": incident.title,
+        "severity": incident.severity,
+        "host": incident.host,
+        "technique_id": incident.mitre_technique_ids[0] if incident.mitre_technique_ids else None,
+        "technique_ids": incident.mitre_technique_ids or [],
+    }
+
+    alerts_with_events = get_incident_alerts_with_events(db, incident.id)
+    if not alerts_with_events:
+        return evidence
+
+    primary_alert, primary_event = alerts_with_events[0]
+    # Merges in the sequence engine's synthetic patterns the same way
+    # get_incident_detail's own rules_by_id does -- a sequence's rule_id
+    # (detection/sequences.py) was never a loaded YAML rule, so it would
+    # otherwise resolve to no title at all.
+    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | SEQUENCE_PATTERNS
+    rule = rules_by_id.get(primary_alert.rule_id)
+
+    evidence["matched_rule"] = rule.title if rule else None
+    evidence["detection_method"] = (
+        "multi-event sequence correlation" if primary_alert.rule_id in SEQUENCE_PATTERNS else "single-event Sigma rule"
+    )
+    evidence["process"] = primary_event.process
+    evidence["parent_process"] = primary_event.parent_process
+    evidence["command_line"] = primary_event.command_line
+    evidence["user"] = primary_event.user
+
+    related = get_related_events(
+        db, host=primary_event.host, around=primary_event.timestamp, exclude_event_id=primary_event.id
+    )
+    if related:
+        evidence["related_events"] = [
+            f"{event.timestamp.isoformat()} event_id={event.event_id} "
+            f"process={event.process or 'unknown'} command_line={event.command_line or 'none'}"
+            for event in related
+        ]
+
+    if len(alerts_with_events) > 1:
+        evidence["additional_alerts"] = (
+            f"{len(alerts_with_events) - 1} more alert(s) matched on this incident, not individually listed here"
+        )
+
+    return evidence

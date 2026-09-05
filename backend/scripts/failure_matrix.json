@@ -16,29 +16,109 @@
     },
     "normalized_count": 5,
     "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 5,
+    "covered_count": 5,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "ae2dd78b-15cf-4404-9847-f289fb23fabb"
+    ],
+    "matched_rule_titles": [
+      "Sensitive Local Group/Account Enumeration via net.exe"
+    ],
+    "matched_technique_ids": [
+      "T1069.001"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1069.001"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Sensitive Local Group/Account Enumeration via net.exe",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx",
+    "behavior_hint": "ACL ForcePwd SPNAdd User Computer Accounts",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 55,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4662": 14,
+      "4702": 4,
+      "4719": 8,
+      "4738": 5,
+      "4742": 1,
+      "5136": 22
+    },
+    "normalized_count": 55,
+    "skipped_count": 0,
+    "covered_count": 15,
+    "uncovered_count": 40,
     "uncovered_breakdown": [
       {
         "channel": "Security",
-        "event_id": 4799,
+        "event_id": 5136,
+        "count": 22
+      },
+      {
+        "channel": "Security",
+        "event_id": 4719,
+        "count": 8
+      },
+      {
+        "channel": "Security",
+        "event_id": 4738,
         "count": 5
+      },
+      {
+        "channel": "Security",
+        "event_id": 4702,
+        "count": 4
+      },
+      {
+        "channel": "Security",
+        "event_id": 4742,
+        "count": 1
       }
     ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      3
+    "matched_rule_ids": [
+      "3a7e9c14-6b2d-4f8a-9e1c-5d3a7b9c2f64",
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
-    "classification_labels": [
-      "event_id_coverage_gap"
+    "matched_rule_titles": [
+      "DCSync -- Directory Replication Rights Abused",
+      "Security Audit Log Cleared"
     ],
-    "reason": "Security event ID 4799 ('A security-enabled local group membership was enumerated') has no category mapping at all -- confirmed real content: TargetUserName=Administrators, CallerProcessName=net1.exe, i.e. a real 'net localgroup administrators' enumeration. Genuinely new coverage gap, not previously identified this session.",
+    "matched_technique_ids": [
+      "T1003.006",
+      "T1685.005"
+    ],
+    "alerts_created": 4,
+    "incident_ids": [
+      1,
+      2
+    ],
+    "mitre_technique_ids": [
+      "T1003.006",
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- DCSync -- Directory Replication Rights Abused, Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -129,6 +209,49 @@
       "channel_provider_gap"
     ],
     "reason": "Bits-Client/Operational channel, not Sysmon or Security.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
+    "behavior_hint": "CA 4624 4625 LogonType2 LogonProc chrome",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 4,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4624": 3,
+      "4625": 1
+    },
+    "normalized_count": 4,
+    "skipped_count": 0,
+    "covered_count": 3,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4625,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      10
+    ],
+    "classification_labels": [
+      "insufficient_telemetry"
+    ],
+    "reason": "Real content read directly: 3 successful LogonType 2 (interactive) logons via chrome.exe as the logon process, plus exactly 1 failed logon (4625) -- 4 events total. 4624/4625 are fully covered event IDs (no channel/parser gap), but this file's own signal is too thin to justify a rule: 1 failure is not a brute-force pattern (the project's own Kerberos-spray rule requires 4 distinct targets in a window, well below the real spray sample's 10, specifically to avoid firing on normal single mistypes), and nothing about the 3 successful logons is anomalous on its own. Writing a rule here would mean inventing a threshold with no real population of logon-failure samples to calibrate or benign-test it against -- exactly the overfitting this project's own discipline avoids. Not pursued this pass; revisit if a real, higher-volume failed-logon sample is ever added.",
     "manual_review_needed": false
   },
   {
@@ -344,6 +467,48 @@
     "manual_review_needed": false
   },
   {
+    "name": "DE_Fake_ComputerAccount_4720.evtx",
+    "behavior_hint": "DE Fake ComputerAccount 4720",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 2,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4720": 2
+    },
+    "normalized_count": 2,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "8c2e6a41-4f9b-4d3e-a17c-6b5d9e2f0a13"
+    ],
+    "matched_rule_titles": [
+      "Computer Account Created"
+    ],
+    "matched_technique_ids": [
+      "T1136.002"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1136.002"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Computer Account Created",
+    "manual_review_needed": false
+  },
+  {
     "name": "DE_ProcessHerpaderping_Sysmon_11_10_1_7.evtx",
     "behavior_hint": "DE ProcessHerpaderping Sysmon 11 10 1 7",
     "parsed_ok": true,
@@ -372,20 +537,105 @@
         "count": 1
       }
     ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      8
+    "matched_rule_ids": [
+      "sequence-process-herpaderping"
     ],
-    "classification_labels": [
-      "requires_sequence"
+    "matched_rule_titles": [
+      "Process Herpaderping (File Create -> Process Access -> Image Load Chain)"
     ],
-    "reason": "Process herpaderping requires correlating FileCreate(11) + ImageLoad(7) + ProcessAccess(10) on the same file/process within a short window -- no single event carries the signal; evaluate_event() is strictly per-event today.",
+    "matched_technique_ids": [
+      "T1055"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1055"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Process Herpaderping (File Create -> Process Access -> Image Load Chain)",
+    "manual_review_needed": false
+  },
+  {
+    "name": "DE_RDP_Tunnel_5156.evtx",
+    "behavior_hint": "DE RDP Tunnel 5156",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 101,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4624": 5,
+      "4648": 3,
+      "4672": 3,
+      "4688": 17,
+      "5156": 63,
+      "5158": 9
+    },
+    "normalized_count": 101,
+    "skipped_count": 0,
+    "covered_count": 6,
+    "uncovered_count": 95,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 5156,
+        "count": 63
+      },
+      {
+        "channel": "Security",
+        "event_id": 4688,
+        "count": 17
+      },
+      {
+        "channel": "Security",
+        "event_id": 5158,
+        "count": 9
+      },
+      {
+        "channel": "Security",
+        "event_id": 4648,
+        "count": 3
+      },
+      {
+        "channel": "Security",
+        "event_id": 4672,
+        "count": 3
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21",
+      "fc643261-3f05-4b96-9fe0-f35e781676b5"
+    ],
+    "matched_rule_titles": [
+      "RDP Logon via Loopback-Tunneled Connection",
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1572",
+      "T1685.005"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1572",
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- RDP Logon via Loopback-Tunneled Connection, Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -405,31 +655,29 @@
     },
     "normalized_count": 18,
     "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 18,
-    "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 4624,
-        "count": 18
-      }
+    "covered_count": 18,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "fc643261-3f05-4b96-9fe0-f35e781676b5"
     ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      3,
-      12
+    "matched_rule_titles": [
+      "RDP Logon via Loopback-Tunneled Connection"
     ],
-    "classification_labels": [
-      "event_id_coverage_gap",
-      "benchmark_labeling_problem"
+    "matched_technique_ids": [
+      "T1572"
     ],
-    "reason": "Security event ID 4624 has no rule. The filename implies LogonType 10 (RemoteInteractive), but the one record sampled this session showed LogonType 5 (service logon) -- needs more of this file's records inspected before trusting a LogonType-based rule; also flagged as a possible benchmark-labeling mismatch between filename and content.",
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1572"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- RDP Logon via Loopback-Tunneled Connection",
     "manual_review_needed": false
   },
   {
@@ -533,6 +781,88 @@
     "manual_review_needed": false
   },
   {
+    "name": "dicovery_4661_net_group_domain_admins_target.evtx",
+    "behavior_hint": "dicovery 4661 net group domain admins target",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 63,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4624": 4,
+      "4661": 16,
+      "4672": 3,
+      "4776": 1,
+      "5140": 2,
+      "5145": 3,
+      "5156": 28,
+      "5158": 5
+    },
+    "normalized_count": 63,
+    "skipped_count": 0,
+    "covered_count": 8,
+    "uncovered_count": 55,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 5156,
+        "count": 28
+      },
+      {
+        "channel": "Security",
+        "event_id": 4661,
+        "count": 16
+      },
+      {
+        "channel": "Security",
+        "event_id": 5158,
+        "count": 5
+      },
+      {
+        "channel": "Security",
+        "event_id": 4672,
+        "count": 3
+      },
+      {
+        "channel": "Security",
+        "event_id": 5140,
+        "count": 2
+      },
+      {
+        "channel": "Security",
+        "event_id": 4776,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
     "name": "discovery_bloodhound.evtx",
     "behavior_hint": "discovery bloodhound",
     "parsed_ok": true,
@@ -551,15 +881,9 @@
     },
     "normalized_count": 10,
     "skipped_count": 0,
-    "covered_count": 1,
-    "uncovered_count": 9,
-    "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 5145,
-        "count": 9
-      }
-    ],
+    "covered_count": 10,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
     "matched_rule_ids": [
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
@@ -603,20 +927,26 @@
     "covered_count": 4,
     "uncovered_count": 0,
     "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      8
+    "matched_rule_ids": [
+      "sequence-smb-share-enum-probe"
     ],
-    "classification_labels": [
-      "requires_sequence"
+    "matched_rule_titles": [
+      "SMB Share Enumeration Probe (Remote Connection + Server Service Pipe)"
     ],
-    "reason": "Share enumeration is a *pattern* of network connections(3) + named-pipe connects(18) to SMB pipes, not any single suspicious event.",
+    "matched_technique_ids": [
+      "T1135"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1135"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- SMB Share Enumeration Probe (Remote Connection + Server Service Pipe)",
     "manual_review_needed": false
   },
   {
@@ -637,34 +967,29 @@
     },
     "normalized_count": 3,
     "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 3,
-    "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 4798,
-        "count": 2
-      },
-      {
-        "channel": "Security",
-        "event_id": 4799,
-        "count": 1
-      }
+    "covered_count": 3,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "ae2dd78b-15cf-4404-9847-f289fb23fabb"
     ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      3
+    "matched_rule_titles": [
+      "Sensitive Local Group/Account Enumeration via net.exe"
     ],
-    "classification_labels": [
-      "event_id_coverage_gap"
+    "matched_technique_ids": [
+      "T1069.001"
     ],
-    "reason": "Security event IDs 4798/4799 (local group/user membership enumeration) -- same gap as 4799_remote_local_groups_enumeration.evtx.",
+    "alerts_created": 3,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1069.001"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Sensitive Local Group/Account Enumeration via net.exe",
     "manual_review_needed": false
   },
   {
@@ -728,15 +1053,9 @@
     },
     "normalized_count": 4,
     "skipped_count": 0,
-    "covered_count": 1,
-    "uncovered_count": 3,
-    "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 5145,
-        "count": 3
-      }
-    ],
+    "covered_count": 4,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
     "matched_rule_ids": [
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
@@ -890,29 +1209,71 @@
     },
     "normalized_count": 1,
     "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "Microsoft-Windows-Sysmon/Operational",
-        "event_id": 6,
-        "count": 1
-      }
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "65430ef0-1787-4b40-8d56-5c8326675f58"
     ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      3
+    "matched_rule_titles": [
+      "Known-Abusable (LOLDriver) Kernel Driver Loaded"
     ],
-    "classification_labels": [
-      "event_id_coverage_gap"
+    "matched_technique_ids": [
+      "T1014"
     ],
-    "reason": "Sysmon event ID 6 (DriverLoaded) has no category mapping at all -- not even attempted this session (CATEGORY_TO_EVENT_ID has no entry covering 6). Confirmed real content: RwDrv.sys (RWEverything), a signed but well-known LOLDriver used for direct hardware/UEFI access and privilege escalation. A 'driver_load' category + a known-LOLDriver-hash/name rule would close this.",
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1014"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Known-Abusable (LOLDriver) Kernel Driver Loaded",
+    "manual_review_needed": false
+  },
+  {
+    "name": "exec_emotet_ps_4104.evtx",
+    "behavior_hint": "exec emotet ps 4104",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Microsoft-Windows-PowerShell/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-PowerShell"
+    ],
+    "event_id_counts": {
+      "4104": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "4e8a1c73-6d2f-4b95-a7c8-3e0d5f9b2a48"
+    ],
+    "matched_rule_titles": [
+      "Suspicious PowerShell WebClient Instantiation"
+    ],
+    "matched_technique_ids": [
+      "T1105"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1105"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Suspicious PowerShell WebClient Instantiation",
     "manual_review_needed": false
   },
   {
@@ -1085,6 +1446,67 @@
       }
     ],
     "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21",
+      "sequence-kerberos-password-spray"
+    ],
+    "matched_rule_titles": [
+      "Kerberos Password Spray (Multiple Distinct Accounts from One Source)",
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1110.003",
+      "T1685.005"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1110.003",
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Kerberos Password Spray (Multiple Distinct Accounts from One Source), Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
+    "name": "LM_4624_mimikatz_sekurlsa_pth_source_machine.evtx",
+    "behavior_hint": "LM 4624 mimikatz sekurlsa pth source machine",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 6,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4624": 1,
+      "4672": 1,
+      "4688": 3
+    },
+    "normalized_count": 6,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 4,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4688,
+        "count": 3
+      },
+      {
+        "channel": "Security",
+        "event_id": 4672,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
@@ -1123,31 +1545,29 @@
     },
     "normalized_count": 869,
     "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 869,
-    "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 5145,
-        "count": 869
-      }
+    "covered_count": 869,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "26ac43fb-1839-43b3-9454-80753b8040ef"
     ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      3,
-      7
+    "matched_rule_titles": [
+      "Executable Payload Written to Admin Share (Remote File Copy)"
     ],
-    "classification_labels": [
-      "event_id_coverage_gap",
-      "rule_too_narrow"
+    "matched_technique_ids": [
+      "T1570"
     ],
-    "reason": "Security event ID 5145 has no rule. It fires on every SMB file-share check (878 real occurrences in this one file), so a real rule needs ShareName/RelativeTargetName filtered to admin shares or abused named pipes, not blanket presence -- writing one without that filter would be unusably noisy, not a missing-coverage problem so much as a not-yet-narrow-enough-safely problem.",
+    "alerts_created": 4,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1570"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Executable Payload Written to Admin Share (Remote File Copy)",
     "manual_review_needed": false
   },
   {
@@ -1190,6 +1610,93 @@
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Process Spawned by WinRM/PSRemoting Host",
+    "manual_review_needed": false
+  },
+  {
+    "name": "LM_ScheduledTask_ATSVC_target_host.evtx",
+    "behavior_hint": "LM ScheduledTask ATSVC target host",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 34,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4624": 6,
+      "4661": 3,
+      "4672": 5,
+      "4688": 4,
+      "4698": 1,
+      "4699": 1,
+      "4776": 4,
+      "5140": 4,
+      "5145": 5
+    },
+    "normalized_count": 34,
+    "skipped_count": 0,
+    "covered_count": 13,
+    "uncovered_count": 21,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4672,
+        "count": 5
+      },
+      {
+        "channel": "Security",
+        "event_id": 4776,
+        "count": 4
+      },
+      {
+        "channel": "Security",
+        "event_id": 5140,
+        "count": 4
+      },
+      {
+        "channel": "Security",
+        "event_id": 4688,
+        "count": 4
+      },
+      {
+        "channel": "Security",
+        "event_id": 4661,
+        "count": 3
+      },
+      {
+        "channel": "Security",
+        "event_id": 4699,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "3a9f6c12-8e4d-4b7a-a5c3-2f1e9d6b8c40",
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Scheduled Task Created with Hidden Flag",
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1053.005",
+      "T1685.005"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1053.005",
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Scheduled Task Created with Hidden Flag, Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -1383,6 +1890,111 @@
     "manual_review_needed": false
   },
   {
+    "name": "Network_Service_Guest_added_to_admins_4732.evtx",
+    "behavior_hint": "Network Service Guest added to admins 4732",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 2,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4732": 2
+    },
+    "normalized_count": 2,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "6f1a3d8e-2b47-4c9a-9e6d-1a5f7c2b4e90"
+    ],
+    "matched_rule_titles": [
+      "Well-Known Low-Privilege Account Added to Local Administrators"
+    ],
+    "matched_technique_ids": [
+      "T1098"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1098"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Well-Known Low-Privilege Account Added to Local Administrators",
+    "manual_review_needed": false
+  },
+  {
+    "name": "NTLM2SelfRelay-med0x2e-security_4624_4688.evtx",
+    "behavior_hint": "NTLM2SelfRelay-med0x2e-security 4624 4688",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 11,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4624": 4,
+      "4634": 1,
+      "4672": 4,
+      "4688": 1
+    },
+    "normalized_count": 11,
+    "skipped_count": 0,
+    "covered_count": 5,
+    "uncovered_count": 6,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4672,
+        "count": 4
+      },
+      {
+        "channel": "Security",
+        "event_id": 4688,
+        "count": 1
+      },
+      {
+        "channel": "Security",
+        "event_id": 4634,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
     "name": "persistence_accessibility_features_osk_sysmon1.evtx",
     "behavior_hint": "persistence accessibility features osk sysmon1",
     "parsed_ok": true,
@@ -1429,6 +2041,109 @@
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Accessibility Tool Launched by Utilman or Winlogon",
+    "manual_review_needed": false
+  },
+  {
+    "name": "phish_windows_credentials_powershell_scriptblockLog_4104.evtx",
+    "behavior_hint": "phish windows credentials powershell scriptblockLog 4104",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 2,
+    "channels": [
+      "Microsoft-Windows-PowerShell/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-PowerShell"
+    ],
+    "event_id_counts": {
+      "4104": 2
+    },
+    "normalized_count": 2,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "2b6d8f14-5a3c-4d97-8e1b-9f4c6a2d0e73"
+    ],
+    "matched_rule_titles": [
+      "PowerShell Fake Credential Prompt (Phishing)"
+    ],
+    "matched_technique_ids": [
+      "T1056.002"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1056.002"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- PowerShell Fake Credential Prompt (Phishing)",
+    "manual_review_needed": false
+  },
+  {
+    "name": "Powershell_4104_MiniDumpWriteDump_Lsass.evtx",
+    "behavior_hint": "Powershell 4104 MiniDumpWriteDump Lsass",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 4,
+    "channels": [
+      "Microsoft-Windows-PowerShell/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-PowerShell"
+    ],
+    "event_id_counts": {
+      "4104": 1,
+      "40961": 1,
+      "40962": 1,
+      "53504": 1
+    },
+    "normalized_count": 4,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 3,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-PowerShell/Operational",
+        "event_id": 40961,
+        "count": 1
+      },
+      {
+        "channel": "Microsoft-Windows-PowerShell/Operational",
+        "event_id": 53504,
+        "count": 1
+      },
+      {
+        "channel": "Microsoft-Windows-PowerShell/Operational",
+        "event_id": 40962,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "9d4e7a2c-1f6b-4e8d-b3a5-7c9f0e2d4b61"
+    ],
+    "matched_rule_titles": [
+      "PowerShell LSASS Memory Dump via Reflection"
+    ],
+    "matched_technique_ids": [
+      "T1003.001"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1003.001"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- PowerShell LSASS Memory Dump via Reflection",
     "manual_review_needed": false
   },
   {
@@ -1528,6 +2243,70 @@
     "manual_review_needed": false
   },
   {
+    "name": "remote_sam_registry_access_via_backup_operator_priv.evtx",
+    "behavior_hint": "remote sam registry access via backup operator priv",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 31,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4624": 7,
+      "4627": 7,
+      "4672": 6,
+      "4776": 2,
+      "5145": 8
+    },
+    "normalized_count": 31,
+    "skipped_count": 0,
+    "covered_count": 16,
+    "uncovered_count": 15,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4627,
+        "count": 7
+      },
+      {
+        "channel": "Security",
+        "event_id": 4672,
+        "count": 6
+      },
+      {
+        "channel": "Security",
+        "event_id": 4776,
+        "count": 2
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
     "name": "rogue_msi_url_1040_1042.evtx",
     "behavior_hint": "rogue msi url 1040 1042",
     "parsed_ok": true,
@@ -1575,6 +2354,93 @@
       "channel_provider_gap"
     ],
     "reason": "Application channel (MsiInstaller provider), not Sysmon or Security.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_securitylogs.evtx",
+    "behavior_hint": "samaccount spoofing CVE-2021-42287 CVE-2021-42278 DC securitylogs",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 18,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4624": 5,
+      "4722": 1,
+      "4724": 1,
+      "4741": 1,
+      "4742": 3,
+      "4768": 2,
+      "4769": 2,
+      "4781": 2
+    },
+    "normalized_count": 18,
+    "skipped_count": 0,
+    "covered_count": 6,
+    "uncovered_count": 12,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4742,
+        "count": 3
+      },
+      {
+        "channel": "Security",
+        "event_id": 4768,
+        "count": 2
+      },
+      {
+        "channel": "Security",
+        "event_id": 4769,
+        "count": 2
+      },
+      {
+        "channel": "Security",
+        "event_id": 4781,
+        "count": 2
+      },
+      {
+        "channel": "Security",
+        "event_id": 4741,
+        "count": 1
+      },
+      {
+        "channel": "Security",
+        "event_id": 4722,
+        "count": 1
+      },
+      {
+        "channel": "Security",
+        "event_id": 4724,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -1840,6 +2706,55 @@
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Suspicious Executable Written to Public or Temp Directory",
+    "manual_review_needed": false
+  },
+  {
+    "name": "temp_scheduled_task_4698_4699.evtx",
+    "behavior_hint": "temp scheduled task 4698 4699",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 2,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4698": 1,
+      "4699": 1
+    },
+    "normalized_count": 2,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4699,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "3a9f6c12-8e4d-4b7a-a5c3-2f1e9d6b8c40"
+    ],
+    "matched_rule_titles": [
+      "Scheduled Task Created with Hidden Flag"
+    ],
+    "matched_technique_ids": [
+      "T1053.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1053.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Scheduled Task Created with Hidden Flag",
     "manual_review_needed": false
   }
 ]

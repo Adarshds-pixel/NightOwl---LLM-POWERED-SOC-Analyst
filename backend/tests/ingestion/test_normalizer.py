@@ -52,6 +52,7 @@ def test_normalize_event_id_1_maps_process_command_line_user():
         "1",
         {
             "Image": r"C:\Windows\System32\cmd.exe",
+            "ParentImage": r"C:\Windows\explorer.exe",
             "CommandLine": "cmd.exe /c whoami",
             "User": r"WORKSTATION01\alice",
         },
@@ -60,6 +61,7 @@ def test_normalize_event_id_1_maps_process_command_line_user():
     assert normalized.event_id == 1
     assert normalized.host == "WORKSTATION01"
     assert normalized.process == r"C:\Windows\System32\cmd.exe"
+    assert normalized.parent_process == r"C:\Windows\explorer.exe"
     assert normalized.command_line == "cmd.exe /c whoami"
     assert normalized.user == r"WORKSTATION01\alice"
     assert normalized.destination_ip is None
@@ -282,13 +284,18 @@ def test_apply_security_aliases_ignores_absent_fields():
 def test_normalize_event_security_4688_routes_through_security_dispatch():
     record = _record(
         "4688",
-        {"NewProcessName": r"C:\Windows\System32\cmd.exe", "SubjectUserName": "alice"},
+        {
+            "NewProcessName": r"C:\Windows\System32\cmd.exe",
+            "ParentProcessName": r"C:\Windows\explorer.exe",
+            "SubjectUserName": "alice",
+        },
         channel="Security",
     )
     normalized = normalize_event(record)
-    # _normalize_process_creation reads Image/User -- only reachable via
-    # _SECURITY_EVENT_ID_DISPATCH if the aliasing ran first.
+    # _normalize_process_creation reads Image/ParentImage/User -- only
+    # reachable via _SECURITY_EVENT_ID_DISPATCH if the aliasing ran first.
     assert normalized.process == r"C:\Windows\System32\cmd.exe"
+    assert normalized.parent_process == r"C:\Windows\explorer.exe"
     assert normalized.user == "alice"
 
 

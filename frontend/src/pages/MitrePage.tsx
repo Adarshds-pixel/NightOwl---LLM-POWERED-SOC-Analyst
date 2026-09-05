@@ -21,8 +21,8 @@ import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
 import { useRules } from '../hooks/useRules'
 import { distinctTechniqueCount, tacticActivityCounts, tacticTechniqueMatrix } from '../lib/aggregations'
 import { incidentRef } from '../lib/format'
-import { TACTIC_LABELS, isTactic, type Tactic } from '../lib/tactics'
-import { CATEGORICAL, ACCENT } from '../lib/tokens'
+import { TACTIC_LABELS, TACTIC_ORDER, isTactic, type Tactic } from '../lib/tactics'
+import { CATEGORICAL, CATEGORICAL_OTHER, ACCENT } from '../lib/tokens'
 
 interface TechniqueRow {
   id: string
@@ -80,11 +80,22 @@ function MitrePage() {
     return row.id.toLowerCase().includes(term) || row.name.toLowerCase().includes(term)
   })
 
-  const tacticSlices = activity.slice(0, 6).map((entry, index) => ({
-    name: entry.label,
-    value: entry.count,
-    color: CATEGORICAL[index % CATEGORICAL.length],
-  }))
+  // Top 6 + a folded "Other" slice, same convention as
+  // attackVectorBreakdown() -- a bare `.slice(0, 6)` here previously
+  // dropped every tactic past the 6th with no indication anything was
+  // cut, so "Total technique hits" silently undercounted the moment a
+  // corpus produced a 7th active tactic (found during the 39-file visual
+  // QA pass, 2026-09-05).
+  const topTacticActivity = activity.slice(0, 6)
+  const otherTacticHits = activity.slice(6).reduce((sum, entry) => sum + entry.count, 0)
+  const tacticSlices = [
+    ...topTacticActivity.map((entry, index) => ({
+      name: entry.label,
+      value: entry.count,
+      color: CATEGORICAL[index % CATEGORICAL.length],
+    })),
+    ...(otherTacticHits > 0 ? [{ name: 'Other', value: otherTacticHits, color: CATEGORICAL_OTHER }] : []),
+  ]
 
   const selectedTechniques = selectedTactic
     ? observedRows.filter((row) => row.tactics.includes(selectedTactic))
@@ -168,7 +179,7 @@ function MitrePage() {
           value={matrix.tacticsPresent.length}
           icon={<Grid3x3 className="h-4 w-4" />}
           accent="primary"
-          note="Of 14 enterprise tactics"
+          note={`Of ${TACTIC_ORDER.length} tracked tactics`}
         />
       </div>
 

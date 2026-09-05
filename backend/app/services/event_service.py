@@ -39,13 +39,44 @@ def create_event(db: Session, normalized: NormalizedEvent) -> Event:
         timestamp=normalized.timestamp,
         event_id=normalized.event_id,
         channel=normalized.channel,
+        event_record_id=normalized.event_record_id,
         process=normalized.process,
+        parent_process=normalized.parent_process,
         command_line=normalized.command_line,
         user=normalized.user,
         raw_json={"raw": normalized.raw, "normalized": normalized.model_dump(mode="json")},
     )
     db.add(event)
     return event
+
+
+def find_existing_event_keys(
+    db: Session, keys: set[tuple[str, str | None, int]]
+) -> set[tuple[str, str | None, int]]:
+    """Which of the given (host, channel, event_record_id) triples already
+    exist in `events` -- ingest_records() uses this to skip re-inserting an
+    event NightOwl has already ingested (the same EVTX file, or a
+    re-export overlapping an earlier one, uploaded twice), instead of
+    silently doubling every event/alert/incident-derived KPI. A Windows
+    event's own EventRecordID is a real identity assigned by Windows
+    itself, not something NightOwl invents (see models/event.py).
+
+    One query for the whole ingest batch, not one per event: narrows on
+    the batch's own hosts + record ids first (both indexed, see
+    `ix_events_dedup_key`), then the exact-triple match happens in Python
+    over that already-small result set.
+    """
+    if not keys:
+        return set()
+    hosts = {host for host, _channel, _record_id in keys}
+    record_ids = {record_id for _host, _channel, record_id in keys}
+    rows = db.execute(
+        select(Event.host, Event.channel, Event.event_record_id).where(
+            Event.host.in_(hosts), Event.event_record_id.in_(record_ids)
+        )
+    ).all()
+    candidates = {(row.host, row.channel, row.event_record_id) for row in rows}
+    return candidates & keys
 
 
 def save_events(db: Session, events: list[NormalizedEvent]) -> list[Event]:
@@ -110,11 +141,12 @@ def _filtered_events_stmt(
     narrowed severity client-side over one page, which made a filtered view
     disagree with its own pagination footer).
     `q` is a case-insensitive substring match across the fields an analyst
-    would actually search by hand (process, command line, user, host) --
-    backing the frontend's global search box. Deliberately a LIKE rather
-    than full-text: the dataset is a single analyst's ingested EVTX files,
-    not a multi-tenant log lake, so an index-free scan is fine and it works
-    identically on Postgres and the SQLite used in tests.
+    would actually search by hand (process, parent process, command line,
+    user, host) -- backing the frontend's global search box. Deliberately
+    a LIKE rather than full-text: the dataset is a single analyst's
+    ingested EVTX files, not a multi-tenant log lake, so an index-free scan
+    is fine and it works identically on Postgres and the SQLite used in
+    tests.
     `covered` is the store-wide twin of `alert_only`: True restricts to
     events whose channel+type at least one loaded rule could ever
     evaluate (matched or not), False restricts to events no loaded rule
@@ -131,6 +163,7 @@ def _filtered_events_stmt(
         stmt = stmt.where(
             or_(
                 Event.process.ilike(pattern),
+                Event.parent_process.ilike(pattern),
                 Event.command_line.ilike(pattern),
                 Event.user.ilike(pattern),
                 Event.host.ilike(pattern),
@@ -226,6 +259,7 @@ def _filtered_alerts_stmt(
         stmt = stmt.where(
             or_(
                 Event.process.ilike(pattern),
+                Event.parent_process.ilike(pattern),
                 Event.command_line.ilike(pattern),
                 Event.user.ilike(pattern),
                 Event.host.ilike(pattern),
@@ -295,7 +329,7 @@ def get_event(db: Session, event_id: int) -> Event | None:
     `GET /events/{id}`, the Logs page's expandable raw-record view. The
     list endpoint deliberately omits raw_json (it is the largest column by
     far and would dominate a 200-row page), so this is the only way to see
-    the fields normalization didn't flatten (ParentImage, Hashes,
-    network 5-tuple, ...).
+    the fields normalization didn't flatten (Hashes, network 5-tuple, ...;
+    ParentImage was promoted onto its own column, see models/event.py).
     """
     return db.get(Event, event_id)

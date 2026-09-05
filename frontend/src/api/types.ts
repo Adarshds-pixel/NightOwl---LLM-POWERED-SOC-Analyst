@@ -17,6 +17,10 @@ export interface ExplainResponse {
   incident_id: number
   explanation: string
   recommended_response: string
+  /** The explanation's own "## Confidence breakdown" section (Fact/
+   *  Inference/Uncertainty), extracted the same way recommended_response
+   *  is -- empty string if the model didn't include the heading. */
+  confidence_breakdown: string
   sources: SourceChunk[]
 }
 
@@ -52,6 +56,18 @@ export interface EventInfo {
   timestamp: string
   event_id: number
   process: string | null
+  parent_process: string | null
+  command_line: string | null
+  user: string | null
+}
+
+// A neighboring event on the same host, near one alert's own event --
+// investigative context, never itself a detection.
+export interface RelatedEventInfo {
+  id: number
+  timestamp: string
+  event_id: number
+  process: string | null
   command_line: string | null
   user: string | null
 }
@@ -59,10 +75,15 @@ export interface EventInfo {
 export interface AlertInfo {
   id: number
   rule_id: string
+  // Human-readable counterparts to rule_id (an opaque UUID) -- the same
+  // rule_title/technique_id GET /alerts and GET /events already expose.
+  rule_title: string | null
+  technique_id: string | null
   matched_at: string
   severity: Severity
   severity_score: number
   event: EventInfo
+  related_events: RelatedEventInfo[]
 }
 
 export interface IncidentDetailResponse {
@@ -142,11 +163,24 @@ export interface UncoveredEventGroup {
   count: number
 }
 
+export interface EventIdCoverageGroup {
+  channel: string | null
+  event_id: number
+  count: number
+  covered: boolean
+}
+
 export interface IngestResponse {
   filename: string
   records_read: number
   events_ingested: number
   events_skipped: number
+  // Records that matched an event already stored (same host/channel/
+  // Windows EventRecordID) and so were never inserted -- uploading the
+  // same file, or a re-export overlapping an earlier one, twice reports
+  // these here instead of doubling events_ingested and every KPI derived
+  // from it.
+  duplicate_events_skipped: number
   rule_matches: number
   matched_rule_titles: string[]
   alerts_created: number
@@ -161,6 +195,13 @@ export interface IngestResponse {
   // uncovered event. Advisory only -- never a detection, never conflate
   // with alerts_created/incident_ids. Poll GET /ai-opinions/{id}.
   ai_opinion_id: number | null
+  // Telemetry profiler: what's actually in this file, independent of
+  // alert count -- distinct raw Channel/Provider strings seen, and every
+  // (channel, event_id) group with its coverage verdict (a superset of
+  // uncovered_breakdown above).
+  channels: string[]
+  providers: string[]
+  event_id_breakdown: EventIdCoverageGroup[]
 }
 
 export type AiOpinionStatus = 'pending' | 'ready' | 'failed'
@@ -183,6 +224,7 @@ export interface EventLogRow {
   timestamp: string
   event_id: number
   process: string | null
+  parent_process: string | null
   command_line: string | null
   user: string | null
   is_alert: boolean
@@ -261,6 +303,7 @@ export interface EventDetailResponse {
   timestamp: string
   event_id: number
   process: string | null
+  parent_process: string | null
   command_line: string | null
   user: string | null
   is_alert: boolean

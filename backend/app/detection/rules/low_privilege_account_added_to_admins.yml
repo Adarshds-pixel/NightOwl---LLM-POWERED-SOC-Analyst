@@ -1,0 +1,42 @@
+title: Well-Known Low-Privilege Account Added to Local Administrators
+id: 6f1a3d8e-2b47-4c9a-9e6d-1a5f7c2b4e90
+status: experimental
+description: >
+  Detects Windows Security Event ID 4732 (a member was added to a
+  security-enabled local group) where the group is the built-in
+  Administrators alias (SID S-1-5-32-544) and the new member is one of
+  Windows' own well-known low-privilege accounts: the Guest account
+  (relative ID 501, any domain) or the NT AUTHORITY\NetworkService /
+  LocalService service accounts (S-1-5-19, S-1-5-20). A legitimate admin
+  essentially never adds Guest or a built-in service account to
+  Administrators -- seeing it is a well-precedented privilege-escalation
+  or backdoor-persistence technique (grant admin rights to an account
+  that's rarely audited or noticed). Scoping to these specific well-known
+  SIDs, rather than any 4732, keeps routine admin-group membership changes
+  (adding a real named user) from tripping this rule. Verified against
+  real content: `Network_Service_Guest_added_to_admins_4732.evtx`, 2
+  records -- one MemberSid `S-1-5-20` (NetworkService), one ending
+  `-501` (Guest), both TargetSid `S-1-5-32-544` (Administrators).
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-05
+references:
+  - https://attack.mitre.org/techniques/T1098/
+  - https://attack.mitre.org/techniques/T1078/001/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1098
+logsource:
+  category: local_group_membership_change
+  service: security
+detection:
+  selection_group:
+    TargetSid: S-1-5-32-544
+  selection_member:
+    MemberSid:
+      - S-1-5-20
+      - S-1-5-19
+  selection_guest:
+    MemberSid|endswith: '-501'
+  condition: selection_group and (selection_member or selection_guest)
+level: high

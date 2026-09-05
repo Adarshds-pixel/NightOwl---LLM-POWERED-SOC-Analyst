@@ -136,6 +136,57 @@ def test_explain_incident_recommended_response_empty_when_heading_missing(api_cl
     assert response.json()["recommended_response"] == ""
 
 
+SAMPLE_EXPLANATION_WITH_CONFIDENCE = (
+    "## What happened\nSomething happened.\n\n"
+    "## Why it matters\nIt matters.\n\n"
+    "## Recommended next steps\n- Isolate the host.\n- Capture memory.\n\n"
+    "## Confidence breakdown\n- Fact: the host is confirmed.\n- Inference: none.\n- Uncertainty: none."
+)
+
+
+def test_explain_incident_includes_confidence_breakdown(api_client, monkeypatch):
+    """pending.md item 5: the explanation's '## Confidence breakdown'
+    section is extracted the same mechanical way recommended_response
+    already is, and must stop before it (not bleed the later section into
+    the earlier one just because both are grabbed from the same draft)."""
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    monkeypatch.setattr(
+        "app.api.routes_incidents.generate_explanation",
+        lambda incident: ExplanationResult(
+            explanation=SAMPLE_EXPLANATION_WITH_CONFIDENCE,
+            draft=SAMPLE_EXPLANATION_WITH_CONFIDENCE,
+            critique=None,
+            chunks=SAMPLE_CHUNKS,
+        ),
+    )
+
+    response = client.post(f"/incidents/{incident_id}/explain")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["recommended_response"] == "- Isolate the host.\n- Capture memory."
+    assert body["confidence_breakdown"] == "- Fact: the host is confirmed.\n- Inference: none.\n- Uncertainty: none."
+
+
+def test_explain_incident_confidence_breakdown_empty_when_heading_missing(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    monkeypatch.setattr(
+        "app.api.routes_incidents.generate_explanation",
+        lambda incident: ExplanationResult(
+            explanation="no headings here", draft="no headings here", critique=None, chunks=[]
+        ),
+    )
+
+    response = client.post(f"/incidents/{incident_id}/explain")
+
+    assert response.status_code == 200
+    assert response.json()["confidence_breakdown"] == ""
+
+
 def test_explain_incident_404_when_not_found(api_client):
     client, _ = api_client
 

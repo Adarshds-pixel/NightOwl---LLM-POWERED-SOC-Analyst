@@ -80,7 +80,16 @@ function DashboardPage() {
   const { incidents, meta, loading, error, refresh } = useIncidentsSnapshot()
   const { byId } = useMitreCatalog()
   const alertsQuery = useAlerts({ limit: 200 })
-  const { eventTotal } = useEventTotals()
+  const { eventTotal, refresh: refreshEventTotals } = useEventTotals()
+
+  // A file uploaded from this page's own empty-state control needs both
+  // the incidents snapshot AND the event totals (PipelineHealthPanel's
+  // eventTotal below) to catch up -- refresh() alone used to leave
+  // eventTotal frozen at whatever it was when this page first mounted.
+  function handleUploadSuccess() {
+    refresh()
+    refreshEventTotals()
+  }
 
   const graph = hostActivity(incidents)
   const focusIncident = selectMostActionableIncident(incidents)
@@ -109,7 +118,7 @@ function DashboardPage() {
             hint="Upload a Windows EVTX export or run Demo Mode, and the whole console fills in from the real detection pipeline."
             action={
               <div className="mt-2">
-                <LogUploadControl variant="primary" onSuccess={refresh} />
+                <LogUploadControl variant="primary" onSuccess={handleUploadSuccess} />
               </div>
             }
           />

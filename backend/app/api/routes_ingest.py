@@ -87,11 +87,25 @@ class UncoveredEventGroup(BaseModel):
     count: int
 
 
+class EventIdCoverageGroup(BaseModel):
+    channel: str | None
+    event_id: int
+    count: int
+    covered: bool
+
+
 class IngestResponse(BaseModel):
     filename: str
     records_read: int
     events_ingested: int
     events_skipped: int
+    # Records that parsed and normalized fine but matched an event already
+    # stored (same host/channel/EventRecordID -- Windows' own per-log
+    # record identity, not something NightOwl invents) and so were never
+    # inserted. Uploading the same EVTX file, or a re-export overlapping
+    # an earlier one, twice reports these here instead of silently
+    # doubling events_ingested and every KPI derived from it.
+    duplicate_events_skipped: int
     rule_matches: int
     matched_rule_titles: list[str]
     alerts_created: int
@@ -112,6 +126,14 @@ class IngestResponse(BaseModel):
     # it (the LLM call itself runs as a background task after this
     # response is already built). GET /ai-opinions/{id} to poll it.
     ai_opinion_id: int | None = None
+    # Telemetry profiler: what's actually in this file, before/regardless
+    # of alert count -- distinct raw Channel/Provider strings seen, and
+    # every (channel, event_id) group with its coverage verdict (a
+    # superset of uncovered_breakdown above, which stays for backward
+    # compatibility with existing consumers of that narrower field).
+    channels: list[str]
+    providers: list[str]
+    event_id_breakdown: list[EventIdCoverageGroup]
 
 
 @router.post("/ingest", response_model=IngestResponse)
@@ -182,33 +204,45 @@ def ingest_evtx(
         )
 
         logger.info(
-            "ingest %s: %d records read, %d events ingested, %d skipped, %d rule matches, "
-            "%d alerts created, %d incidents involved",
+            "ingest %s: %d records read, %d events ingested, %d skipped, %d duplicates skipped, "
+            "%d rule matches, %d alerts created, %d incidents involved",
             filename,
             outcome.records_read,
             outcome.events_ingested,
             outcome.events_skipped,
+            outcome.duplicate_events_skipped,
             outcome.rule_matches,
             outcome.alerts_created,
             len(outcome.incident_ids),
         )
         ai_opinion_id: int | None = None
-        # Advisory second opinion only for a file NO rule fired on AND that
-        # had events no rule could even evaluate -- a file with real
-        # matches already has a real detection to look at, and a file
-        # that's fully covered with no matches is genuinely, verifiably
-        # clean. This is deliberately the narrow slice where an LLM opinion
-        # adds something a rule-based verdict can't.
+        # Advisory second opinion, from two independent triggers:
+        #   1. No rule fired AND some events had no rule that could even
+        #      evaluate them -- a file with real matches already has a real
+        #      detection to look at, and a file that's fully covered with no
+        #      matches is genuinely, verifiably clean. This is deliberately
+        #      the narrow slice where an LLM opinion adds something a
+        #      rule-based verdict can't.
+        #   2. A narrow, verified advisory pattern was flagged (see
+        #      advisory_patterns.py) -- independent of coverage/matches,
+        #      since the pattern (e.g. a \lsass/\srvsvc named-pipe connect)
+        #      isn't represented as an Alert anywhere else in the file and
+        #      still deserves a second look even if other, unrelated
+        #      activity in the same file already matched a real rule.
+        advisory_sample_ids = list(outcome.named_pipe_discovery_event_ids)
         if outcome.rule_matches == 0 and outcome.uncovered_events > 0:
-            opinion = create_pending_opinion(db, filename, outcome.uncovered_event_ids)
+            advisory_sample_ids = list(dict.fromkeys(outcome.uncovered_event_ids + advisory_sample_ids))
+        if advisory_sample_ids:
+            opinion = create_pending_opinion(db, filename, advisory_sample_ids)
             ai_opinion_id = opinion.id
-            background_tasks.add_task(fill_in_opinion, opinion.id, filename, outcome.uncovered_event_ids)
+            background_tasks.add_task(fill_in_opinion, opinion.id, filename, advisory_sample_ids)
 
         return IngestResponse(
             filename=filename,
             records_read=outcome.records_read,
             events_ingested=outcome.events_ingested,
             events_skipped=outcome.events_skipped,
+            duplicate_events_skipped=outcome.duplicate_events_skipped,
             rule_matches=outcome.rule_matches,
             matched_rule_titles=outcome.matched_rule_titles,
             alerts_created=outcome.alerts_created,
@@ -220,6 +254,12 @@ def ingest_evtx(
                 for g in outcome.uncovered_breakdown
             ],
             ai_opinion_id=ai_opinion_id,
+            channels=outcome.channels,
+            providers=outcome.providers,
+            event_id_breakdown=[
+                EventIdCoverageGroup(channel=g.channel, event_id=g.event_id, count=g.count, covered=g.covered)
+                for g in outcome.event_id_breakdown
+            ],
         )
     finally:
         if tmp_path is not None and tmp_path.exists():

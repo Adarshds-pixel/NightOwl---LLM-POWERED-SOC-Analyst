@@ -48,6 +48,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.detection.engine import covered_event_ids, evaluate_event  # noqa: E402
 from app.detection.rule_loader import LoadedRule, get_loaded_rules  # noqa: E402
+from app.detection.sequences import SEQUENCE_PATTERNS  # noqa: E402
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts  # noqa: E402
 from app.ingestion.normalizer import (  # noqa: E402
     EventNormalizationError,
@@ -58,7 +59,11 @@ from app.models.incident import Incident  # noqa: E402
 from app.services.ingest_service import ingest_records  # noqa: E402
 
 SAMPLE_LOGS = Path(__file__).resolve().parents[1] / "sample_logs"
-MALICIOUS_DIR = SAMPLE_LOGS / "real_world_fixtures"
+# real_world_fixtures/ splits malicious/ and benign/ into separate
+# directories (2026-09-05) -- this script's whole premise is "every
+# fixture here is malicious, classify its miss," so it only ever reads
+# the malicious/ side.
+MALICIOUS_DIR = SAMPLE_LOGS / "real_world_fixtures" / "malicious"
 
 FAILURE_CATEGORIES: dict[int, str] = {
     1: "parser_gap",
@@ -101,75 +106,26 @@ KNOWN_MISS_CLASSIFICATION: dict[str, dict[str, object]] = {
         "categories": [2],
         "reason": "Application channel (MsiInstaller provider), not Sysmon or Security.",
     },
-    "LM_5145_Remote_FileCopy.evtx": {
-        "categories": [3, 7],
-        "reason": (
-            "Security event ID 5145 has no rule. It fires on every SMB file-share "
-            "check (878 real occurrences in this one file), so a real rule needs "
-            "ShareName/RelativeTargetName filtered to admin shares or abused named "
-            "pipes, not blanket presence -- writing one without that filter would be "
-            "unusably noisy, not a missing-coverage problem so much as a "
-            "not-yet-narrow-enough-safely problem."
-        ),
-    },
-    "DE_RDP_Tunneling_4624.evtx": {
-        "categories": [3, 12],
-        "reason": (
-            "Security event ID 4624 has no rule. The filename implies LogonType 10 "
-            "(RemoteInteractive), but the one record sampled this session showed "
-            "LogonType 5 (service logon) -- needs more of this file's records "
-            "inspected before trusting a LogonType-based rule; also flagged as a "
-            "possible benchmark-labeling mismatch between filename and content."
-        ),
-    },
-    "DE_ProcessHerpaderping_Sysmon_11_10_1_7.evtx": {
-        "categories": [8],
-        "reason": (
-            "Process herpaderping requires correlating FileCreate(11) + "
-            "ImageLoad(7) + ProcessAccess(10) on the same file/process within a "
-            "short window -- no single event carries the signal; evaluate_event() "
-            "is strictly per-event today."
-        ),
-    },
-    "discovery_enum_shares_target_sysmon_3_18.evtx": {
-        "categories": [8],
-        "reason": (
-            "Share enumeration is a *pattern* of network connections(3) + "
-            "named-pipe connects(18) to SMB pipes, not any single suspicious event."
-        ),
-    },
-    # -- verified 2026-09-05 against the 7-file corpus addition (all new,
-    # never tuned against -- a genuine unplanned generalization check) --
-    "4799_remote_local_groups_enumeration.evtx": {
-        "categories": [3],
-        "reason": (
-            "Security event ID 4799 ('A security-enabled local group "
-            "membership was enumerated') has no category mapping at all -- "
-            "confirmed real content: TargetUserName=Administrators, "
-            "CallerProcessName=net1.exe, i.e. a real 'net localgroup "
-            "administrators' enumeration. Genuinely new coverage gap, not "
-            "previously identified this session."
-        ),
-    },
-    "discovery_local_user_or_group_windows_security_4799_4798.evtx": {
-        "categories": [3],
-        "reason": (
-            "Security event IDs 4798/4799 (local group/user membership "
-            "enumeration) -- same gap as 4799_remote_local_groups_enumeration.evtx."
-        ),
-    },
-    "discovery_UEFI_Settings_rweverything_sysmon_6.evtx": {
-        "categories": [3],
-        "reason": (
-            "Sysmon event ID 6 (DriverLoaded) has no category mapping at all "
-            "-- not even attempted this session (CATEGORY_TO_EVENT_ID has no "
-            "entry covering 6). Confirmed real content: RwDrv.sys "
-            "(RWEverything), a signed but well-known LOLDriver used for "
-            "direct hardware/UEFI access and privilege escalation. A "
-            "'driver_load' category + a known-LOLDriver-hash/name rule would "
-            "close this."
-        ),
-    },
+    # LM_5145_Remote_FileCopy.evtx (5145 admin-share payload write) and
+    # DE_RDP_Tunneling_4624.evtx (4624 loopback-tunneled RDP logon) were
+    # classified here and closed 2026-09 by admin_share_payload_write.yml
+    # and rdp_logon_via_loopback_tunnel.yml respectively, after pulling
+    # each file's full real field distribution rather than trusting the
+    # filename or a single sampled record (see pending.md item 3) --
+    # removed from this table since they're hits now, not misses.
+    # DE_ProcessHerpaderping_Sysmon_11_10_1_7.evtx (FileCreate+ProcessAccess+
+    # ImageLoad chain) and discovery_enum_shares_target_sysmon_3_18.evtx
+    # (NetworkConnection+PipeConnect to \srvsvc) were classified here and
+    # closed 2026-09 by the 2-pattern sequence engine
+    # (detection/sequences.py, see pending.md item 5) -- removed from this
+    # table since they're hits now, not misses.
+    # 4799_remote_local_groups_enumeration.evtx, discovery_local_user_or_
+    # group_windows_security_4799_4798.evtx (4798/4799 coverage gap) and
+    # discovery_UEFI_Settings_rweverything_sysmon_6.evtx (Sysmon 6 coverage
+    # gap) were classified here and closed 2026-09 by
+    # sensitive_group_account_enumeration.yml and
+    # known_abusable_driver_loaded.yml respectively (see pending.md item 3)
+    # -- removed from this table since they're hits now, not misses.
     "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx": {
         "categories": [6],
         "reason": (
@@ -190,6 +146,35 @@ KNOWN_MISS_CLASSIFICATION: dict[str, dict[str, object]] = {
             "Confirmed real content: PipeName=\\srvsvc, Image=System -- "
             "PowerView's Invoke-UserHunter NetSessionEnum technique connects "
             "to \\srvsvc, not \\spoolss."
+        ),
+    },
+    # DE_Fake_ComputerAccount_4720.evtx, Network_Service_Guest_added_to_
+    # admins_4732.evtx, temp_scheduled_task_4698_4699.evtx, and the 3 real
+    # PowerShell 4104 samples (exec_emotet_ps_4104.evtx,
+    # Powershell_4104_MiniDumpWriteDump_Lsass.evtx,
+    # phish_windows_credentials_powershell_scriptblockLog_4104.evtx) were
+    # classified here and closed 2026-09-05 by computer_account_created.yml,
+    # low_privilege_account_added_to_admins.yml,
+    # hidden_scheduled_task_created.yml, and the 3 new PowerShell/
+    # Operational-channel rules respectively (see pending.md) -- removed
+    # from this table since they're hits now, not misses.
+    "CA_4624_4625_LogonType2_LogonProc_chrome.evtx": {
+        "categories": [10],
+        "reason": (
+            "Real content read directly: 3 successful LogonType 2 (interactive) "
+            "logons via chrome.exe as the logon process, plus exactly 1 failed "
+            "logon (4625) -- 4 events total. 4624/4625 are fully covered event "
+            "IDs (no channel/parser gap), but this file's own signal is too "
+            "thin to justify a rule: 1 failure is not a brute-force pattern "
+            "(the project's own Kerberos-spray rule requires 4 distinct targets "
+            "in a window, well below the real spray sample's 10, specifically "
+            "to avoid firing on normal single mistypes), and nothing about the "
+            "3 successful logons is anomalous on its own. Writing a rule here "
+            "would mean inventing a threshold with no real population of "
+            "logon-failure samples to calibrate or benign-test it against -- "
+            "exactly the overfitting this project's own discipline avoids. Not "
+            "pursued this pass; revisit if a real, higher-volume failed-logon "
+            "sample is ever added."
         ),
     },
 }
@@ -346,6 +331,22 @@ def analyze_fixture(path: Path, rules: list[LoadedRule]) -> FixtureRecord:
     sorted_records = sorted(records, key=_timestamp_sort_key)
     with SessionLocal() as db:
         outcome = ingest_records(db, sorted_records, rules=rules, matched_at=None)
+        # The in-process pass above (evaluate_event() only) is blind to the
+        # sequence engine (detection/sequences.py) -- it runs only inside
+        # ingest_records' own real path, after the per-event loop. Without
+        # this merge, a sequence-only hit (found live 2026-09-05: the
+        # Kerberos password spray fixture correctly showed 2 alerts/HIT,
+        # but its "Rules matched" column silently showed only the
+        # unrelated 1102 rule, dropping the sequence match this file was
+        # actually built to verify) would never appear in the "Rules
+        # matched" column even though outcome.alerts_created already
+        # counted it.
+        matched_titles.update(outcome.matched_rule_titles)
+        for pattern in SEQUENCE_PATTERNS.values():
+            if pattern.title in outcome.matched_rule_titles:
+                matched_rule_ids.add(pattern.rule_id)
+                if pattern.technique_id:
+                    matched_techniques.add(pattern.technique_id)
         mitre_ids: set[str] = set()
         if outcome.incident_ids:
             incidents = db.query(Incident).filter(Incident.id.in_(outcome.incident_ids)).all()

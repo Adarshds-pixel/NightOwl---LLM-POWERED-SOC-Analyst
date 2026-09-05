@@ -19,6 +19,7 @@ from app.schemas.event import NormalizedEvent
 from app.services.event_service import (
     count_events,
     create_event,
+    find_existing_event_keys,
     get_alerts_for_event_ids,
     list_events,
     save_events,
@@ -58,6 +59,20 @@ def test_create_event_persists_flat_columns_from_normalized():
         assert event.process == r"C:\Windows\System32\cmd.exe"
         assert event.command_line == "cmd.exe /c whoami"
         assert event.user == r"WORKSTATION01\alice"
+
+
+def test_create_event_persists_parent_process():
+    """ParentImage promotion (pending.md): normalize_event() already
+    populates NormalizedEvent.parent_process for a process-creation event
+    (see test_normalizer.py) -- this confirms create_event() carries it
+    through to the flat Event column, not just raw_json."""
+    with Session(_engine()) as db:
+        normalized = _normalized_event(parent_process=r"C:\Windows\explorer.exe")
+        event = create_event(db, normalized)
+        db.commit()
+        db.refresh(event)
+
+        assert event.parent_process == r"C:\Windows\explorer.exe"
 
 
 def test_create_event_raw_json_contains_raw_and_normalized_keys():
@@ -289,3 +304,58 @@ def test_get_alerts_for_event_ids_omits_events_with_no_alert():
         result = get_alerts_for_event_ids(db, [event.id])
 
         assert result == {}
+
+
+# -- parent_process search (ParentImage promotion, pending.md) -------------
+
+
+def test_list_events_q_matches_parent_process():
+    with Session(_engine()) as db:
+        _insert_event(db, process="cmd.exe", parent_process="C:\\Windows\\sdclt.exe")
+        _insert_event(db, process="notepad.exe", parent_process="explorer.exe", event_id=2)
+        db.commit()
+
+        results = list_events(db, q="sdclt")
+
+        assert [e.process for e in results] == ["cmd.exe"]
+
+
+# -- find_existing_event_keys (duplicate-ingest detection) ------------------
+
+
+def test_find_existing_event_keys_matches_real_triples():
+    with Session(_engine()) as db:
+        _insert_event(db, host="HOST-A", channel="Security", event_record_id=101)
+        db.commit()
+
+        found = find_existing_event_keys(db, {("HOST-A", "Security", 101), ("HOST-A", "Security", 999)})
+
+        assert found == {("HOST-A", "Security", 101)}
+
+
+def test_find_existing_event_keys_distinguishes_by_channel():
+    """The same host + record id from two different channels must not
+    collide -- EventRecordID is only unique per (host, channel) log, not
+    globally, exactly like event_id itself (see engine.py's channel guard)."""
+    with Session(_engine()) as db:
+        _insert_event(db, host="HOST-A", channel="Security", event_record_id=5)
+        db.commit()
+
+        found = find_existing_event_keys(db, {("HOST-A", "Microsoft-Windows-Sysmon/Operational", 5)})
+
+        assert found == set()
+
+
+def test_find_existing_event_keys_distinguishes_by_host():
+    with Session(_engine()) as db:
+        _insert_event(db, host="HOST-A", channel="Security", event_record_id=5)
+        db.commit()
+
+        found = find_existing_event_keys(db, {("HOST-B", "Security", 5)})
+
+        assert found == set()
+
+
+def test_find_existing_event_keys_empty_input_returns_empty_without_querying():
+    with Session(_engine()) as db:
+        assert find_existing_event_keys(db, set()) == set()

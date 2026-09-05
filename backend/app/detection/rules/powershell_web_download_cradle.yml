@@ -1,0 +1,52 @@
+title: Suspicious PowerShell WebClient Instantiation
+id: 4e8a1c73-6d2f-4b95-a7c8-3e0d5f9b2a48
+status: experimental
+description: >
+  Detects Windows Event ID 4104 (PowerShell Script Block Logging) where
+  the logged script block references `Net.WebClient` -- the .NET class
+  behind the classic PowerShell "download cradle" (fetch and run a
+  second-stage payload without a browser-downloaded file ever touching
+  disk), a long-precedented technique in real malware (Emotet, many
+  public Cobalt Strike/Empire-style loaders).
+
+  **Originally required `WebClient` AND a `DownloadFile`/`DownloadString`
+  call together, for tighter scoping -- dropped after checking against
+  real content, not assumed.** Verified against `exec_emotet_ps_4104.evtx`
+  (a real Emotet script block): its `.downloadFile()` call is itself
+  obfuscated with embedded PowerShell backticks (the literal logged text
+  is `d`+backtick+`OWN`+backtick+`load`+backtick+`FIlE`, which does not
+  contain the contiguous substring "downloadfile" at all -- confirmed by
+  reading the raw field directly, not inferred), so a `contains` check
+  for the download method can never match this real sample, or any
+  similarly obfuscated one; this project's rule engine has no regex
+  support to see through it. The class name `Net.WebClient` itself was
+  the one token this specific attacker didn't split apart (logged as
+  case-scrambled `neT.WEbcLiENt`, but still one contiguous run) --
+  confirmed present, so this rule keys on that alone.
+
+  **Caveat, stated plainly rather than overclaiming**: matching on
+  `WebClient` alone is coarser than the two-condition version this
+  replaced. Re-verified 2026-09-05 against real, not synthetic, clean
+  data: `nightowl_benign_powershell.evtx` (a real PowerShell-Operational
+  export from an ordinary PC, 466 real `ScriptBlockText` records) --
+  0 matches. That's one real environment's ordinary usage, not proof this
+  never fires legitimately anywhere (`Net.WebClient` does occasionally
+  appear in legitimate install/update scripts), so level stays `medium`,
+  not `high`, but this is no longer an untested rule.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-05
+references:
+  - https://attack.mitre.org/techniques/T1105/
+  - https://attack.mitre.org/techniques/T1059/001/
+tags:
+  - attack.command_and_control
+  - attack.execution
+  - attack.t1105
+logsource:
+  category: script_block_logging
+  service: powershell
+detection:
+  selection:
+    ScriptBlockText|contains: WebClient
+  condition: selection
+level: medium

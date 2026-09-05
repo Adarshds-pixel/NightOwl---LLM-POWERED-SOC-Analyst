@@ -1,0 +1,54 @@
+title: Known-Abusable (LOLDriver) Kernel Driver Loaded
+id: 65430ef0-1787-4b40-8d56-5c8326675f58
+status: experimental
+description: >
+  Detects Sysmon Event ID 6 (DriverLoaded) for a kernel driver filename
+  from a small, explicitly non-exhaustive seed list of publicly documented
+  "Bring Your Own Vulnerable Driver" (BYOVD) targets -- legitimately signed
+  drivers with a known arbitrary-read/write, privilege-escalation, or
+  process-kill primitive that attackers load deliberately (the driver
+  itself is not malware) to defeat kernel-mode protections, dump
+  credentials, or disable EDR/AV. Matching on the loaded filename, not the
+  one sample hash this rule was verified against, so it still fires if the
+  same known-vulnerable driver ships with a different build/signature.
+  Source for the seed list: the community-maintained loldrivers.io
+  catalogue. This list is intentionally small and will miss any
+  BYOVD driver not on it -- it is a floor, not a complete BYOVD defense.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://www.loldrivers.io/
+  - https://attack.mitre.org/techniques/T1014/
+tags:
+  - attack.defense_evasion
+  - attack.t1014
+logsource:
+  category: driver_load
+  service: sysmon
+detection:
+  selection:
+    ImageLoaded|endswith:
+      # RWEverything -- arbitrary physical memory / I/O port / PCI config
+      # space access (this rule's verified real-sample fixture).
+      - RwDrv.sys
+      # Dell -- CVE-2021-21551, widely abused for BYOVD privilege
+      # escalation and EDR termination.
+      - dbutil_2_3.sys
+      # Gigabyte -- CVE-2018-19320, arbitrary kernel read/write.
+      - gdrv.sys
+      # Generic MSR/IO access driver reused across multiple public BYOVD
+      # campaigns (cryptominers, APT tooling).
+      - WinRing0x64.sys
+      # ASUS -- arbitrary kernel read/write, repeatedly abused for BYOVD
+      # privilege escalation.
+      - AsIO.sys
+      - AsIO2.sys
+      # Zemana anti-malware driver -- process-kill primitive abused by
+      # multiple ransomware families (AvosLocker, BlackByte, LockBit) to
+      # terminate EDR/AV processes from kernel mode.
+      - zamguard64.sys
+      # MSI Afterburner (RTCore64) -- CVE-2019-16098, arbitrary kernel
+      # read/write; used by the BlackByte ransomware BYOVD chain.
+      - RTCore64.sys
+  condition: selection
+level: high

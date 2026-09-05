@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
+from app.detection.sequences import SEQUENCE_PATTERNS
 from app.services.event_service import count_events, get_alerts_for_event_ids, get_event, list_events
 
 router = APIRouter()
@@ -28,6 +29,7 @@ class EventLogRow(BaseModel):
     timestamp: datetime
     event_id: int
     process: str | None
+    parent_process: str | None
     command_line: str | None
     user: str | None
     is_alert: bool
@@ -57,7 +59,10 @@ def get_events(
     end_date: datetime | None = Query(default=None),
     alert_only: bool | None = Query(default=None, description="true = only alert-triggering events, false = only normal events"),
     severity: str | None = Query(default=None, description="only events with an alert of this severity, e.g. 'critical'"),
-    q: str | None = Query(default=None, description="case-insensitive substring match on process, command line, user or host"),
+    q: str | None = Query(
+        default=None,
+        description="case-insensitive substring match on process, parent process, command line, user or host",
+    ),
     covered: bool | None = Query(
         default=None,
         description="true = event's channel/type has rule coverage (matched or not), "
@@ -91,7 +96,10 @@ def get_events(
     )
 
     alerts_by_event_id = get_alerts_for_event_ids(db, [event.id for event in events])
-    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()}
+    # Sequence-detected alerts (detection/sequences.py) carry a rule_id
+    # that was never a loaded YAML rule -- merge in their titles/technique
+    # ids too, or every such alert would show as "Unknown rule".
+    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | SEQUENCE_PATTERNS
 
     rows = []
     for event in events:
@@ -104,6 +112,7 @@ def get_events(
                 timestamp=event.timestamp,
                 event_id=event.event_id,
                 process=event.process,
+                parent_process=event.parent_process,
                 command_line=event.command_line,
                 user=event.user,
                 is_alert=alert is not None,
@@ -130,6 +139,7 @@ class EventDetailResponse(BaseModel):
     timestamp: datetime
     event_id: int
     process: str | None
+    parent_process: str | None
     command_line: str | None
     user: str | None
     is_alert: bool
@@ -149,7 +159,8 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db)) -> EventDetai
         raise HTTPException(status_code=404, detail=f"event {event_id} not found")
 
     alert = get_alerts_for_event_ids(db, [event.id]).get(event.id)
-    rule = {r.rule_id: r for r in get_loaded_rules()}.get(alert.rule_id) if alert else None
+    rules_by_id = {r.rule_id: r for r in get_loaded_rules()} | SEQUENCE_PATTERNS
+    rule = rules_by_id.get(alert.rule_id) if alert else None
     # create_event stores {"raw": ..., "normalized": ...}; tolerate a row
     # written before that shape existed rather than 500-ing on it.
     payload = event.raw_json if isinstance(event.raw_json, dict) else {}
@@ -160,6 +171,7 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db)) -> EventDetai
         timestamp=event.timestamp,
         event_id=event.event_id,
         process=event.process,
+        parent_process=event.parent_process,
         command_line=event.command_line,
         user=event.user,
         is_alert=alert is not None,

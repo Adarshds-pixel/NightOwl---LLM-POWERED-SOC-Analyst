@@ -1,5 +1,8 @@
-"""`ai_opinions` -- an LLM's advisory read on an ingest whose events had no
-loaded-rule coverage (Vol1 style: separate table, not `Alert`/`Incident`).
+"""`ai_opinions` -- an LLM's advisory read on an ingest, triggered either by
+events with no loaded-rule coverage or by a narrow, verified advisory
+pattern a deterministic rule can't safely absorb (see
+services/advisory_patterns.py, routes_ingest.py) (Vol1 style: separate
+table, not `Alert`/`Incident`).
 
 Deliberately its own table rather than a special kind of Alert: an opinion
 is not a detection. It never carries a numeric severity score (only a

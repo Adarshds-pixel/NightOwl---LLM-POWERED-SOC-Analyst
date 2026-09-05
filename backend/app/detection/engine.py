@@ -38,6 +38,10 @@ CATEGORY_TO_EVENT_ID: dict[str, frozenset[int]] = {
     "process_creation": frozenset({1, 4688}),
     "file_change": frozenset({2}),
     "network_connection": frozenset({3}),
+    # Sysmon Event ID 6, "DriverLoaded" -- no rule ever mapped this before
+    # (see known_abusable_driver_loaded.yml, which scopes it to a small,
+    # named list of publicly documented BYOVD driver filenames).
+    "driver_load": frozenset({6}),
     "image_load": frozenset({7}),
     "create_remote_thread": frozenset({8}),
     # 10 = Sysmon process access, 4656/4663 = Security object (incl.
@@ -60,6 +64,44 @@ CATEGORY_TO_EVENT_ID: dict[str, frozenset[int]] = {
     # used here specifically for DCSync-style directory-replication rights
     # abuse (see dcsync_replication_rights.yml).
     "directory_service_access": frozenset({4662}),
+    # Security Event ID 4799 ("a security-enabled local group membership
+    # was enumerated") and 4798 ("a user's local group membership was
+    # enumerated") -- both carry TargetUserName/CallerProcessName and are
+    # scoped together since one rule's selection targets either shape (see
+    # sensitive_group_account_enumeration.yml).
+    "local_group_enumeration": frozenset({4798, 4799}),
+    # Security Event ID 4624 ("an account was successfully logged on") --
+    # scoped specifically to the loopback-tunneled RDP logon pattern (see
+    # rdp_logon_via_loopback_tunnel.yml), not general logon monitoring.
+    "rdp_tunneled_logon": frozenset({4624}),
+    # Security Event ID 5145 ("a network share object was checked to see
+    # whether client can be granted desired access") -- fires on every SMB
+    # share access, so scoped narrowly to an executable-shaped write onto
+    # an admin share (see admin_share_payload_write.yml), not blanket
+    # presence.
+    "admin_share_payload_write": frozenset({5145}),
+    # Security Event ID 4732 ("a member was added to a security-enabled
+    # local group") -- scoped to the well-known-low-privilege-account
+    # pattern (see low_privilege_account_added_to_admins.yml), not blanket
+    # group-membership monitoring.
+    "local_group_membership_change": frozenset({4732}),
+    # Security Event ID 4720 ("a user account was created") -- scoped to
+    # the computer-account-shaped name pattern (see
+    # computer_account_created.yml), not blanket account-creation
+    # monitoring (routine human-user provisioning is common and would be
+    # noisy).
+    "computer_account_created": frozenset({4720}),
+    # Security Event ID 4698 ("a scheduled task was created") -- scoped to
+    # the Hidden-flag pattern (see hidden_scheduled_task_created.yml), the
+    # native-log complement to the existing Sysmon process-creation-based
+    # scheduled-task rules.
+    "scheduled_task_created_security": frozenset({4698}),
+    # PowerShell/Operational Event ID 4104 ("Execute a Remote Command" --
+    # Script Block Logging). Three separate rules share this category, one
+    # per real-verified technique fingerprint (see each rule's own file):
+    # LSASS dump via reflection, fake credential prompt, web download
+    # cradle.
+    "script_block_logging": frozenset({4104}),
 }
 
 _SUPPORTED_MODIFIERS = {None, "contains", "startswith", "endswith"}

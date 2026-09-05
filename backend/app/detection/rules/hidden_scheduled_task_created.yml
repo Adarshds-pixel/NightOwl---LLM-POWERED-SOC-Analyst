@@ -1,0 +1,38 @@
+title: Scheduled Task Created with Hidden Flag
+id: 3a9f6c12-8e4d-4b7a-a5c3-2f1e9d6b8c40
+status: experimental
+description: >
+  Detects Windows Security Event ID 4698 (a scheduled task was created)
+  where the task's own XML definition (`TaskContent`) sets
+  `<Hidden>true</Hidden>` -- a real, standard Task Scheduler XML element
+  that suppresses the task from the default view in Task Scheduler's own
+  GUI. Legitimate software occasionally hides its own maintenance tasks,
+  but a hidden task is also a well-precedented persistence technique
+  (survive reboot, avoid a casual admin glance at the task list) --
+  complements the existing process-creation-based scheduled-task rules
+  (`scheduled_task_creation_schtasks.yml`,
+  `scheduled_task_creation_powershell.yml`, which key on Sysmon
+  Image/CommandLine) by also catching the native Security-log event
+  itself, regardless of which tool created the task. Verified against
+  real content: `temp_scheduled_task_4698_4699.evtx` -- a 4698/4699 pair
+  for task `\CYAlyNSS` (a random-looking name, itself not part of this
+  rule's condition since a naming heuristic would be far more overfit-
+  prone than the standard `<Hidden>true</Hidden>` element), whose
+  `TaskContent` contains `<Hidden>true</Hidden>` and an action that pipes
+  `tasklist` output to a file under `%windir%\Temp`.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-05
+references:
+  - https://attack.mitre.org/techniques/T1053/005/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1053.005
+logsource:
+  category: scheduled_task_created_security
+  service: security
+detection:
+  selection:
+    TaskContent|contains: '<Hidden>true</Hidden>'
+  condition: selection
+level: medium

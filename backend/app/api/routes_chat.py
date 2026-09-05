@@ -30,6 +30,7 @@ from app.rag import cache
 from app.rag.chat_service import generate_chat_reply
 from app.services import audit_service
 from app.services.chat_service import add_message, list_messages
+from app.services.incident_service import build_incident_evidence
 
 router = APIRouter()
 
@@ -65,23 +66,6 @@ class ChatHistoryResponse(BaseModel):
     count: int
 
 
-def _incident_to_dict(incident: Incident) -> dict:
-    """Map the (currently sparse) Incident model to the loose dict shape
-    rag/chat_service.generate_chat_reply expects -- same shape as
-    routes_incidents.py's `_incident_to_dict` (duplicated here rather than
-    imported/shared, matching this codebase's existing file-local-schema
-    convention -- routes_incidents.py itself keeps its Pydantic models and
-    this helper private rather than in a shared `schemas/` layer).
-    """
-    return {
-        "description": incident.title,
-        "severity": incident.severity,
-        "host": incident.host,
-        "technique_id": incident.mitre_technique_ids[0] if incident.mitre_technique_ids else None,
-        "technique_ids": incident.mitre_technique_ids or [],
-    }
-
-
 @router.post("/incidents/{incident_id}/chat", response_model=ChatMessageResponse)
 def chat_with_incident(
     incident_id: int, payload: ChatMessageRequest, db: Session = Depends(get_db)
@@ -98,7 +82,7 @@ def chat_with_incident(
 
     result = cache.get_chat_reply(incident_id, payload.message) if settings.response_cache_enabled else None
     if result is None:
-        result = generate_chat_reply(_incident_to_dict(incident), history, payload.message)
+        result = generate_chat_reply(build_incident_evidence(db, incident), history, payload.message)
         if settings.response_cache_enabled:
             cache.set_chat_reply(incident_id, payload.message, result)
 

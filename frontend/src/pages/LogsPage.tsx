@@ -5,6 +5,7 @@ import type { EventLogRow, IngestResponse } from '../api'
 import { LogUploadControl } from '../components/ingest/LogUploadControl'
 import { AiOpinionPanel } from '../components/logs/AiOpinionPanel'
 import { EventDetailDrawer } from '../components/logs/EventDetailDrawer'
+import { TelemetryProfilePanel } from '../components/logs/TelemetryProfilePanel'
 import {
   Button,
   Card,
@@ -57,13 +58,20 @@ function LogsPage() {
     { ...filters, search: debouncedSearch },
     pageSize,
   )
-  const { eventTotal, alertTotal, uncoveredTotal } = useEventTotals()
+  const { eventTotal, alertTotal, uncoveredTotal, refresh: refreshEventTotals } = useEventTotals()
   const verifiedCleanTotal = Math.max(eventTotal - alertTotal - uncoveredTotal, 0)
   const [aiOpinionId, setAiOpinionId] = useState<number | null>(null)
+  const [lastIngest, setLastIngest] = useState<IngestResponse | null>(null)
 
   function handleUploadSuccess(res: IngestResponse) {
     setAiOpinionId(res.ai_opinion_id)
+    setLastIngest(res)
     refresh()
+    // Without this, the KPI cards below (Events ingested/Alerting events/
+    // Verified clean/No rule coverage/Detection rate) stay frozen at
+    // whatever they were when this page first mounted -- refresh() above
+    // only re-fetches the event table (useEvents), a separate hook.
+    refreshEventTotals()
   }
 
   const detectionRatePercent = eventTotal > 0 ? (alertTotal / eventTotal) * 100 : 0
@@ -114,6 +122,12 @@ function LogsPage() {
       cell: (event) => <span className="font-mono text-meta text-text-muted">{event.user ?? '--'}</span>,
     },
     {
+      key: 'parentProcess',
+      header: 'Parent process',
+      hideBelow: 'xl',
+      cell: (event) => <span className="font-mono text-meta text-text-muted">{event.parent_process ?? '--'}</span>,
+    },
+    {
       key: 'message',
       header: 'Message',
       className: 'max-w-0',
@@ -140,7 +154,8 @@ function LogsPage() {
         actions={<LogUploadControl onSuccess={handleUploadSuccess} />}
       />
 
-      <AiOpinionPanel opinionId={aiOpinionId} />
+      <TelemetryProfilePanel ingest={lastIngest} hasAiOpinion={aiOpinionId !== null} />
+      <AiOpinionPanel opinionId={aiOpinionId} hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
@@ -199,7 +214,7 @@ function LogsPage() {
               <SearchInput
                 value={filters.search}
                 onChange={(search) => setFilters({ ...filters, search })}
-                placeholder="Search process, command line, user or host..."
+                placeholder="Search process, parent process, command line, user or host..."
               />
             }
             filters={

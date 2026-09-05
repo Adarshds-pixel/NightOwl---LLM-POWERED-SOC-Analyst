@@ -10,12 +10,12 @@ import { EmptyState, FloatingTooltip } from '../ui'
  * real detection are drawn -- never the full 858-entry catalog, which would
  * be a wall of empty cells pretending to be coverage.
  *
- * `showAllTactics` draws all 14 enterprise tactics instead of only the ones
- * with detections, dimming the empty ones. That is the coverage-map reading:
- * a tactic NightOwl has never detected is a real, meaningful gap, and hiding
- * the column would hide the gap. The dashboard's compact summary leaves it
- * off, because there it is a glanceable summary rather than a coverage
- * assessment.
+ * `showAllTactics` draws every tactic in `TACTIC_ORDER` instead of only the
+ * ones with detections, dimming the empty ones. That is the coverage-map
+ * reading: a tactic NightOwl has never detected is a real, meaningful gap,
+ * and hiding the column would hide the gap. The dashboard's compact summary
+ * leaves it off, because there it is a glanceable summary rather than a
+ * coverage assessment.
  *
  * `compact` is the dashboard variant: abbreviated tactic labels, smaller
  * cells, a capped number of rows.

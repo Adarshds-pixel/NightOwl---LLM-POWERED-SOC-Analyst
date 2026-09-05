@@ -48,13 +48,22 @@ guessing (e.g. "the retrieved context does not specify ...").
 them, and briefly explain what that technique means in this context.
 5. Write for a junior analyst: define jargon briefly, keep sentences short, and prefer concrete \
 detail (process names, command lines, hosts) over vague generalities.
-6. Structure your answer in three short sections, each with a markdown heading using EXACTLY \
+6. Structure your answer in four short sections, each with a markdown heading using EXACTLY \
 this text (needed so callers can split the response programmatically):
    - "## What happened": a 2-4 sentence plain-English summary of the observed activity.
    - "## Why it matters": the ATT&CK technique(s) involved and the attacker goal they usually serve.
    - "## Recommended next steps": 2-4 concrete triage/response actions, grounded in the retrieved \
 playbook context if present, or general SOC best practice if not.
-7. Keep the whole response under ~300 words. Do not repeat the raw input back verbatim."""
+   - "## Confidence breakdown": exactly three labeled bullets, every one of which must be present \
+even if its content is "None for this incident":
+     - "- Fact:" claims taken directly from the incident context above (process, command line, \
+host, user, matched rule, related events) -- things this specific incident's own data confirms.
+     - "- Inference:" reasonable interpretation drawn from the retrieved technique background \
+applied to this incident, not directly confirmed by the incident context itself.
+     - "- Uncertainty:" anything the incident context and retrieved chunks together don't clearly \
+establish, including cases where the evidence is thin (e.g. an incident with no related events, or \
+a technique with only general background retrieved).
+7. Keep the whole response under ~350 words. Do not repeat the raw input back verbatim."""
 
 HUMAN_PROMPT = """## Incident context
 {incident_context}
@@ -314,6 +323,26 @@ def extract_assessment_label(response: str) -> str:
 
 
 RECOMMENDED_STEPS_HEADING = "## Recommended next steps"
+CONFIDENCE_BREAKDOWN_HEADING = "## Confidence breakdown"
+
+
+def _extract_section(text: str, heading: str) -> str:
+    """Text between `heading` and the next "## " heading, or the end of
+    `text` if there isn't a later one -- shared by every extract_* helper
+    below. Stopping at the next heading (rather than just taking
+    everything after `heading`, the original approach) matters now that
+    "## Recommended next steps" is no longer always the last section:
+    since "## Confidence breakdown" (pending.md item 5) was added after
+    it, a naive "everything after" would have pulled the confidence
+    breakdown into the recommended-response text too.
+    """
+    idx = text.find(heading)
+    if idx == -1:
+        return ""
+    start = idx + len(heading)
+    next_heading = text.find("\n## ", start)
+    section = text[start:next_heading] if next_heading != -1 else text[start:]
+    return section.strip()
 
 
 def extract_recommended_response(explanation: str) -> str:
@@ -325,10 +354,20 @@ def extract_recommended_response(explanation: str) -> str:
     requested format, or `explanation` is the empty string -- rather than
     raising, since the full explanation text is still returned either way.
     """
-    idx = explanation.find(RECOMMENDED_STEPS_HEADING)
-    if idx == -1:
-        return ""
-    return explanation[idx + len(RECOMMENDED_STEPS_HEADING):].strip()
+    return _extract_section(explanation, RECOMMENDED_STEPS_HEADING)
+
+
+def extract_confidence_breakdown(explanation: str) -> str:
+    """Pull the "## Confidence breakdown" section out of a generated
+    explanation (pending.md item 5: separate FACT / INFERENCE / UNCERTAINTY
+    the same mechanical way extract_recommended_response already extracts
+    its own heading) -- exposed as its own field on the explain endpoint's
+    response, alongside the full explanation.
+
+    Returns "" if the heading isn't present, same reasoning as
+    extract_recommended_response above.
+    """
+    return _extract_section(explanation, CONFIDENCE_BREAKDOWN_HEADING)
 
 
 if __name__ == "__main__":

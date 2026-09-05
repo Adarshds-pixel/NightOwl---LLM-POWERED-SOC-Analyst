@@ -16,14 +16,16 @@ EVTX upload
 Ingestion     evtx_reader -> normalizer -> NormalizedEvent   --> events table
    |
    v
-Detection     15 Sigma-style YAML rules evaluated per event  --> alerts table
+Detection     33 Sigma-style YAML rules + a 3-pattern sequence
+              engine, evaluated per event / per batch          --> alerts table
    |          severity = Sigma level + MITRE tactic weight
    v
 Correlation   alerts grouped per host within a 1h window     --> incidents table
    |          incident carries the union of technique ids
    v
 AI layer      retrieve (ChromaDB) -> draft (LLM) -> self-critique (LLM)
-   |          returns explanation + recommended response + source chunks
+   |          returns explanation + confidence breakdown (Fact/
+   |          Inference/Uncertainty) + recommended response + sources
    v
 Console       React SOC UI over the REST API
 ```
@@ -99,7 +101,7 @@ Error shape is uniform: `{"detail": "<string>"}`. `LLMProviderError` gives 503; 
 
 ## 5. Detection engine
 
-Rules are Sigma-style YAML files in `backend/app/detection/rules/` (15 of them), loaded once at first use and cached in-process.
+Rules are Sigma-style YAML files in `backend/app/detection/rules/` (33 of them as of 2026-09-05, up from the original 15 -- see `backend/scripts/failure_matrix.md` and repo-root `pending.md` for the real-world-fixture-driven trail of what each later addition closed and why), loaded once at first use and cached in-process.
 
 - **pySigma is used for validation only.** Its design centres on backends that convert a rule into a target query language (Elasticsearch DSL, Splunk SPL) to run against an external log store; there is no official backend for evaluating a rule against a single in-memory dict, which is exactly what `POST /ingest` needs. So `SigmaRule.from_yaml()` validates structure (real errors, not decoration) and a small hand-rolled interpreter in `engine.py` evaluates the `detection` block parsed separately with `yaml.safe_load`.
 - **Supported subset:** named selections (AND across fields, OR across a value list), contains/startswith/endswith/exact modifiers, all case-insensitive, and a boolean condition string (and/or/not/parentheses) via a recursive-descent parser, not `eval()`, since rule files are treated as untrusted input.
@@ -111,7 +113,12 @@ Rules are Sigma-style YAML files in `backend/app/detection/rules/` (15 of them),
 
 **Incident grouping** (`services/incident_service.py`): a match joins the most recent open incident for the same host within a 1-hour window, merging its technique id and raising severity to the higher of the two; otherwise a new incident is created.
 
-**The 15 rules** cover execution (T1059.001 encoded PowerShell and execution-policy bypass, T1218.005 mshta), persistence (T1547.001 Run keys, T1546.012 IFEO debugger, T1053.005 scheduled tasks via schtasks and PowerShell), ingress and evasion (T1105 certutil download and suspicious writes to public/temp), command and control (T1071.001 LOLBin network connection), credential access (T1003.001 LSASS dump, T1003.002 SAM hive dump) and lateral movement (T1021.001 RDP, T1021.002 admin share, T1021.006 WinRM).
+**The 33 rules** cover execution (T1059.001 encoded PowerShell and execution-policy bypass, T1218 pcalua LOLBin, T1218.005 mshta, T1105 certutil download / ftp.exe child process / suspicious writes to public-or-temp), persistence (T1547.001 Run keys, T1546.012 IFEO debugger, T1053.005 scheduled tasks via schtasks and PowerShell, T1546.008 accessibility-tool/sticky-keys hijack, T1546.003 WMI CommandLineEventConsumer), privilege escalation and defense evasion (T1548.002 UAC bypass via sdclt.exe and UAC disabled via registry, T1134.001 rogue spoolss named pipe/SeImpersonate, T1070.006 timestomping, T1014 known-abusable/BYOVD driver load, T1685.005 security audit log cleared), credential access (T1003.001 LSASS memory dump via process access *and* via Security-channel object-access auditing, T1003.002 SAM/SYSTEM/SECURITY hive dump, T1003.006 DCSync), discovery (T1069.001 sensitive local group/account enumeration via net.exe), lateral movement (T1021.001 RDP, T1021.002 admin share, T1021.006 WinRM network connection and process spawned by a WinRM host, T1570 admin-share executable payload write, T1572 RDP logon over a loopback tunnel) and command and control (T1071.001 LOLBin network connection). T1055 (Remote Thread Creation from a scripting engine or web-server process) sits across the defense-evasion/privilege-escalation boundary, matching Process Injection's own real ATT&CK family.
+
+**Two mechanisms sit outside this single-event Sigma engine entirely, both narrow and built only once real fixture data justified them (never speculatively):**
+
+- **The sequence engine** (`detection/sequences.py`) hand-codes 3 multi-event correlations no single-event rule can express -- "did event A, then B, then C happen together" or "did N distinct things happen from one source within a window." Process Herpaderping (FileCreate -> ProcessAccess -> ImageLoad, chained via Sysmon `ProcessGuid`, T1055), an SMB share-enumeration probe (a `\srvsvc` PipeConnect corroborated by an inbound port-445 connection, T1135), and a Kerberos password spray (>=4 distinct `TargetUserName` values from one source IP within 60s, T1110.003). It runs once per ingest batch after the per-event rule loop, feeding the same `find_or_create_incident`/`save_alerts` path a normal rule match uses -- there is no parallel Alert/Incident creation logic, just a second source of `RuleMatch`es. Its `rule_id`s are never loaded YAML, so any route resolving an alert's title/technique (`routes_alerts.py`, `routes_events.py`, `routes_incidents.py`) merges in `SEQUENCE_PATTERNS` alongside `get_loaded_rules()`.
+- **Advisory patterns** (`services/advisory_patterns.py`) are narrow event shapes too false-positive-prone for a deterministic rule (e.g. `\lsass`/`\srvsvc` named-pipe connects from `System`) but still worth a human second look -- routed to the LLM advisory second-opinion mechanism (`ai_opinion_service.py`) instead, never creating an Alert/Incident/severity score of their own.
 
 ---
 
@@ -149,7 +156,7 @@ Prompts live together in `rag/prompts.py` (build_explanation_prompt, build_criti
 
 ### What the model can and cannot see
 
-The LLM receives the incident's title, severity, host and technique ids, **not** the underlying command lines, processes or users. Explanations are therefore about the technique and the incident's shape, not about the raw evidence. This is a known limitation, not an oversight.
+**Fixed 2026-09-05 -- this used to be a real, documented gap.** Earlier, the LLM received only the incident's title, severity, host and technique ids, not the underlying command lines, processes or users -- explanations were about the technique in the abstract, not the actual evidence on that machine. `services/incident_service.py::build_incident_evidence()` now pulls the incident's first alert's real process, parent process, command line, user, matched rule title, detection method (Sigma rule vs. sequence correlation), and up to 5 nearby related events -- the same per-alert evidence `GET /incidents/{id}` already assembles -- into both the explain and chat prompts. Bounded to one alert's detail (not every alert an incident has) so a rule that fired dozens of times doesn't balloon the prompt; the rest are counted, not individually listed. Verified live: asked the chat "what process or parent process triggered this alert?" and it answered from the real (absent, in that case) evidence instead of guessing.
 
 ### Evaluation results
 

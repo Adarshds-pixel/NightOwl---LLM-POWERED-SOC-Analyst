@@ -1,0 +1,49 @@
+title: Executable Payload Written to Admin Share (Remote File Copy)
+id: 26ac43fb-1839-43b3-9454-80753b8040ef
+status: experimental
+description: >
+  Detects Windows Security Event ID 5145 (a network share object was
+  checked to see whether client can be granted desired access) on an
+  admin share (C$/ADMIN$) where the target is an executable-shaped file
+  and the access actually granted includes a write (`AccessList` contains
+  `%%4417`, WriteData/AddFile) -- a remote payload being dropped onto the
+  admin share, the classic PsExec-style lateral-movement file-copy step,
+  not routine share browsing.
+
+  Event ID 5145 alone is far too common to use as a blanket signal --
+  verified against a real 869-record sample, every single one is on
+  ShareName `\\*\C$`, and the overwhelming majority are ordinary
+  metadata/attribute reads (e.g. `desktop.ini`). This rule is
+  deliberately scoped to the narrow combination that separates a real
+  payload drop from that noise: admin share + executable-shaped target +
+  an actual write access grant. Two of this sample's real records
+  (`malwr.exe`, `Windows\Temp\setup.bat`) show all three; a third
+  (`Windows\Temp\wodCmdTerm.exe`) shares the executable target and admin
+  share but is read-only (no `%%4417` in its `AccessList`) and correctly
+  does not match.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1570/
+  - https://attack.mitre.org/techniques/T1021/002/
+tags:
+  - attack.lateral_movement
+  - attack.t1570
+logsource:
+  category: admin_share_payload_write
+  service: security
+detection:
+  selection:
+    ShareName|contains:
+      - 'C$'
+      - 'ADMIN$'
+    RelativeTargetName|endswith:
+      - '.exe'
+      - '.bat'
+      - '.ps1'
+      - '.dll'
+      - '.vbs'
+      - '.scr'
+    AccessList|contains: '%%4417'
+  condition: selection
+level: high

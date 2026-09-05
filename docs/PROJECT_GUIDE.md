@@ -76,7 +76,7 @@ Frontend variables live in `frontend/.env.local` (`VITE_API_BASE_URL`, `VITE_API
 ## 4. Testing
 
 ```bash
-cd backend && ./venv/Scripts/python.exe -m pytest -q     # 344 tests
+cd backend && ./venv/Scripts/python.exe -m pytest -q     # 471 tests
 cd frontend && npm run build && npm run lint             # typecheck + build + oxlint
 ```
 
@@ -92,6 +92,52 @@ A few checks need network or a live database and are excluded from the offline p
 4. Open an incident, run the AI analysis, and confirm the explanation returns with source chunks and a self-critique result.
 5. Ask a follow-up in the chat panel; confirm it answers and the audit trail records the calls.
 6. `/demo` runs that whole sequence end to end with terminal narration, against the same real endpoints.
+
+### Verifying detection changes against real-world captures
+
+`backend/sample_logs/real_world_fixtures/` holds real, independently-
+sourced EVTX captures (not `build_demo_evtx_fixtures.py`-generated demo
+data), split into two directories so "is this one safe to call clean"
+is never a naming-convention guess: `malicious/` (54 publicly documented
+attack techniques run against real machines, real Sysmon/Security
+auditing) and `benign/` (2 real captures from an ordinary PC, gitignored
+-- see root `.gitignore` -- since they carry their owner's real Windows
+username/hostname; a fresh clone just has fewer clean fixtures, nothing
+requires their presence). Plus the 5 synthetic `demo_fixtures/noise_*.evtx`
+clean slices. This is the project's actual detection-accuracy source of
+truth; the number below, not this document, tells you whether a
+detection change helped or hurt:
+
+```bash
+cd backend
+./venv/Scripts/python.exe scripts/run_detection_benchmark.py    # fast: aggregate recall/FP count only
+./venv/Scripts/python.exe scripts/build_failure_matrix.py       # slower: full per-fixture breakdown + writes
+                                                                 # scripts/failure_matrix.json/.md
+```
+
+Current state: **47/54 detected (87.0%), 0 false positives** across all
+clean fixtures. Every miss in `failure_matrix.md` is hand-classified
+(`channel_provider_gap`, `rule_missing`, etc.) with the real field values
+that were checked, not a guessed reason -- read that file before adding a
+new rule for a miss, it usually already explains exactly what's missing
+and why. `pending.md` (repo root) is the living roadmap built from this
+same data; re-run these scripts after any detection-affecting change and
+update both files, the same discipline that got this project from 3/32
+to 33/39 over the course of one long session.
+
+Two rules-adjacent things live outside the single-event Sigma engine and
+won't show up if you only skim `app/detection/rules/`:
+`app/detection/sequences.py` (a small, hand-written 3-pattern
+multi-event correlator for the handful of techniques a single-event rule
+structurally can't express -- Process Herpaderping, an SMB
+share-enumeration probe, a Kerberos password spray) and
+`app/services/advisory_patterns.py` (narrow patterns routed to an LLM
+second opinion instead of a rule, because a deterministic match would be
+too false-positive-prone). Both are read by `routes_alerts.py`/
+`routes_events.py`/`routes_incidents.py` alongside the loaded YAML rules
+when resolving an alert's title/technique -- if you add a new rule-title
+lookup anywhere, it needs to consult these too, or a sequence/advisory
+alert will render as "Unknown rule".
 
 ### Verifying a specific behaviour quickly
 
@@ -142,6 +188,7 @@ A Postman collection covering every endpoint is in `docs/postman/`.
 | Tests hit the real LLM instead of mocks | `.env` left on `groq`, while the test file only mocks the Gemini branch | Set `LLM_PROVIDER=gemini` when you are done testing against Groq |
 | `docker compose build backend` fails with certificate errors from PyPI | Same TLS interception as section 1, but inside the container | Already handled in `backend/Dockerfile` via trusted-host flags |
 | `ChatGroq(timeout=...)` appears to do nothing | The field is `request_timeout` for Groq and `timeout` for Gemini | Use the right name per provider; the wrong one is silently ignored |
+| A backend Python change (a new rule file is the exception) doesn't seem to take effect, even after a fresh upload | The run command above starts plain `uvicorn`, **no `--reload`** -- new Sigma YAML rules are re-parsed from disk on every request so those take effect immediately, but any change to `app/*.py` (a new sequence pattern, a route, a service) is only picked up on the next process start | `netstat -ano \| findstr :8000`, `taskkill /F /PID <pid>`, restart uvicorn. Found live 2026-09-05: the sequence engine (`detection/sequences.py`) had been fully built and tested for a while before anyone noticed the *running* server was still serving a build from before it landed |
 
 ### Field note: capturing real Sysmon telemetry
 
@@ -156,7 +203,7 @@ A 30-day plan compressed to 26, run by a 4-person team as two rotating pairs (ba
 | Phase | Days | Outcome |
 |---|---|---|
 | Research, planning, design | 1-2 | Stack chosen, free-tier-only LLM policy, wireframes |
-| Backend core and detection | 3-12 | FastAPI, DB models and migrations, EVTX ingestion, normalization, detection engine, 29 rules, alert persistence, incident grouping, severity scoring, MITRE validation, incident endpoints |
+| Backend core and detection | 3-12 | FastAPI, DB models and migrations, EVTX ingestion, normalization, detection engine, 33 rules, alert persistence, incident grouping, severity scoring, MITRE validation, incident endpoints |
 | AI / RAG | 3-12 | ChromaDB and embeddings, ATT&CK loader, knowledge-base build, retrieval, prompts and LLM client, explain with self-critique and source attribution, incident chat |
 | Production hardening | 13 | API key auth, pagination, rate limiting, response caching, audit log, CI pipeline, backend Dockerfile |
 | Frontend | 14-20 | Vite/React scaffold, then the full SOC console redesign |
@@ -164,7 +211,9 @@ A 30-day plan compressed to 26, run by a 4-person team as two rotating pairs (ba
 | Deployment | 23-24 | Containers and compose, clean-machine tests |
 | Demo and report | 25-26 | Final report, presentation |
 
-**Where things actually stand.** Backend, detection, AI/RAG and the console are built and working end to end; the backend suite is 382 tests. The console covers Overview, Incidents, Incident detail, AI Assistant, MITRE ATT&CK, Alerts, Logs, Rules Engine, Reports, Settings and Demo Mode, all bound to live API data.
+**Where things actually stand.** Backend, detection, AI/RAG and the console are built and working end to end; the backend suite is 471 tests. The console covers Overview, Incidents, Incident detail, AI Assistant, MITRE ATT&CK, Alerts, Logs, Rules Engine, Reports, Settings and Demo Mode, all bound to live API data.
+
+Detection accuracy against the real-world fixture corpus (see §4) has moved from an initial 3/32 to **33/39 (84.6%), 0 false positives**, driven by measuring against real captures rather than building speculatively -- see `pending.md` for the full trace of what each pass added and why. Landed this way: 4 new Sigma rules verified against real field values, the 3-pattern sequence engine (`detection/sequences.py`) for techniques no single-event rule can express, a bounded AI/RAG evidence package (process/parent-process/command-line/user/matched-rule/related-events) with a mechanical FACT/INFERENCE/UNCERTAINTY breakdown on every explanation, and `ParentImage` promoted to a real searchable column. A full visual QA pass (uploading all 39 fixtures through the actual running console, not just the API) also caught and fixed several bugs invisible to the offline test suite alone -- a KPI-staleness race condition, a whole MITRE tactic silently missing from every tactic-based view, and the backend's own no-`--reload` gotcha above.
 
 Still open: a responsive and accessibility sweep at laptop and tablet widths, a frontend Dockerfile and full-stack compose, and the formal testing report.
 

@@ -60,6 +60,17 @@ export function EvidenceSourcePanel({
         </Card>
       )}
 
+      {result.confidence_breakdown && (
+        <Card
+          title="Confidence breakdown"
+          subtitle="Fact vs. inference vs. what the evidence doesn't establish"
+          accent="violet"
+          className="bg-surface-2/40"
+        >
+          <Markdown content={result.confidence_breakdown} />
+        </Card>
+      )}
+
       <div>
         <h3 className="mb-2 text-meta font-semibold tracking-[0.12em] text-text-dim uppercase">
           Sources and references

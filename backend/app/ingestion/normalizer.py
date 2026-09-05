@@ -49,18 +49,36 @@ def _extract_channel(system: dict) -> str | None:
     return channel if isinstance(channel, str) and channel else None
 
 
+def _extract_event_record_id(system: dict) -> int | None:
+    """Non-raising, same posture as _extract_channel: EventRecordID backs
+    ingest-time duplicate detection (event_service.py), not required to
+    build a valid Event row, so a record missing or carrying an
+    unparseable one still normalizes -- it just can never be deduplicated
+    against a re-upload."""
+    raw_record_id = system.get("EventRecordID")
+    if raw_record_id is None:
+        return None
+    try:
+        return int(raw_record_id)
+    except (TypeError, ValueError):
+        return None
+
+
 # The single source of truth for "which channel is this," in scoping terms:
 # canonical token -> the lowercase substring of the raw `System.Channel`
 # string that identifies it. Real observed values (verified against actual
 # sample files, not assumed): Sysmon -> 'Microsoft-Windows-Sysmon/Operational'
-# (contains "sysmon"), Security -> 'Security' (contains "security"). Every
+# (contains "sysmon"), Security -> 'Security' (contains "security"),
+# PowerShell -> 'Microsoft-Windows-PowerShell/Operational' (contains
+# "powershell", verified against 3 real 4104 samples, 2026-09-05). Every
 # call site that needs a channel-scoping decision (rule_loader.py, engine.py,
-# this module's own Security-channel dispatch, event_service.py's SQL-level
+# this module's own per-channel dispatch, event_service.py's SQL-level
 # coverage filter) must derive from this one table rather than re-hardcoding
 # a channel string comparison independently.
 CHANNEL_TOKEN_SUBSTRINGS: dict[str, str] = {
     "sysmon": "sysmon",
     "security": "security",
+    "powershell": "powershell",
 }
 
 
@@ -142,6 +160,7 @@ def _to_int(value: str | None) -> int | None:
 def _normalize_process_creation(data: dict[str, str | None]) -> dict:
     return {
         "process": data.get("Image"),
+        "parent_process": data.get("ParentImage"),
         "command_line": data.get("CommandLine"),
         "user": data.get("User"),
     }
@@ -190,15 +209,34 @@ _SYSMON_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]] = 
 }
 
 # Security-channel field names for the same concepts Sysmon calls
-# Image/ParentImage/CommandLine/User -- confirmed against real captured
-# Security-channel field values (`sample_logs/real_world_fixtures/`), not
-# assumed from public schema docs alone. Only applied for `channel ==
+# Image/ParentImage/CommandLine/User. Only applied for `channel ==
 # "security"` (see normalize_event()), so a Sysmon record's own `Image`
-# etc. is never touched. `NewProcessName`/`ProcessCommandLine` only
-# populate on 4688; the other two are common across most Security event
-# IDs but only ever consulted here for the one ID this module dispatches
-# on (4688) -- adding more Security event IDs to `_SECURITY_EVENT_ID_DISPATCH`
-# is what would put the rest of this table to use.
+# etc. is never touched.
+#
+# Verification status, checked against the one real 4688 sample in the
+# whole 39-file corpus (`LM_WMIC_4648_rpcss.evtx`, 2026-09-05 -- pending.md
+# previously flagged this table as "wired up but unverified", this is that
+# check): its real EventData fields are exactly SubjectUserSid,
+# SubjectUserName, SubjectDomainName, SubjectLogonId, NewProcessId,
+# NewProcessName, TokenElevationType, ProcessId, CommandLine (present as a
+# key but empty -- "Include command line in process creation events"
+# wasn't enabled on that capture).
+#   - "NewProcessName" -> "Image": VERIFIED (real value
+#     "C:\Windows\System32\wbem\WMIC.exe").
+#   - "SubjectUserName" -> "User": VERIFIED (real value "user01").
+#   - "ProcessCommandLine" -> "CommandLine": the real field is already
+#     named plain "CommandLine" -- this alias's own premise (that it's
+#     sometimes called "ProcessCommandLine" instead) never matched
+#     anything in the one sample checked, so it's presently inert, not
+#     confirmed. Harmless either way: if the premise is simply wrong, nothing
+#     fires; if some other real 4688 capture genuinely does use that name,
+#     this is ready for it.
+#   - "ParentProcessName" -> "ParentImage": NOT PRESENT in the sample at
+#     all, and not part of the standard 4688 field set Microsoft documents
+#     -- a bare 4688 only carries the *creator's* `ProcessId` (a PID, not a
+#     resolved name), never a parent process name/path. Kept rather than
+#     removed since it's harmless dead weight (same reasoning as above),
+#     but do not treat this as a validated mapping.
 _SECURITY_FIELD_ALIASES: dict[str, str] = {
     "NewProcessName": "Image",
     "ParentProcessName": "ParentImage",
@@ -222,6 +260,29 @@ _SECURITY_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]] 
     4688: _normalize_process_creation,
 }
 
+# PowerShell/Operational channel -- Event ID 4104 ("Execute a Remote
+# Command"/Script Block Logging). No extractor promotes a universal field
+# (process/command_line/user) here: a real 4104 record's EventData carries
+# no Image/CommandLine-shaped field at all (verified against 3 real
+# samples, 2026-09-05 -- MessageNumber, MessageTotal, ScriptBlockText,
+# ScriptBlockId, Path only), so inventing one would mean guessing rather
+# than reading real data. `ScriptBlockText` still reaches rules and the UI
+# through `event_data` -- normalize_event() always populates that dict
+# regardless of whether a dispatch entry exists (see NormalizedEvent's own
+# `event_data` field comment) -- so no dispatch entry is needed for
+# detection to work; this table is currently empty on purpose, not a stub.
+_POWERSHELL_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]] = {}
+
+# Which dispatch table applies to a given canonical channel token. `None`
+# (channel unrecognized, or Sysmon's own token) falls through to the Sysmon
+# table -- Sysmon is the one channel this project supported before channel-
+# awareness existed at all, so it's the correct default for anything not
+# explicitly Security/PowerShell, matching every existing real fixture.
+_CHANNEL_DISPATCH_TABLES: dict[str | None, dict[int, Callable[[dict[str, str | None]], dict]]] = {
+    "security": _SECURITY_EVENT_ID_DISPATCH,
+    "powershell": _POWERSHELL_EVENT_ID_DISPATCH,
+}
+
 
 def normalize_event(record: dict) -> NormalizedEvent:
     event = record.get("Event")
@@ -235,16 +296,17 @@ def normalize_event(record: dict) -> NormalizedEvent:
     timestamp = _extract_timestamp(system)
     event_id = _extract_event_id(system)
     channel = _extract_channel(system)
+    event_record_id = _extract_event_record_id(system)
 
     data = _data_dict(event.get("EventData"))
     if event_id == 2:
         data = _flag_timestomp(data)
 
-    if canonical_channel(channel) == "security":
+    token = canonical_channel(channel)
+    if token == "security":
         data = _apply_security_aliases(data)
-        extractor = _SECURITY_EVENT_ID_DISPATCH.get(event_id)
-    else:
-        extractor = _SYSMON_EVENT_ID_DISPATCH.get(event_id)
+    dispatch = _CHANNEL_DISPATCH_TABLES.get(token, _SYSMON_EVENT_ID_DISPATCH)
+    extractor = dispatch.get(event_id)
     type_fields = extractor(data) if extractor else {}
 
     return NormalizedEvent(
@@ -252,6 +314,7 @@ def normalize_event(record: dict) -> NormalizedEvent:
         timestamp=timestamp,
         event_id=event_id,
         channel=channel,
+        event_record_id=event_record_id,
         raw=record,
         event_data=data,
         **type_fields,

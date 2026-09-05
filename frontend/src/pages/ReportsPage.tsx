@@ -24,7 +24,7 @@ import { distinctTechniqueCount } from '../lib/aggregations'
 import { formatDateTime, incidentRef } from '../lib/format'
 import { buildReport, downloadText, reportToCsv, REPORT_WINDOWS, type ReportWindow } from '../lib/report'
 import { SEVERITY_HEX, severityLabel } from '../lib/severity'
-import { ACCENT, CATEGORICAL } from '../lib/tokens'
+import { ACCENT, CATEGORICAL, CATEGORICAL_OTHER } from '../lib/tokens'
 import type { IncidentSummary } from '../api'
 
 const SEVERITY_ROWS = ['critical', 'high', 'medium', 'low'] as const
@@ -66,11 +66,22 @@ function ReportsPage() {
     color: SEVERITY_HEX[severity],
   }))
 
-  const tacticSlices = report.tactics.slice(0, 6).map((entry, index) => ({
-    name: entry.label,
-    value: entry.count,
-    color: CATEGORICAL[index % CATEGORICAL.length],
-  }))
+  // Top 6 + a folded "Other" slice, same convention as
+  // attackVectorBreakdown() -- a bare `.slice(0, 6)` here previously
+  // dropped every tactic past the 6th with no indication anything was
+  // cut, so the "Hits" total silently undercounted the moment a corpus
+  // produced a 7th active tactic (found during the 39-file visual QA
+  // pass, 2026-09-05; the MITRE page had the identical bug).
+  const topReportTactics = report.tactics.slice(0, 6)
+  const otherReportTacticHits = report.tactics.slice(6).reduce((sum, entry) => sum + entry.count, 0)
+  const tacticSlices = [
+    ...topReportTactics.map((entry, index) => ({
+      name: entry.label,
+      value: entry.count,
+      color: CATEGORICAL[index % CATEGORICAL.length],
+    })),
+    ...(otherReportTacticHits > 0 ? [{ name: 'Other', value: otherReportTacticHits, color: CATEGORICAL_OTHER }] : []),
+  ]
 
   const columns: Column<IncidentSummary>[] = [
     {

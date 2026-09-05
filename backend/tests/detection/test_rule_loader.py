@@ -38,7 +38,7 @@ logsource:
   category: process_creation
 """
 
-EXPECTED_RULE_COUNT = 29
+EXPECTED_RULE_COUNT = 39
 EXPECTED_CATEGORIES = {
     "process_creation",
     "network_connection",
@@ -51,6 +51,14 @@ EXPECTED_CATEGORIES = {
     "file_change",
     "audit_log_cleared",
     "directory_service_access",
+    "local_group_enumeration",
+    "driver_load",
+    "rdp_tunneled_logon",
+    "admin_share_payload_write",
+    "local_group_membership_change",
+    "computer_account_created",
+    "scheduled_task_created_security",
+    "script_block_logging",
 }
 
 

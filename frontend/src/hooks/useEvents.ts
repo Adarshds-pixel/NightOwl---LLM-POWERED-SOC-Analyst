@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getEvents, type EventLogRow, type Severity } from '../api'
 
 export interface EventFilters {
@@ -40,6 +40,10 @@ export function useEvents(filters: EventFilters, pageSize: number) {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Guards against an older, slower request landing after a newer one and
+  // overwriting it with stale data -- see useEventTotals.ts's requestId
+  // doc comment for the observed failure mode this prevents.
+  const requestId = useRef(0)
 
   // 'clean' is the "matched no rule" case, which the API expresses as
   // alert_only=false rather than as a severity value.
@@ -47,6 +51,7 @@ export function useEvents(filters: EventFilters, pageSize: number) {
   const alertOnlyParam = filters.severity === 'clean' ? false : (filters.alertOnly ?? undefined)
 
   const load = useCallback(() => {
+    const thisRequest = ++requestId.current
     setLoading(true)
     setError(null)
     getEvents({
@@ -60,11 +65,16 @@ export function useEvents(filters: EventFilters, pageSize: number) {
       offset: page * pageSize,
     })
       .then((res) => {
+        if (thisRequest !== requestId.current) return
         setEvents(res.events)
         setTotal(res.total)
       })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false))
+      .catch((err: Error) => {
+        if (thisRequest === requestId.current) setError(err.message)
+      })
+      .finally(() => {
+        if (thisRequest === requestId.current) setLoading(false)
+      })
   }, [filters.host, filters.search, alertOnlyParam, severityParam, filters.startDate, filters.endDate, page, pageSize])
 
   useEffect(() => {

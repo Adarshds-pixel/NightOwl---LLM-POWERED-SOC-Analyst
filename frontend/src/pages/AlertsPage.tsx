@@ -196,7 +196,7 @@ function AlertsPage() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <div className="flex flex-col gap-4 xl:col-span-8">
           <FilterBar
-            search={<SearchInput value={search} onChange={setSearch} placeholder="Search alerts by process, command line, user or host..." />}
+            search={<SearchInput value={search} onChange={setSearch} placeholder="Search alerts by process, parent process, command line, user or host..." />}
             filters={
               <Select
                 label="Severity"

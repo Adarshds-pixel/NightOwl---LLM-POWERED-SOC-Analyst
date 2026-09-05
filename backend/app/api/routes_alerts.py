@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
+from app.detection.sequences import SEQUENCE_PATTERNS
 from app.services.event_service import count_alert_rows, list_alert_rows
 
 router = APIRouter()
@@ -34,6 +35,7 @@ class AlertRow(BaseModel):
     timestamp: datetime
     event_id: int
     process: str | None
+    parent_process: str | None
     command_line: str | None
     user: str | None
     is_alert: bool = True
@@ -58,14 +60,20 @@ def get_alerts(
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
     severity: str | None = Query(default=None, description="only alerts of this severity, e.g. 'critical'"),
-    q: str | None = Query(default=None, description="case-insensitive substring match on process, command line, user or host"),
+    q: str | None = Query(
+        default=None,
+        description="case-insensitive substring match on process, parent process, command line, user or host",
+    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> AlertListResponse:
     rows = list_alert_rows(db, host=host, start_date=start_date, end_date=end_date, severity=severity, q=q, limit=limit, offset=offset)
     total = count_alert_rows(db, host=host, start_date=start_date, end_date=end_date, severity=severity, q=q)
-    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()}
+    # Sequence-detected alerts (detection/sequences.py) carry a rule_id
+    # that was never a loaded YAML rule -- merge in their titles/technique
+    # ids too, or every such alert would show as "Unknown rule".
+    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | SEQUENCE_PATTERNS
 
     result = []
     for alert, event in rows:
@@ -78,6 +86,7 @@ def get_alerts(
                 timestamp=event.timestamp,
                 event_id=event.event_id,
                 process=event.process,
+                parent_process=event.parent_process,
                 command_line=event.command_line,
                 user=event.user,
                 severity=alert.severity,

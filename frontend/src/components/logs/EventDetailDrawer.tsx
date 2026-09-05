@@ -61,6 +61,7 @@ export function EventDetailDrawer({ eventId, onClose }: { eventId: number | null
               <KeyValue label="Host" value={event.host} mono />
               <KeyValue label="User" value={event.user ?? '--'} mono />
               <KeyValue label="Process" value={event.process ?? '--'} mono />
+              <KeyValue label="Parent process" value={event.parent_process ?? '--'} mono />
               <KeyValue label="Timestamp" value={formatDateTime(event.timestamp)} mono />
               <div className="col-span-2">
                 <p className="text-micro font-medium tracking-[0.1em] text-text-faint uppercase">Command line</p>

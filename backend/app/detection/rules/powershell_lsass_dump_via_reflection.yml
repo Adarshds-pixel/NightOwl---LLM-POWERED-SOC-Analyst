@@ -1,0 +1,42 @@
+title: PowerShell LSASS Memory Dump via Reflection
+id: 9d4e7a2c-1f6b-4e8d-b3a5-7c9f0e2d4b61
+status: experimental
+description: >
+  Detects Windows Event ID 4104 (PowerShell Script Block Logging) where
+  the logged script block references both the LSASS process and
+  `MiniDumpWriteDump` -- the Win32 API used to dump a process's memory to
+  disk. Real credential-dumping PowerShell tooling (e.g. Out-Minidump /
+  the "NanoDump"-style scripts) invokes `MiniDumpWriteDump` via .NET
+  reflection against `[PSObject].Assembly`'s internal
+  `WindowsErrorReporting` type specifically to dump LSASS without
+  dropping a separate binary (procdump.exe etc.) to disk -- there is no
+  legitimate reason a script would combine these two specific terms.
+  Complements the existing Sysmon-based `lsass_memory_dump.yml` (which
+  looks for `procdump`-style command lines) by also catching the
+  fileless, in-process variant that only shows up in script-block
+  content. Verified against real content:
+  `Powershell_4104_MiniDumpWriteDump_Lsass.evtx` -- the full script reads
+  `Get-Process lsass`, then resolves `MiniDumpWriteDump` off
+  `System.Management.Automation.WindowsErrorReporting`'s nested
+  `NativeMethods` type via reflection. Checked the other 2 real 4104
+  samples in the corpus (an Emotet downloader, a fake-credential-prompt
+  phishing script) as involuntary benign look-alikes: neither mentions
+  `lsass` or `MiniDumpWriteDump` at all.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-05
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+  - https://attack.mitre.org/techniques/T1059/001/
+tags:
+  - attack.credential_access
+  - attack.t1003.001
+logsource:
+  category: script_block_logging
+  service: powershell
+detection:
+  selection_lsass:
+    ScriptBlockText|contains: lsass
+  selection_dump:
+    ScriptBlockText|contains: MiniDumpWriteDump
+  condition: selection_lsass and selection_dump
+level: critical

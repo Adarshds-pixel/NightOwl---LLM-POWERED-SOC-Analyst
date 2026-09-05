@@ -1,0 +1,41 @@
+title: Sensitive Local Group/Account Enumeration via net.exe
+id: ae2dd78b-15cf-4404-9847-f289fb23fabb
+status: experimental
+description: >
+  Detects Windows Security Event ID 4799 (a security-enabled local group
+  membership was enumerated) or 4798 (a user's local group membership was
+  enumerated) where the enumerating process is net.exe's worker process
+  (net1.exe) and the target is a sensitive built-in group or account --
+  Administrators, Domain Admins, Enterprise Admins, Schema Admins, Backup
+  Operators, Account Operators, Remote Desktop Users, or the built-in
+  Administrator account. `net localgroup <group>` / `net user <account>`
+  against one of these specific high-value targets is a well-precedented
+  discovery step (T1069.001 / T1087.001) ahead of privilege escalation or
+  lateral movement -- scoping to this named-target list, rather than any
+  net1.exe invocation, keeps routine account administration (checking an
+  arbitrary non-privileged group or user) from tripping this rule.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-04
+references:
+  - https://attack.mitre.org/techniques/T1069/001/
+  - https://attack.mitre.org/techniques/T1087/001/
+tags:
+  - attack.discovery
+  - attack.t1069.001
+logsource:
+  category: local_group_enumeration
+  service: security
+detection:
+  selection:
+    CallerProcessName|endswith: net1.exe
+    TargetUserName:
+      - Administrators
+      - Administrator
+      - Domain Admins
+      - Enterprise Admins
+      - Schema Admins
+      - Backup Operators
+      - Account Operators
+      - Remote Desktop Users
+  condition: selection
+level: low

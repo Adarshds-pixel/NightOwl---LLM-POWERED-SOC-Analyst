@@ -33,3 +33,11 @@ final_plan.md
 
 # Claude Code local session/config state -- machine-local, not project source.
 .claude/
+
+# Real (not synthetic) clean-corpus captures from a contributor's own PC
+# (backend/scripts/run_detection_benchmark.py, build_failure_matrix.py) --
+# these carry the owner's real Windows username/hostname baked into the
+# EVTX records, so they stay local rather than being committed. Neither
+# script requires them to be present; a fresh clone just has fewer clean
+# fixtures to test false positives against.
+backend/sample_logs/real_world_fixtures/benign/
