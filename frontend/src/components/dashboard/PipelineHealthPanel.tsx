@@ -18,7 +18,22 @@ import { Card, ChartLegend, MiniStat, RingGauge, TrendChart } from '../ui'
  * fast, how many detection rules are loaded, how much telemetry has been
  * ingested, and how much of it tripped a rule.
  */
-export function PipelineHealthPanel({ alerts, eventTotal, alertTotal }: { alerts: EventLogRow[]; eventTotal: number; alertTotal: number }) {
+export function PipelineHealthPanel({
+  alerts,
+  eventTotal,
+  alertTotal,
+  now,
+}: {
+  alerts: EventLogRow[]
+  eventTotal: number
+  alertTotal: number
+  /** Shared recent-activity anchor (epoch ms), computed once by the caller
+   *  from the datasets feeding this page -- see lib/aggregations.ts's
+   *  `latestTimestampMs`. NightOwl's alert timestamps are the real
+   *  historical EVTX event time, not upload time, so anchoring to
+   *  `Date.now()` here would leave this chart empty for any real corpus. */
+  now: number
+}) {
   const { status, latencyMs, samples } = useHealth()
   const { rules } = useRules()
 
@@ -28,7 +43,7 @@ export function PipelineHealthPanel({ alerts, eventTotal, alertTotal }: { alerts
   const latencyScore = latencyMs === null ? 0 : Math.max(0, 100 - Math.min(100, (latencyMs / 400) * 100))
   const detectionRate = eventTotal > 0 ? (alertTotal / eventTotal) * 100 : 0
 
-  const activity = activityByHour(alerts, 12)
+  const activity = activityByHour(alerts, 12, now)
   const trendData = activity.map((point) => ({ label: point.label, alerts: point.count }))
 
   return (
@@ -67,7 +82,7 @@ export function PipelineHealthPanel({ alerts, eventTotal, alertTotal }: { alerts
       <div className="mt-4">
         <div className="mb-1 flex items-center gap-1.5 text-micro tracking-[0.12em] text-text-faint uppercase">
           <Activity className="h-3 w-3" />
-          Alerts per hour - last 12h
+          Alerts per hour - most recent 12h of activity
         </div>
         <TrendChart
           data={trendData}

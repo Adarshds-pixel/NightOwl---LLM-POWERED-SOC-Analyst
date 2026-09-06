@@ -262,6 +262,38 @@ export function hostActivity(incidents: IncidentSummary[]): { nodes: HostNode[];
   return { nodes, edges }
 }
 
+/** The most recent timestamp actually present across one or more arrays of
+ *  ISO timestamps, as epoch ms -- `null` when there is nothing to anchor
+ *  to. NightOwl ingests historical EVTX archives (real-world fixtures span
+ *  2019-2023; even the newest synthetic samples predate real wall-clock
+ *  "now" by weeks), so any "last Nh" window measured from `Date.now()`
+ *  is empty for virtually all real data. Call sites that render a
+ *  recent-activity window should compute this once from whichever
+ *  datasets feed that view and pass it as the shared `now` for every
+ *  series in that view, instead of letting each aggregation default to
+ *  `Date.now()` independently. */
+export function latestTimestampMs(...timestampLists: string[][]): number | null {
+  let latest: number | null = null
+  for (const list of timestampLists) {
+    for (const iso of list) {
+      const time = new Date(iso).getTime()
+      if (Number.isNaN(time)) continue
+      if (latest === null || time > latest) latest = time
+    }
+  }
+  return latest
+}
+
+/** `latestTimestampMs`, falling back to real wall-clock time when none of
+ *  the given datasets have any timestamps at all (e.g. genuinely empty
+ *  data, before anything has been ingested). Page components should call
+ *  this rather than writing `?? Date.now()` inline -- `Date.now()` is an
+ *  impure call, and keeping it in this plain module (not a component's
+ *  render body) is what this project's lint config expects. */
+export function activityAnchorMs(...timestampLists: string[][]): number {
+  return latestTimestampMs(...timestampLists) ?? Date.now()
+}
+
 // --- Period-over-period deltas ------------------------------------------
 // Every "+12% from yesterday" figure in the UI comes from here. It is a
 // real comparison of two equal windows of ingested data, and it returns

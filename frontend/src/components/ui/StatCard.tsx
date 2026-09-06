@@ -114,7 +114,7 @@ export function StatCard({
         ) : delta ? (
           <DeltaLine delta={delta} />
         ) : (
-          <span className="text-text-faint">Not enough history to compare</span>
+          <span className="text-text-faint">No earlier period in this dataset to compare</span>
         )}
       </div>
     </Wrapper>

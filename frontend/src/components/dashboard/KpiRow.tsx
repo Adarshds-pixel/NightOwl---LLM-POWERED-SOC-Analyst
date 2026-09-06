@@ -21,11 +21,18 @@ export function KpiRow({
   meta,
   alerts,
   alertTotal,
+  now,
 }: {
   incidents: IncidentSummary[]
   meta: IncidentsMeta
   alerts: AlertRow[]
   alertTotal: number
+  /** Shared recent-activity anchor (epoch ms) -- see PipelineHealthPanel's
+   *  `now` prop doc and lib/aggregations.ts's `latestTimestampMs`. Passed
+   *  in rather than left to `bucketCounts`/`periodDelta`'s own
+   *  `Date.now()` default so every sparkline/delta on this row windows
+   *  against the same reference point. */
+  now: number
 }) {
   const navigate = useNavigate()
 
@@ -40,8 +47,8 @@ export function KpiRow({
         value={meta.totalAll}
         icon={<ShieldAlert className="h-4 w-4" />}
         accent="primary"
-        delta={periodDelta(incidentTimes)}
-        trend={bucketCounts(incidentTimes)}
+        delta={periodDelta(incidentTimes, 24, now)}
+        trend={bucketCounts(incidentTimes, 12, 24, now)}
         onClick={() => navigate('/incidents')}
       />
       <StatCard
@@ -49,8 +56,8 @@ export function KpiRow({
         value={meta.totalCritical}
         icon={<Siren className="h-4 w-4" />}
         accent="red"
-        delta={periodDelta(criticalTimes)}
-        trend={bucketCounts(criticalTimes)}
+        delta={periodDelta(criticalTimes, 24, now)}
+        trend={bucketCounts(criticalTimes, 12, 24, now)}
         pulse={meta.totalCritical > 0}
         onClick={() => navigate('/incidents?severity=critical')}
       />
@@ -65,8 +72,8 @@ export function KpiRow({
         value={alertTotal}
         icon={<Bell className="h-4 w-4" />}
         accent="magenta"
-        delta={periodDelta(alertTimes)}
-        trend={bucketCounts(alertTimes)}
+        delta={periodDelta(alertTimes, 24, now)}
+        trend={bucketCounts(alertTimes, 12, 24, now)}
         onClick={() => navigate('/alerts')}
       />
       <StatCard

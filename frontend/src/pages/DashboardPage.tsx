@@ -16,7 +16,13 @@ import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
 import { useAlerts } from '../hooks/useAlerts'
 import { useEventTotals } from '../hooks/useEventTotals'
-import { computeThreatLevel, hostActivity, selectMostActionableIncident, type ThreatLevel } from '../lib/aggregations'
+import {
+  activityAnchorMs,
+  computeThreatLevel,
+  hostActivity,
+  selectMostActionableIncident,
+  type ThreatLevel,
+} from '../lib/aggregations'
 
 /** Visual language per computed threat level -- reuses the same
  *  `computeThreatLevel` the sidebar's status block already shows, just given
@@ -95,6 +101,18 @@ function DashboardPage() {
   const focusIncident = selectMostActionableIncident(incidents)
   const threat = computeThreatLevel(incidents)
 
+  // NightOwl ingests historical EVTX archives, not a live feed -- alert and
+  // incident timestamps are the real event time from the source log, which
+  // can be years before actual wall-clock "now". The recent-activity
+  // graphs/deltas below anchor to the most recent timestamp actually in
+  // this dataset instead of Date.now(), so they show real data instead of
+  // being permanently empty; every series on this page shares the same
+  // anchor rather than each computing its own.
+  const activityNow = activityAnchorMs(
+    incidents.map((incident) => incident.created_at),
+    alertsQuery.alerts.map((alert) => alert.timestamp),
+  )
+
   if (loading) {
     return (
       <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -131,7 +149,7 @@ function DashboardPage() {
     <div className="flex flex-col gap-4 p-5">
       <ThreatBanner level={threat.level} activeCount={threat.activeCount} />
 
-      <KpiRow incidents={incidents} meta={meta} alerts={alertsQuery.alerts} alertTotal={alertsQuery.total} />
+      <KpiRow incidents={incidents} meta={meta} alerts={alertsQuery.alerts} alertTotal={alertsQuery.total} now={activityNow} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <div className="xl:col-span-3">
@@ -184,7 +202,12 @@ function DashboardPage() {
           <HostGraphLegend />
         </Card>
         <div className="xl:col-span-3">
-          <PipelineHealthPanel alerts={alertsQuery.alerts} eventTotal={eventTotal} alertTotal={alertsQuery.total} />
+          <PipelineHealthPanel
+            alerts={alertsQuery.alerts}
+            eventTotal={eventTotal}
+            alertTotal={alertsQuery.total}
+            now={activityNow}
+          />
         </div>
       </div>
     </div>

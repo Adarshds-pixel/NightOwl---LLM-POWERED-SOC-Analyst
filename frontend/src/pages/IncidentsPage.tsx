@@ -25,7 +25,7 @@ import {
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
 import { usePreferences } from '../context/preferences/usePreferences'
-import { bucketCounts, periodDelta, severityDistribution } from '../lib/aggregations'
+import { activityAnchorMs, bucketCounts, periodDelta, severityDistribution } from '../lib/aggregations'
 import { SEVERITY_ACCENT } from '../lib/severity'
 import { filterIncidents, primaryTactic } from '../lib/filtering'
 import { formatDateTime, incidentRef } from '../lib/format'
@@ -58,6 +58,10 @@ function IncidentsPage() {
   const filtered = useMemo(() => filterIncidents(incidents, filters, byId), [incidents, filters, byId])
   const distribution = severityDistribution(incidents)
   const times = incidents.map((incident) => incident.created_at)
+  // Same historical-dataset anchor as the Dashboard (see DashboardPage.tsx)
+  // instead of Date.now(): incident.created_at is the real historical
+  // EVTX event time, not upload time.
+  const activityNow = activityAnchorMs(times)
   const visible = filtered.slice(page * pageSize, page * pageSize + pageSize)
 
   const columns: Column<IncidentSummary>[] = [
@@ -165,8 +169,8 @@ function IncidentsPage() {
           value={meta.totalAll}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent="primary"
-          delta={periodDelta(times)}
-          trend={bucketCounts(times)}
+          delta={periodDelta(times, 24, activityNow)}
+          trend={bucketCounts(times, 12, 24, activityNow)}
         />
         {/* Accents come from SEVERITY_ACCENT rather than being chosen here,
             so these four can never drift from the severity ramp used by

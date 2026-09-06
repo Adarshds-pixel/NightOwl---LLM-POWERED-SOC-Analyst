@@ -1,9 +1,34 @@
-"""Severity scoring v1 (Day 10): combines a rule's raw Sigma level with a
-weight for the MITRE tactic(s) it's tagged with (parsed from the rule's own
-`tags:` list by rule_loader.py), so a "medium" rule tagged
-command-and-control/impact ranks above a "medium" rule tagged only
-reconnaissance -- both start from the same base severity, but the tactic
+"""Severity scoring v1.1 (recalibrated 2026-09-06): combines a rule's raw
+Sigma level with a weight for the MITRE tactic(s) it's tagged with (parsed
+from the rule's own `tags:` list by rule_loader.py), so a "medium" rule
+tagged command-and-control ranks above a "medium" rule tagged only
+persistence -- both start from the same base severity, but the tactic
 carries real risk information the raw Sigma level alone doesn't capture.
+
+v1 used a 0/1/2/3 weight tier and capped the total at "critical". Since
+every adjacent Sigma level is exactly 1 rank apart, ANY nonzero weight was
+enough to escalate a rule by at least one full band, and the only tactics
+that carried weight 0 (reconnaissance, resource_development) describe
+pre-compromise attacker prep that essentially no host-telemetry detection
+rule in this project is tagged with alone. Auditing the real ruleset
+(43 rules) against v1 showed 41/43 rules escalated -- every medium/low rule
+in the project became high/critical, and every high rule became critical,
+making "medium" and "low" mathematically unreachable as a final severity
+and "critical" the outcome for nearly everything. That is the bug this
+recalibration fixes.
+
+v1.1 keeps the same base-rank table and the same "highest tactic wins,
+capped at critical" mechanism, but narrows escalation to a single +1 rank,
+reserved for tactics that mark a concrete, defensible increase in realized
+attacker leverage: stealing credentials, moving to another host, gathering
+data for exfiltration, actively communicating with an attacker, exfiltrating
+data, or causing impact. Tactics that describe routine steps common to
+findings across the whole severity range (getting a foothold, running code,
+persisting, evading defenses, discovering things) no longer escalate on
+their own -- a rule's author-declared level is trusted for those, so
+medium/low rules tagged only with routine tactics now correctly stay
+medium/low, and high rules tagged only with routine tactics stay high
+instead of auto-maxing at critical.
 """
 
 _BASE_RANK: dict[str, int] = {
@@ -16,27 +41,33 @@ _BASE_RANK: dict[str, int] = {
 _DEFAULT_RANK = _BASE_RANK["medium"]
 
 # Weight added on top of the base rank for the highest-weighted tactic a
-# rule is tagged with. Grouped loosely by how much real damage/progress an
-# attacker gains once a technique in that tactic succeeds -- reconnaissance
-# costs nothing yet, command_and_control/exfiltration/impact are the
-# tactics that matter most once reached. Keys use underscores, matching
+# rule is tagged with. Only tactics that represent a concrete increase in
+# realized attacker leverage (credential theft, spreading to another host,
+# staging data, talking to C2, exfiltrating, or causing impact) carry
+# weight 1; every other tactic -- including the "attacker got in / ran
+# something / stuck around / hid / looked around" steps that appear on
+# rules across the whole severity range -- carries weight 0, so those
+# rules keep the level their author declared instead of being forced up
+# by tag alone. Escalation is intentionally capped at +1 rank (see module
+# docstring for why: with adjacent Sigma levels 1 rank apart, any larger
+# weight makes "medium"/"low" unreachable). Keys use underscores, matching
 # this project's existing rule-tag convention (e.g. "attack.command_and_control"
 # in the seed rules), not MITRE's site hyphens.
 _TACTIC_WEIGHT: dict[str, int] = {
     "reconnaissance": 0,
     "resource_development": 0,
-    "initial_access": 1,
-    "execution": 1,
-    "persistence": 1,
-    "privilege_escalation": 1,
-    "defense_evasion": 1,
-    "credential_access": 2,
-    "discovery": 2,
-    "lateral_movement": 2,
-    "collection": 2,
-    "command_and_control": 3,
-    "exfiltration": 3,
-    "impact": 3,
+    "initial_access": 0,
+    "execution": 0,
+    "persistence": 0,
+    "privilege_escalation": 0,
+    "defense_evasion": 0,
+    "discovery": 0,
+    "credential_access": 1,
+    "lateral_movement": 1,
+    "collection": 1,
+    "command_and_control": 1,
+    "exfiltration": 1,
+    "impact": 1,
 }
 
 _RANK_LABELS = ["informational", "low", "medium", "high", "critical"]
