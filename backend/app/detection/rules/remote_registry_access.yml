@@ -1,0 +1,51 @@
+title: Remote Registry Access via winreg Named Pipe
+id: 1e6b8a34-9f27-4c60-a3d5-2b7e4f9c8d15
+status: experimental
+description: >
+  Detects Windows Security Event ID 5145 (a network share object was
+  checked to see whether client can be granted desired access) where the
+  client connects to the `IPC$` administrative share and the target is
+  `winreg` -- the fixed, well-known RPC named pipe the Remote Registry
+  service exposes. This is the real network-level signature of remote
+  registry access (e.g. querying or saving `HKLM\SAM`/`SECURITY`/`SYSTEM`
+  on a target machine over the network) regardless of which specific
+  tool an attacker used, since `winreg` is a stable Windows RPC endpoint
+  name, not something that varies by tool. Remote registry access is
+  disabled by default on workstations and rarely used outside of
+  specific enterprise management tooling, making this a comparatively
+  low-noise signal to flag for review.
+
+  Deliberately scoped to the pipe name alone, not the specific hive-dump
+  file names also present in this project's one real sample (see below)
+  -- those names are one particular tool's own convention, and building
+  a rule around them would overfit to a single sample rather than the
+  underlying technique.
+
+  Verified against real content:
+  `remote_sam_registry_access_via_backup_operator_priv.evtx` -- a real
+  5145 record with `ShareName: \\*\IPC$`, `RelativeTargetName: winreg`,
+  and a write-capable `AccessList`. The same capture's later 5145 records
+  show the likely next step of the same technique -- files named
+  `Users\PSAM`, `Users\PSYSTEM`, `Users\PSECURITY` written to the `C$`
+  share root with `%%4417` (WriteData) access, consistent with saved
+  registry hive files being staged for exfiltration -- corroborating
+  evidence for why this capture is a real detection, not a reason to key
+  the rule's own condition on those specific filenames.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-06
+references:
+  - https://attack.mitre.org/techniques/T1003/002/
+  - https://attack.mitre.org/techniques/T1021/002/
+tags:
+  - attack.credential_access
+  - attack.lateral_movement
+  - attack.t1003.002
+logsource:
+  category: remote_registry_access
+  service: security
+detection:
+  selection:
+    ShareName|contains: 'IPC$'
+    RelativeTargetName: winreg
+  condition: selection
+level: high

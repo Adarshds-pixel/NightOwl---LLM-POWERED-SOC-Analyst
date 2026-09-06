@@ -1,0 +1,47 @@
+title: Audit Policy Weakened (Success or Failure Auditing Removed)
+id: 7a4e9c26-3d81-4f5e-9b02-6c8a1d3f5e72
+status: experimental
+description: >
+  Detects Windows Security Event ID 4719 (system audit policy was
+  changed) where the change **removed** success or failure auditing
+  from a subcategory, rather than adding it. Windows encodes the
+  specific change(s) in the `AuditPolicyChanges` field as one or more of
+  4 fixed codes: `%%8448` (Success added), `%%8449` (Success removed),
+  `%%8450` (Failure added), `%%8451` (Failure removed). Routine,
+  legitimate audit-policy administration (e.g. a GPO enabling a new
+  audit category) almost always *adds* auditing; deliberately *removing*
+  it is a well-precedented defense-evasion step (stop logging a
+  subcategory before doing something in it that shouldn't be recorded).
+  Scoped to the removed-auditing codes specifically, not any 4719, so
+  routine policy tightening doesn't trip this rule.
+
+  Verified against real content:
+  `ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx` -- one real 4719
+  record, `AuditPolicyChanges: '%%8449, %%8451'` (both success and
+  failure auditing removed from one subcategory,
+  `SubcategoryGuid: {0cce9215-69ae-11d9-bed3-505054503030}`), raised by
+  `DC1$` (the domain controller's own machine account -- consistent with
+  an attacker who has already obtained SYSTEM/DC-equivalent access,
+  since only a privileged principal can change audit policy at all).
+  This file is already detected via its DCSync activity
+  (`dcsync_replication_rights.yml`); this rule adds real, independently
+  verified technique coverage rather than changing that file's own
+  detection status.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-06
+references:
+  - https://attack.mitre.org/techniques/T1685/001/
+  - https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4719
+tags:
+  - attack.defense_impairment
+  - attack.t1685.001
+logsource:
+  category: audit_policy_weakened
+  service: security
+detection:
+  selection:
+    AuditPolicyChanges|contains:
+      - '%%8449'
+      - '%%8451'
+  condition: selection
+level: high

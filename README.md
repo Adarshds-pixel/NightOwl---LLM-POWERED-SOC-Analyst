@@ -6,7 +6,7 @@ This is a final-year major project built by a team of 4, AI-assisted, over a 30-
 
 ## Features
 - Batch ingestion of Sysmon EVTX log files
-- Rule-based detection engine (39 Sigma-style YAML rules + a 2-pattern behavioral sequence engine, `pySigma`-validated) across Sysmon, Security, and PowerShell/Operational channels
+- Rule-based detection engine (41 Sigma-style YAML rules + a 2-pattern behavioral sequence engine, `pySigma`-validated) across Sysmon, Security, and PowerShell/Operational channels
 - Automatic MITRE ATT&CK technique mapping + severity scoring
 - Incident grouping, status workflow, and a backend audit trail
 - RAG pipeline (ChromaDB + LangChain + LLM) generating grounded, plain-English incident explanations and recommended responses
@@ -66,7 +66,7 @@ To (re)build the knowledge base the AI layer retrieves from, run `python ai/tool
 
 ## Status
 
-Backend, detection, AI/RAG and the frontend console are built and working end to end: EVTX upload creates real incidents, the explain and chat endpoints answer from the knowledge base with source attribution, and the console renders all of it from live API data. The backend test suite is 483 tests. Detection accuracy is tracked against a real-world EVTX corpus (`backend/scripts/run_detection_benchmark.py`), not just synthetic fixtures — currently 47/54 (87.0%) with 0 false positives; see `docs/PROJECT_GUIDE.md`.
+Backend, detection, AI/RAG and the frontend console are built and working end to end: EVTX upload creates real incidents, the explain and chat endpoints answer from the knowledge base with source attribution, and the console renders all of it from live API data. The backend test suite is 487 tests. Detection accuracy is tracked against a real-world EVTX corpus (`backend/scripts/run_detection_benchmark.py`), not just synthetic fixtures — currently 47/54 (87.0%) with 0 false positives; see `docs/PROJECT_GUIDE.md`.
 
 Deliberately **not** implemented, because nothing in the system could honestly back them: threat-intel feeds, a geographic attack map, host CPU/memory/disk telemetry, and user accounts. Where a design reference called for one of those, the UI shows a real equivalent instead — documented in the frontend phase notes.
 

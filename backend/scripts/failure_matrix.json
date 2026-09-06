@@ -65,18 +65,13 @@
     },
     "normalized_count": 55,
     "skipped_count": 0,
-    "covered_count": 15,
-    "uncovered_count": 40,
+    "covered_count": 23,
+    "uncovered_count": 32,
     "uncovered_breakdown": [
       {
         "channel": "Security",
         "event_id": 5136,
         "count": 22
-      },
-      {
-        "channel": "Security",
-        "event_id": 4719,
-        "count": 8
       },
       {
         "channel": "Security",
@@ -96,29 +91,34 @@
     ],
     "matched_rule_ids": [
       "3a7e9c14-6b2d-4f8a-9e1c-5d3a7b9c2f64",
+      "7a4e9c26-3d81-4f5e-9b02-6c8a1d3f5e72",
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
+      "Audit Policy Weakened (Success or Failure Auditing Removed)",
       "DCSync -- Directory Replication Rights Abused",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
       "T1003.006",
+      "T1685.001",
       "T1685.005"
     ],
-    "alerts_created": 4,
+    "alerts_created": 12,
     "incident_ids": [
       1,
-      2
+      2,
+      3
     ],
     "mitre_technique_ids": [
       "T1003.006",
+      "T1685.001",
       "T1685.005"
     ],
     "detected": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- DCSync -- Directory Replication Rights Abused, Security Audit Log Cleared",
+    "reason": "detected -- Audit Policy Weakened (Success or Failure Auditing Removed), DCSync -- Directory Replication Rights Abused, Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -1057,25 +1057,29 @@
     "uncovered_count": 0,
     "uncovered_breakdown": [],
     "matched_rule_ids": [
+      "1e6b8a34-9f27-4c60-a3d5-2b7e4f9c8d15",
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
+      "Remote Registry Access via winreg Named Pipe",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
+      "T1003.002",
       "T1685.005"
     ],
-    "alerts_created": 1,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1003.002",
       "T1685.005"
     ],
     "detected": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Security Audit Log Cleared",
+    "reason": "detected -- Remote Registry Access via winreg Named Pipe, Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -2285,25 +2289,29 @@
       }
     ],
     "matched_rule_ids": [
+      "1e6b8a34-9f27-4c60-a3d5-2b7e4f9c8d15",
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
+      "Remote Registry Access via winreg Named Pipe",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
+      "T1003.002",
       "T1685.005"
     ],
-    "alerts_created": 1,
+    "alerts_created": 3,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1003.002",
       "T1685.005"
     ],
     "detected": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Security Audit Log Cleared",
+    "reason": "detected -- Remote Registry Access via winreg Named Pipe, Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {

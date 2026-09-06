@@ -143,17 +143,25 @@ uncalibrated threshold.
 **Still genuinely blocked, zero real samples anywhere in the corpus**:
 4697, 4728, 4740. Unchanged from before this pass.
 
-**Two coincidental hits, worth stating plainly (not new, but re-verified
-after adding the new rules — they still only match on the unrelated
-1102 rule)**: `remote_sam_registry_access_via_backup_operator_priv.evtx`
-and `samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_
-securitylogs.evtx` both only match `security_audit_log_cleared.yml`
-(1102), not the technique their filenames imply — the former has no
-process-creation events at all (so `sam_registry_hive_dump.yml`'s
-`reg.exe`/`CommandLine` selection has nothing to match), and the latter's
-actual CVE technique needs behavioral correlation across
-4741/4742/4768/4769 timing, out of scope like the rest of multi-event
-correlation.
+**One of the two former "coincidental hit" files is now fixed —
+`remote_sam_registry_access_via_backup_operator_priv.evtx`** used to
+only match `security_audit_log_cleared.yml` (1102), not the technique
+its filename implies. Fixed 2026-09-06 by `remote_registry_access.yml`
+(see the follow-up-validation section above): the file's own 5145
+records show a connection to the `winreg` RPC pipe over `IPC$` — the
+real remote-registry-access signature — which this project had
+previously and wrongly assumed didn't exist here because there's no
+process-creation evidence for `sam_registry_hive_dump.yml`'s
+`reg.exe`/`CommandLine` selection to match. This file is now correctly
+attributed to T1003.002, not just the unrelated log-clear event.
+
+**The other, `samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_
+securitylogs.evtx`, is still a coincidental hit** — its actual CVE
+technique needs behavioral correlation across 4741/4742/4768/4769
+timing, out of scope like the rest of multi-event correlation. Its real
+4769 record (`ServiceName: 01566S-WIN16-IR$`, a bare computer-account
+name where a real SPN belongs) is a genuine anomaly but the only real
+4769 sample in the corpus — not building a rule on one sample.
 
 **UI overhaul: checked, no real gap found** — see the "Deferred beyond
 this pass" section's updated entry. Not pursued further.
@@ -243,15 +251,58 @@ directly instead of the old filename-exclusion-list hack
 (`REAL_WORLD_CLEAN_FILES`), which no longer exists. `pytest` re-run after
 the move: 482 passed, 1 skipped, unchanged.
 
+### Both flagged rule candidates built and verified — DONE (2026-09-06)
+
+- **`audit_policy_weakened.yml`** (Security 4719, `AuditPolicyChanges`
+  contains `%%8449`/`%%8451` -- success/failure auditing *removed*, not
+  just changed). Verified firing on the real
+  `ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx` record (8 real
+  occurrences, all correctly matched) and not on a benign look-alike
+  (auditing *added* instead: `%%8448`/`%%8450`). Originally tagged
+  `T1562.002` from general knowledge; the rule loader's own MITRE
+  validator caught it as **revoked** in this project's actual bundled
+  ATT&CK dataset (checked via `app.mitre.validator.validate_technique_id`,
+  not assumed) -- corrected to **T1685.001** ("Disable or Modify Windows
+  Event Log", tactic `defense-impairment`), confirmed valid and not
+  revoked/deprecated. A reminder that a technique ID recalled from
+  memory still needs checking against this project's own dataset, the
+  same discipline already applied to real event field values.
+- **`remote_registry_access.yml`** (Security 5145, `ShareName` contains
+  `IPC$` and `RelativeTargetName` is exactly `winreg`). Verified firing
+  on the real `remote_sam_registry_access_via_backup_operator_priv.evtx`
+  record and not on a benign look-alike (`srvsvc`, a far more common RPC
+  endpoint over the same share). Deliberately does **not** key on the
+  same capture's own `Users\PSAM`/`PSYSTEM`/`PSECURITY` hive-file names
+  (visible in later 5145 records in the same file, corroborating that
+  this capture really is a hive-dump attempt) -- those are one tool's
+  own file-naming convention, and building a rule around them would
+  overfit to a single sample; `winreg` is a fixed Windows RPC endpoint
+  name regardless of tool.
+- Both added to `CATEGORY_TO_EVENT_ID` (`audit_policy_weakened`,
+  `remote_registry_access` -- the latter deliberately shares event ID
+  5145 with the existing `admin_share_payload_write` category, since
+  each rule's own category governs its own scoping independently) and to
+  `tests/detection/test_rules_matrix.py` (fire + benign-look-alike
+  cases, rule count 39 → 41 everywhere it's asserted:
+  `test_rule_loader.py`, `test_ingest_flow.py`). Full backend suite: 486
+  passed, 1 skipped (was 482).
+- Benchmark re-run: **47/54 (87.0%) unchanged** -- both target files were
+  already counted as detected via the coincidental 1102 rule, so raw
+  recall doesn't move -- but **techniques credited went from 25 to 27**
+  (T1003.002, T1685.001 newly attributed), and
+  `remote_sam_registry_access_via_backup_operator_priv.evtx` is no
+  longer a "right file, wrong technique" case (see the updated note
+  above). False positives: still 0/8.
+
 **Still open, in explicit priority order for next session**:
-1. Decide on and, if approved, build the 2 new rule candidates above
-   (4719 audit-policy-weakened, 5145 winreg-remote-registry) --
-   real data already gathered, just needs the actual YAML + verification
-   + regression tests.
-2. Continue production hardening (auth/RBAC is explicitly out of scope;
+1. Continue production hardening (auth/RBAC is explicitly out of scope;
    rate limiting, upload validation limits, resource limits, secret
    management, observability, DB indexes/retention are not).
-3. 4697/4728/4740 remain genuinely blocked -- zero real samples anywhere.
+2. 4697/4728/4740 remain genuinely blocked -- zero real samples anywhere.
+3. `samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_
+   securitylogs.evtx` remains a coincidental-only hit -- needs multi-event
+   correlation (out of scope), or a second real 4769 sample before a
+   single-event rule on its anomalous `ServiceName` could be justified.
 
 ---
 
@@ -636,6 +687,13 @@ the 5 clean `noise_*.evtx` fixtures throughout:
   end, `sysmon_vm_capture.evtx` (0 FP, genuinely clean) -- **0 false
   positives across 8 clean fixtures** (5 synthetic Sysmon-only + 3 real:
   Security, PowerShell, Sysmon). 39 rules loaded, up from 33.
+- **2 more rules landed the next day** (`audit_policy_weakened.yml`,
+  `remote_registry_access.yml` -- see the "both flagged rule candidates"
+  entry above): **47/54 (87.0%) unchanged in raw recall** (both target
+  files already counted as detected via the coincidental 1102 rule) but
+  **techniques credited 25 → 27**, and one of the two former
+  "coincidental hit" files is now correctly attributed. Still 0 false
+  positives across all 8 clean fixtures. 41 rules loaded, up from 39.
 
 **Worth stating plainly, found while building the failure matrix**: 4 of
 the 26 "detected" hits (`discovery_bloodhound.evtx`,

@@ -271,6 +271,24 @@ SECURITY_RULE_CASES = [
         {"TaskContent": "<Task><Settings><Hidden>true</Hidden></Settings></Task>"},
         {"TaskContent": "<Task><Settings><Hidden>false</Hidden></Settings></Task>"},
     ),
+    (
+        "Audit Policy Weakened (Success or Failure Auditing Removed)",
+        4719,
+        {"AuditPolicyChanges": "%%8449, %%8451"},
+        # Benign look-alike: same event, but auditing was added, not
+        # removed -- routine policy tightening (e.g. a GPO enabling a new
+        # audit category), not defense evasion.
+        {"AuditPolicyChanges": "%%8448, %%8450"},
+    ),
+    (
+        "Remote Registry Access via winreg Named Pipe",
+        5145,
+        {"ShareName": "\\\\*\\IPC$", "RelativeTargetName": "winreg"},
+        # Benign look-alike: same admin share, a different (and far more
+        # common) RPC endpoint -- e.g. querying share enumeration, not
+        # touching the registry.
+        {"ShareName": "\\\\*\\IPC$", "RelativeTargetName": "srvsvc"},
+    ),
 ]
 
 # PowerShell/Operational-channel rules -- each declares `service:
@@ -322,8 +340,8 @@ def _event(event_id, event_data, channel="Microsoft-Windows-Sysmon/Operational")
     )
 
 
-def test_exactly_thirty_nine_rules_are_covered_by_this_matrix():
-    assert len(RULE_CASES) + len(SECURITY_RULE_CASES) + len(POWERSHELL_RULE_CASES) == 39
+def test_exactly_forty_one_rules_are_covered_by_this_matrix():
+    assert len(RULE_CASES) + len(SECURITY_RULE_CASES) + len(POWERSHELL_RULE_CASES) == 41
     rules = rule_loader.load_rules()
     covered_titles = (
         {title for title, *_ in RULE_CASES}

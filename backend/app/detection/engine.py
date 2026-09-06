@@ -102,6 +102,18 @@ CATEGORY_TO_EVENT_ID: dict[str, frozenset[int]] = {
     # LSASS dump via reflection, fake credential prompt, web download
     # cradle.
     "script_block_logging": frozenset({4104}),
+    # Security Event ID 4719 ("system audit policy was changed") -- scoped
+    # to the auditing-removed codes specifically (see
+    # audit_policy_weakened.yml), not any audit policy change.
+    "audit_policy_weakened": frozenset({4719}),
+    # Security Event ID 5145 again, same event as admin_share_payload_write
+    # above but a different real technique: connecting to the `winreg`
+    # RPC endpoint over IPC$ (remote registry access), not a file write
+    # onto C$/ADMIN$ (see remote_registry_access.yml). Two categories can
+    # safely share one event ID -- each rule's own category determines
+    # its own scoping, evaluate_event() never compares one rule's
+    # category against another's.
+    "remote_registry_access": frozenset({5145}),
 }
 
 _SUPPORTED_MODIFIERS = {None, "contains", "startswith", "endswith"}

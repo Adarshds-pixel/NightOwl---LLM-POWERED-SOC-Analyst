@@ -38,7 +38,7 @@ logsource:
   category: process_creation
 """
 
-EXPECTED_RULE_COUNT = 39
+EXPECTED_RULE_COUNT = 41
 EXPECTED_CATEGORIES = {
     "process_creation",
     "network_connection",
@@ -59,6 +59,8 @@ EXPECTED_CATEGORIES = {
     "computer_account_created",
     "scheduled_task_created_security",
     "script_block_logging",
+    "audit_policy_weakened",
+    "remote_registry_access",
 }
 
 
