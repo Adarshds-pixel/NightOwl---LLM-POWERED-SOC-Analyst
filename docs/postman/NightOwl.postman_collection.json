@@ -459,7 +459,7 @@
                 "explain"
               ]
             },
-            "description": "Needs live Postgres, a real incident_id, and a real LLM_API_KEY in backend .env (2 live Gemini calls per request -- mind the free-tier daily quota, see guide Section 17.3/Troubleshooting). Expected: HTTP 200 with explanation/recommended_response/sources[]."
+            "description": "Needs live Postgres, a real incident_id, and a real GROQ_API_KEY in backend .env (2 live Groq calls per request -- mind the free-tier daily quota, see guide Section 17.3/Troubleshooting). Expected: HTTP 200 with explanation/recommended_response/sources[]."
           },
           "response": []
         }
@@ -502,7 +502,7 @@
                 "chat"
               ]
             },
-            "description": "Needs live Postgres, a real incident_id, and a real LLM_API_KEY (or GROQ_API_KEY) in backend .env (1 live LLM call per request -- mind the free-tier daily quota, see guide Section 21). Each call persists both the user message and the assistant reply as chat_messages rows, so retrieval scoped to this incident's context sees prior turns on the next call. Expected: HTTP 200 with incident_id/role (\"assistant\")/content/sources[]."
+            "description": "Needs live Postgres, a real incident_id, and a real GROQ_API_KEY in backend .env (1 live LLM call per request -- mind the free-tier daily quota, see guide Section 21). Each call persists both the user message and the assistant reply as chat_messages rows, so retrieval scoped to this incident's context sees prior turns on the next call. Expected: HTTP 200 with incident_id/role (\"assistant\")/content/sources[]."
           },
           "response": []
         },

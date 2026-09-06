@@ -1,0 +1,52 @@
+title: Sensitive Domain Group Membership Change
+id: 4b6f2a1d-8e3c-4f5a-b0d7-2c9e6a1f4b83
+status: experimental
+description: >
+  Detects Windows Security Event IDs 4728 (a member was added to a
+  security-enabled global group) and 4756 (a member was added to a
+  security-enabled universal group) where the target group is one of
+  Windows' well-known, domain-independent privileged groups: Domain Admins
+  (RID -512), Schema Admins (-518), Enterprise Admins (-519), or Enterprise
+  Key Admins (-527). Scoped to the well-known RID suffix (independent of
+  the domain SID prefix, which differs per environment) rather than any
+  4728/4756, mirroring this project's existing
+  low_privilege_account_added_to_admins.yml rule's own use of well-known
+  SID suffixes. Verified against real content:
+  `ID4728-4756-Member added to sensitive domain groups.evtx` (4 records:
+  1x4728 TargetSid ending -512/"Domain Admins", 3x4756 TargetSid ending
+  -519/"Enterprise Admins", -527/"Enterprise Key Admins",
+  -518/"Schema Admins" -- same member added to all four). Deliberately
+  does NOT fire on two other real 4728 patterns this project has samples
+  for and considered building rules for: (1)
+  `ID4728-Massive account group membership change.evtx` (11x4728, same
+  actor adding the same member to 11 GENERIC, non-sensitive groups
+  Group01..Group11) -- a real signal, but a pure-volume one with no
+  benign-volume baseline to calibrate a threshold against, and only one
+  such sample exists (this project's own discipline is not to extend
+  sequence/threshold logic on fewer than 3 confirmed cases); and (2)
+  `ID4728-Member adding to a group by the same account.evtx` (1x4728,
+  MemberSid == SubjectUserSid, a self-add, but to a non-sensitive generic
+  group) -- self-add-to-own-group is a plausible independent indicator,
+  but this is the only real sample and it doesn't combine with a sensitive
+  target, so it's not built as its own rule here either. Both remain
+  documented, evidence-limited gaps rather than forced rules.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-06
+references:
+  - https://attack.mitre.org/techniques/T1098/007/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1098.007
+logsource:
+  category: sensitive_domain_group_membership_change
+  service: security
+detection:
+  selection:
+    TargetSid|endswith:
+      - '-512'
+      - '-518'
+      - '-519'
+      - '-527'
+  condition: selection
+level: critical

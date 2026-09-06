@@ -1,18 +1,30 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getIncident, type IncidentDetailResponse } from '../api'
 
 export function useIncidentDetail(id: number) {
   const [incident, setIncident] = useState<IncidentDetailResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Guards against an older, slower request landing after a newer one and
+  // overwriting it with stale data -- same pattern as useEvents.ts's
+  // requestId (rapid incident-id navigation, or refresh() called twice in
+  // quick succession, could otherwise let a superseded response win).
+  const requestId = useRef(0)
 
   const load = useCallback(() => {
+    const thisRequest = ++requestId.current
     setLoading(true)
     setError(null)
     getIncident(id)
-      .then(setIncident)
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false))
+      .then((result) => {
+        if (thisRequest === requestId.current) setIncident(result)
+      })
+      .catch((err: Error) => {
+        if (thisRequest === requestId.current) setError(err.message)
+      })
+      .finally(() => {
+        if (thisRequest === requestId.current) setLoading(false)
+      })
   }, [id])
 
   useEffect(() => {

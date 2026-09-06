@@ -160,12 +160,38 @@ CHAT_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
+# Bound on how much prior conversation is ever sent to the LLM or folded
+# into the chat cache key (see rag/cache.py) -- both must agree on the same
+# definition of "recent enough to matter", so this one constant/function is
+# the single source of truth for both. `list_messages()` (services/
+# chat_service.py) is deliberately left unbounded itself: it's also used by
+# the GET /chat history-listing endpoint, which should keep showing the
+# full conversation to the analyst even once the LLM only sees the tail of
+# it. A simple deterministic recency window (most recent N messages) is
+# used rather than a token-aware or summarization-based bound -- keeps
+# prompt growth bounded without an elaborate memory subsystem.
+MAX_CHAT_HISTORY_MESSAGES = 10
+
+
+def bound_chat_history(history: list[dict]) -> list[dict]:
+    """Keep only the most recent MAX_CHAT_HISTORY_MESSAGES turns (history is
+    oldest-first, so this is a plain tail slice, not a head slice)."""
+    if len(history) <= MAX_CHAT_HISTORY_MESSAGES:
+        return history
+    return history[-MAX_CHAT_HISTORY_MESSAGES:]
+
+
 def format_chat_history(history: list[dict]) -> str:
     """Render prior chat turns (each {"role": ..., "content": ...}, oldest
-    first) as plain "role: content" lines for the prompt."""
-    if not history:
+    first) as plain "role: content" lines for the prompt. Bounded to the
+    most recent MAX_CHAT_HISTORY_MESSAGES turns (see bound_chat_history) so
+    an old, long-running conversation can't grow the prompt indefinitely --
+    applied here, not in the caller, so every caller of this function gets
+    the bound for free rather than needing to remember to apply it."""
+    bounded = bound_chat_history(history)
+    if not bounded:
         return "(no prior messages -- this is the first question)"
-    return "\n".join(f"{turn['role']}: {turn['content']}" for turn in history)
+    return "\n".join(f"{turn['role']}: {turn['content']}" for turn in bounded)
 
 
 def build_chat_prompt(incident: dict, chunks: list[dict], history: list[dict], message: str) -> list[BaseMessage]:

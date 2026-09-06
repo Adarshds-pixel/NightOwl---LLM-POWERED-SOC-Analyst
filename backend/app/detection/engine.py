@@ -114,6 +114,19 @@ CATEGORY_TO_EVENT_ID: dict[str, frozenset[int]] = {
     # its own scoping, evaluate_event() never compares one rule's
     # category against another's.
     "remote_registry_access": frozenset({5145}),
+    # Security Event ID 4697 ("a service was installed in the system") --
+    # scoped to the kernel-driver-service-type pattern specifically (see
+    # kernel_driver_service_installed.yml), not blanket 4697 monitoring:
+    # no real benign-4697 sample exists in this project's corpus to bound
+    # a broader rule's false-positive rate against.
+    "kernel_driver_service_installed": frozenset({4697}),
+    # Security Event ID 4728 ("a member was added to a security-enabled
+    # global group") and 4756 (same for a universal group) -- scoped to
+    # well-known privileged-group RID suffixes (see
+    # sensitive_domain_group_membership_change.yml), not blanket
+    # group-membership monitoring. Deliberately does not cover volume-only
+    # or self-add patterns -- see the rule file's own description for why.
+    "sensitive_domain_group_membership_change": frozenset({4728, 4756}),
 }
 
 _SUPPORTED_MODIFIERS = {None, "contains", "startswith", "endswith"}
@@ -214,6 +227,17 @@ def _field_matches(event_value: object, rule_value: object, modifier: str | None
     if modifier not in _SUPPORTED_MODIFIERS:
         logger.warning("unsupported sigma modifier %r (v1 supports contains/startswith/endswith)", modifier)
         return False
+
+    # No current field is ever list/tuple-valued in practice (NormalizedEvent
+    # is all-scalar, event_data is dict[str, str | None] -- verified against
+    # every real fixture this project has, 2026-09-06), but stringifying a
+    # hypothetical list/tuple whole (`str(['a', 'b'])` -> `"['a', 'b']"`)
+    # would risk a `contains` match on repr artifacts like `[`/`'`/`,` rather
+    # than the collection's actual elements. Match element-wise instead --
+    # this is a defensive correctness fix for a currently-latent case, not a
+    # behavior change for the scalar case every existing rule/test exercises.
+    if isinstance(event_value, (list, tuple)):
+        return any(_field_matches(element, rule_value, modifier) for element in event_value)
 
     candidates = rule_value if isinstance(rule_value, list) else [rule_value]
     event_str = str(event_value).lower()

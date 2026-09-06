@@ -1416,6 +1416,301 @@
     "manual_review_needed": false
   },
   {
+    "name": "ID4688-4697 RDP hijack via service creation.evtx",
+    "behavior_hint": "ID4688-4697 RDP hijack via service creation",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 3,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4688": 1,
+      "4697": 1
+    },
+    "normalized_count": 3,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4688,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1685.005"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID4697-MSF payload deployed via service.evtx",
+    "behavior_hint": "ID4697-MSF payload deployed via service",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4697": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      7
+    ],
+    "classification_labels": [
+      "rule_too_narrow"
+    ],
+    "reason": "Real content read directly: ServiceType 0x00000010 (ordinary user-mode/own-process service), not the kernel-driver value (0x00000001) kernel_driver_service_installed.yml is scoped to. 4697 IS covered as an event id/category (the new rule maps it), so this is rule_too_narrow, not a coverage gap -- the rule was deliberately scoped to the one real invariant this project's 4 real 4697 samples actually share (only 1 of 4 is a kernel driver); ServiceName/ServiceFileName are fully attacker-chosen in all 4 samples and not safe to key a rule on, and no real benign-4697 sample exists anywhere in the corpus to bound a broader rule's false-positive rate against. Not pursued further this pass -- see the rule file's own description.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID4697-New service for Mimikatz.evtx",
+    "behavior_hint": "ID4697-New service for Mimikatz",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 2,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4697": 1
+    },
+    "normalized_count": 2,
+    "skipped_count": 0,
+    "covered_count": 2,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "7030683e-ef1f-4a43-8563-0e9ec2b6e559",
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Kernel-Mode Driver Installed as a Windows Service",
+      "Security Audit Log Cleared"
+    ],
+    "matched_technique_ids": [
+      "T1543.003",
+      "T1685.005"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1543.003",
+      "T1685.005"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Kernel-Mode Driver Installed as a Windows Service, Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID4728-4756-Member added to sensitive domain groups.evtx",
+    "behavior_hint": "ID4728-4756-Member added to sensitive domain groups",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 4,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4728": 1,
+      "4756": 3
+    },
+    "normalized_count": 4,
+    "skipped_count": 0,
+    "covered_count": 4,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "4b6f2a1d-8e3c-4f5a-b0d7-2c9e6a1f4b83"
+    ],
+    "matched_rule_titles": [
+      "Sensitive Domain Group Membership Change"
+    ],
+    "matched_technique_ids": [
+      "T1098.007"
+    ],
+    "alerts_created": 4,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1098.007"
+    ],
+    "detected": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Sensitive Domain Group Membership Change",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID4728-Massive account group membership change.evtx",
+    "behavior_hint": "ID4728-Massive account group membership change",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 11,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4728": 11
+    },
+    "normalized_count": 11,
+    "skipped_count": 0,
+    "covered_count": 11,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      7
+    ],
+    "classification_labels": [
+      "rule_too_narrow"
+    ],
+    "reason": "Real content read directly: 11x4728, same actor adding the same member to 11 GENERIC groups (Group01..Group11, non-privileged sequential RIDs) -- 4728 IS covered (the new rule maps it), so this is rule_too_narrow/requires_sequence, not a coverage gap. This file's real signal is pure VOLUME (11 adds by one subject in one capture), not any single group's identity -- structurally different from the sensitive-group pattern the new rule targets, and correctly does not match it (none of these 11 groups are sensitive). Building a volume/threshold rule here would mean calibrating against exactly one real sample with no benign-volume baseline -- the same overfitting risk this project's sequence engine discipline explicitly avoids (extend only on a 3rd real sequence-dependent miss, not speculatively). This is the 1st such sample seen. Not pursued this pass.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID4728-Member adding to a group by the same account.evtx",
+    "behavior_hint": "ID4728-Member adding to a group by the same account",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4728": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      7
+    ],
+    "classification_labels": [
+      "rule_too_narrow"
+    ],
+    "reason": "Real content read directly: 1x4728, MemberSid == SubjectUserSid (a self-add: the account added itself to a group) targeting Group02, a GENERIC non-sensitive group. 4728 IS covered, so this is rule_too_narrow, not a coverage gap. Self-add-to-own-group is a real, generalizable behavioral indicator (self-service privilege grab) independent of which group -- but this is the only real sample of it, and it happens to target a non-sensitive group, so it doesn't establish 'self-add is independently suspicious' with this project's usual rigor (a real population, not a 1-file case -- the same bar that kept the samaccount_spoofing file's anomalous ServiceName from becoming a rule). Flagged, not acted on, pending a second real sample.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID7045-4697-SMBexec service registration.evtx",
+    "behavior_hint": "ID7045-4697-SMBexec service registration",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 2,
+    "channels": [
+      "Security",
+      "System"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing",
+      "Service Control Manager"
+    ],
+    "event_id_counts": {
+      "4697": 1,
+      "7045": 1
+    },
+    "normalized_count": 2,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "System",
+        "event_id": 7045,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      7
+    ],
+    "classification_labels": [
+      "rule_too_narrow"
+    ],
+    "reason": "Real content read directly: this file's own 4697 record has ServiceType 0x00000010 (ordinary), so it doesn't match kernel_driver_service_installed.yml for the same reason as the MSF-payload file above (both 4697 and 7045 are now covered event ids/categories, so this is rule_too_narrow, not a coverage gap). This file's own 7045 (System channel, Service Control Manager) record was the only real System-channel sample anywhere in the corpus -- normalizer.py's CHANNEL_TOKEN_SUBSTRINGS gained a 'system' entry this pass so it's no longer silently misrouted through the Sysmon dispatch table, but no rule alerts on 7045 alone: a single real sample, 1:1-paired with this same file's own 4697, isn't enough to justify either a standalone 7045 rule (underfitting risk, same as raw 4697) or 4697+7045 correlation logic (would overfit to the one file that happens to have both). Parsed, normalized, and correctly reported as covered-but-not-matched -- not silently treated as unsupported.",
+    "manual_review_needed": false
+  },
+  {
     "name": "kerberos_pwd_spray_4771.evtx",
     "behavior_hint": "kerberos pwd spray 4771",
     "parsed_ok": true,

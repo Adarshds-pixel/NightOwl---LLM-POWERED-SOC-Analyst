@@ -26,20 +26,10 @@ class Settings(BaseSettings):
     # (another, unrelated Postgres process already owns 5432 on dev machines).
     database_url: str = "postgresql+psycopg2://nightowl:nightowl@localhost:5433/nightowl"
 
-    # LLM wiring (Pair 2, Day 7+) — Gemini free tier via langchain-google-genai.
-    llm_api_key: str = ""
-    # Alias that auto-tracks Google's current recommended free-tier Flash
-    # model rather than a pinned dated snapshot that could be deprecated
-    # mid-roadmap (e.g. the Gemini 2.5 family, retiring 2026-10-16) — see
-    # docs/decisions.md. Override via LLM_MODEL in .env to pin a version.
-    llm_model: str = "gemini-flash-latest"
-
-    # Which provider llm_client.py builds: "gemini" (default) or "groq".
-    # Added for the Day 10 hallucination spot-check, where Gemini's 20
-    # req/day free-tier cap can't reliably cover 10 explain() calls (20
-    # requests). Groq is also an explicitly allowed free-tier provider per
-    # the roadmap's Day 2 task. Gemini stays the project default.
-    llm_provider: str = "gemini"
+    # LLM wiring (Pair 2, Day 7+) — Groq, exclusively (see rag/llm_client.py's
+    # module docstring: this project previously also supported Gemini as an
+    # alternate provider, removed 2026-09-06 once its free tier proved
+    # structurally unreliable for this project's call volume).
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
 
@@ -63,9 +53,9 @@ class Settings(BaseSettings):
 
     # Shared-secret header auth (Day 13, Pair 1). Empty (default) = auth
     # disabled -- same "empty string = not configured" convention as
-    # llm_api_key/groq_api_key above, so local dev, Postman, and the
-    # existing test suite keep working with no header until an operator
-    # opts in by setting this in .env.
+    # groq_api_key above, so local dev, Postman, and the existing test
+    # suite keep working with no header until an operator opts in by
+    # setting this in .env.
     api_key: str = ""
 
     # In-memory token-bucket rate limiting (Day 13, Pair 1). Requests/minute

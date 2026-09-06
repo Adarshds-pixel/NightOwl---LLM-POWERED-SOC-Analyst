@@ -97,6 +97,36 @@ def test_ingest_rejects_oversized_file(api_client, monkeypatch):
     assert "too large" in response.json()["detail"]
 
 
+def test_ingest_accepts_a_file_exactly_at_the_size_limit(api_client, monkeypatch):
+    """Boundary check for the chunked-copy size enforcement (routes_ingest.py
+    streams the upload to its on-disk temp file in bounded chunks, checking
+    the running total against MAX_UPLOAD_BYTES as it goes, rather than
+    reading the whole body into memory first) -- exactly-at-the-limit must
+    still succeed, confirming the check is a strict `>`, not `>=`."""
+    monkeypatch.setattr("app.api.routes_ingest.MAX_UPLOAD_BYTES", 10)
+    monkeypatch.setattr(
+        "app.api.routes_ingest.read_records_as_dicts",
+        lambda path: iter([_record("1")]),
+    )
+    client, _ = api_client
+    response = client.post(
+        "/ingest",
+        files={"file": ("exact.evtx", b"x" * 10, "application/octet-stream")},
+    )
+    assert response.status_code == 200
+
+
+def test_ingest_rejects_a_file_one_byte_over_the_limit(api_client, monkeypatch):
+    monkeypatch.setattr("app.api.routes_ingest.MAX_UPLOAD_BYTES", 10)
+    client, _ = api_client
+    response = client.post(
+        "/ingest",
+        files={"file": ("over.evtx", b"x" * 11, "application/octet-stream")},
+    )
+    assert response.status_code == 413
+    assert "too large" in response.json()["detail"]
+
+
 def test_ingest_rejects_corrupted_evtx_bytes(api_client):
     client, _ = api_client
     # Under ~40 bytes, python-evtx fails to even read the file header and

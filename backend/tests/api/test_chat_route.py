@@ -186,7 +186,13 @@ def test_get_chat_history_404_when_incident_not_found(api_client):
     assert "999" in response.json()["detail"]
 
 
-def test_chat_repeated_message_served_from_cache(api_client, monkeypatch):
+def test_chat_identical_call_with_identical_state_is_served_from_cache(api_client, monkeypatch):
+    """Two requests with the *same* pre-call conversation state (same
+    incident, same message, same history) must hit the cache -- simulated
+    directly against cache.py/generate_chat_reply rather than via two real
+    POSTs, since every real POST persists new messages and so naturally
+    changes history between calls (see the test below, which covers that
+    real-world case instead)."""
     client, SessionLocal = api_client
     incident_id = _insert_incident(SessionLocal)
 
@@ -197,6 +203,10 @@ def test_chat_repeated_message_served_from_cache(api_client, monkeypatch):
         return ChatReplyResult(reply="It was a PowerShell execution.", chunks=SAMPLE_CHUNKS)
 
     monkeypatch.setattr("app.api.routes_chat.generate_chat_reply", fake_generate_chat_reply)
+    # Freeze list_messages() so both calls snapshot identical (empty)
+    # history, reproducing the "truly identical state" case a real client
+    # can't otherwise trigger through two sequential POSTs.
+    monkeypatch.setattr("app.api.routes_chat.list_messages", lambda db, incident_id: [])
 
     first = client.post(f"/incidents/{incident_id}/chat", json={"message": "What happened?"})
     second = client.post(f"/incidents/{incident_id}/chat", json={"message": "What happened?"})
@@ -206,7 +216,32 @@ def test_chat_repeated_message_served_from_cache(api_client, monkeypatch):
     assert first.json()["content"] == second.json()["content"] == "It was a PowerShell execution."
     assert call_count["n"] == 1
 
-    # Both turns still get persisted even though the second reply was cached.
+
+def test_chat_repeated_message_after_intervening_reply_is_not_served_from_cache(api_client, monkeypatch):
+    """The bug this closes: asking the same question twice is a realistic
+    sanity re-check, but the first exchange is persisted before the second
+    call's history is snapshotted -- so the second call's conversation
+    state has genuinely changed (it now includes the first Q&A) and must
+    NOT return the first call's stale cached reply."""
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+
+    replies = iter(["It was a PowerShell execution.", "Confirmed: still a PowerShell execution, per the same evidence."])
+
+    def fake_generate_chat_reply(incident, history, message):
+        return ChatReplyResult(reply=next(replies), chunks=SAMPLE_CHUNKS)
+
+    monkeypatch.setattr("app.api.routes_chat.generate_chat_reply", fake_generate_chat_reply)
+
+    first = client.post(f"/incidents/{incident_id}/chat", json={"message": "What happened?"})
+    second = client.post(f"/incidents/{incident_id}/chat", json={"message": "What happened?"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["content"] == "It was a PowerShell execution."
+    assert second.json()["content"] == "Confirmed: still a PowerShell execution, per the same evidence."
+
+    # Both turns are persisted regardless of cache behavior.
     with SessionLocal() as db:
         rows = db.query(ChatMessage).filter_by(incident_id=incident_id).order_by(ChatMessage.created_at).all()
     assert [r.role for r in rows] == ["user", "assistant", "user", "assistant"]

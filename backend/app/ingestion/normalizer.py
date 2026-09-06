@@ -70,15 +70,23 @@ def _extract_event_record_id(system: dict) -> int | None:
 # sample files, not assumed): Sysmon -> 'Microsoft-Windows-Sysmon/Operational'
 # (contains "sysmon"), Security -> 'Security' (contains "security"),
 # PowerShell -> 'Microsoft-Windows-PowerShell/Operational' (contains
-# "powershell", verified against 3 real 4104 samples, 2026-09-05). Every
-# call site that needs a channel-scoping decision (rule_loader.py, engine.py,
-# this module's own per-channel dispatch, event_service.py's SQL-level
-# coverage filter) must derive from this one table rather than re-hardcoding
-# a channel string comparison independently.
+# "powershell", verified against 3 real 4104 samples, 2026-09-05), System ->
+# 'System' (contains "system", verified against the real Event ID 7045
+# record in ID7045-4697-SMBexec service registration.evtx, 2026-09-06 --
+# before this entry, a 7045 event's channel canonicalized to None and
+# silently fell through to the Sysmon dispatch table in normalize_event()
+# below; System carries no dedicated dispatch table since its raw
+# EventData fields already land in event_data unconditionally, same as the
+# empty-but-present PowerShell dispatch table). Every call site that needs
+# a channel-scoping decision (rule_loader.py, engine.py, this module's own
+# per-channel dispatch, event_service.py's SQL-level coverage filter) must
+# derive from this one table rather than re-hardcoding a channel string
+# comparison independently.
 CHANNEL_TOKEN_SUBSTRINGS: dict[str, str] = {
     "sysmon": "sysmon",
     "security": "security",
     "powershell": "powershell",
+    "system": "system",
 }
 
 

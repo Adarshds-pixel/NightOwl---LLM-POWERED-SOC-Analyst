@@ -4,10 +4,11 @@ sentence-transformers>=3.0.0
 requests>=2.31.0
 pytest>=7.4.0
 
-# LLM wiring (Pair 2, Day 7+) — Gemini free tier via LangChain
+# LLM wiring (Pair 2, Day 7+) — Groq, exclusively (see app/rag/llm_client.py's
+# module docstring; this project previously also depended on
+# langchain-google-genai for an alternate Gemini provider, removed
+# 2026-09-06 once Gemini's free tier proved structurally unreliable).
 langchain-core>=0.3.0
-langchain-google-genai>=2.0.0
-# Alternate free-tier provider (Pair 2, Day 10) — see app/rag/llm_client.py
 langchain-groq>=0.2.0
 
 # Backend/API deps (Pair 1, Day 3+)

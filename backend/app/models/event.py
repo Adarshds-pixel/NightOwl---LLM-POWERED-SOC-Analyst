@@ -18,7 +18,14 @@ class Event(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     host: Mapped[str] = mapped_column(String(255))
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Indexed: the default sort/range-filter column for GET /events (see
+    # migration 707e52de18cf, which created `ix_events_timestamp` directly
+    # via op.create_index -- this `index=True` was missing from the model
+    # itself, so a schema built via Base.metadata.create_all() (every
+    # in-memory SQLite test DB) silently lacked the index even though real
+    # Postgres has had it since that migration. Declaring it here keeps the
+    # model and the real schema in agreement.
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     event_id: Mapped[int]
     # Raw `Event.System.Channel` (e.g. "Microsoft-Windows-Sysmon/Operational",
     # "Security"). A queryable column, not just part of raw_json, because

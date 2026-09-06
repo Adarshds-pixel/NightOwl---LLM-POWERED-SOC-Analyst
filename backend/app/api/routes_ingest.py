@@ -148,31 +148,51 @@ def ingest_evtx(
         )
 
     # Fast path: Starlette already knows the size once the upload is fully
-    # received, so this avoids our own .read() building a second in-memory
-    # copy of a huge file just to measure it.
+    # received, so this avoids reading anything just to measure it.
     if file.size is not None and file.size > MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
             detail=f"file too large: {file.size} bytes exceeds the {MAX_UPLOAD_BYTES}-byte limit",
         )
 
-    content = file.file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="uploaded file is empty")
-    # Fallback for when Starlette didn't populate `file.size` (e.g. certain
-    # multipart/test-client shapes) -- same limit, checked after the read
-    # since there was no way to know sooner.
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"file too large: {len(content)} bytes exceeds the {MAX_UPLOAD_BYTES}-byte limit",
-        )
+    # Note on what this route can and can't protect against: Starlette's
+    # multipart parser (FastAPI's `File(...)` dependency) has already fully
+    # received and spooled the entire upload to a SpooledTemporaryFile
+    # before this route function body even runs -- there is no hook in the
+    # installed FastAPI/Starlette version to cap size *during* multipart
+    # parsing without hand-rolling a custom parser (out of scope -- see
+    # MAX_UPLOAD_BYTES's own comment; this is a documented limitation, not
+    # an oversight). What this code *can* control is what happens after
+    # that: read_records_as_dicts() requires a real file on disk (python-
+    # evtx needs random-access seeking, confirmed via evtx_reader.py --
+    # in-memory bytes/a stream won't do), so the already-spooled upload
+    # still has to become a second on-disk file for the parser to read.
+    # The previous version of this code read the *entire* spooled upload
+    # into one contiguous Python `bytes` object first (`file.file.read()`)
+    # and only then wrote that to the new temp file -- a full, avoidable
+    # third in-memory copy of the whole upload with no purpose beyond
+    # staging. Copying directly from the already-spooled file object to the
+    # new temp file in bounded chunks avoids ever holding the full upload
+    # as one Python object, and lets the size limit be enforced as bytes
+    # are copied rather than only after a full second copy already exists.
+    _COPY_CHUNK_BYTES = 1024 * 1024  # 1MB
 
     tmp_path: Path | None = None
     try:
+        total_bytes = 0
         with tempfile.NamedTemporaryFile(suffix=ALLOWED_EXTENSION, delete=False) as tmp:
-            tmp.write(content)
             tmp_path = Path(tmp.name)
+            while chunk := file.file.read(_COPY_CHUNK_BYTES):
+                total_bytes += len(chunk)
+                if total_bytes > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"file too large: exceeds the {MAX_UPLOAD_BYTES}-byte limit",
+                    )
+                tmp.write(chunk)
+
+        if total_bytes == 0:
+            raise HTTPException(status_code=400, detail="uploaded file is empty")
 
         try:
             records = list(read_records_as_dicts(tmp_path))

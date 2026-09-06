@@ -50,6 +50,12 @@ function IncidentDetailPage() {
   const [tab, setTab] = useState<TabValue>('overview')
   const [selectedAlert, setSelectedAlert] = useState<AlertInfo | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
+  // Bumped on every status change so AuditTrail (which owns its own
+  // useIncidentAudit instance, not lifted up here) knows to refetch even
+  // when a status change happens while the Audit tab is already mounted --
+  // otherwise the trail only ever refetches on tab remount and misses the
+  // status_change event just recorded.
+  const [auditRefreshTick, setAuditRefreshTick] = useState(0)
 
   // Picked up once from the dashboard assistant card, then stripped from
   // history so a refresh or back-nav cannot re-trigger the auto-send.
@@ -67,6 +73,7 @@ function IncidentDetailPage() {
   function handleStatusChanged() {
     refresh()
     refreshList()
+    setAuditRefreshTick((tick) => tick + 1)
   }
 
   if (loading) return <LoadingState label="Loading incident" className="py-24" />
@@ -268,7 +275,7 @@ function IncidentDetailPage() {
 
       {tab === 'chat' && <ChatPanel incidentId={incident.id} initialMessage={prefillChatMessage} />}
 
-      {tab === 'audit' && <AuditTrail incidentId={incident.id} />}
+      {tab === 'audit' && <AuditTrail incidentId={incident.id} refreshSignal={auditRefreshTick} />}
 
       <AlertEvidenceDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} />
       <EventDetailDrawer eventId={selectedEventId} onClose={() => setSelectedEventId(null)} />

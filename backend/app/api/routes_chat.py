@@ -80,11 +80,11 @@ def chat_with_incident(
 
     add_message(db, incident_id, role="user", content=payload.message)
 
-    result = cache.get_chat_reply(incident_id, payload.message) if settings.response_cache_enabled else None
+    result = cache.get_chat_reply(incident_id, payload.message, history) if settings.response_cache_enabled else None
     if result is None:
         result = generate_chat_reply(build_incident_evidence(db, incident), history, payload.message)
         if settings.response_cache_enabled:
-            cache.set_chat_reply(incident_id, payload.message, result)
+            cache.set_chat_reply(incident_id, payload.message, history, result)
 
     reply = add_message(db, incident_id, role="assistant", content=result.reply)
 

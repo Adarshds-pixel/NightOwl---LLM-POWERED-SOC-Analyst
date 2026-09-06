@@ -240,6 +240,7 @@ def test_normalize_event_channel_absent_leaves_none():
         ("Microsoft-Windows-Sysmon/Operational", "sysmon"),
         ("Security", "security"),
         ("SECURITY", "security"),  # case-insensitive
+        ("System", "system"),  # real Service Control Manager (Event ID 7045) channel
         ("Application", None),
         (None, None),
         ("", None),

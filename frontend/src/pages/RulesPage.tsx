@@ -22,7 +22,7 @@ import {
 } from '../components/ui'
 import { useRules } from '../hooks/useRules'
 import { formatRelativeTime } from '../lib/format'
-import { CATEGORICAL } from '../lib/tokens'
+import { CATEGORICAL, CATEGORICAL_OTHER } from '../lib/tokens'
 import { topBy } from '../lib/aggregations'
 
 const SEVERITY_LEVELS: Severity[] = ['critical', 'high', 'medium', 'low']
@@ -57,11 +57,27 @@ function RulesPage() {
 
   const selected = rules.find((rule) => rule.rule_id === selectedId) ?? filtered[0] ?? null
   const triggeredToday = rules.reduce((sum, rule) => sum + rule.matches_24h, 0)
-  const categoryCounts = topBy(rules, (rule) => rule.category, 6).map((entry, index) => ({
-    name: entry.label.replace(/_/g, ' '),
-    value: entry.count,
-    color: CATEGORICAL[index % CATEGORICAL.length],
-  }))
+  // Top 6 + a folded "Other" slice, same convention as
+  // attackVectorBreakdown()/MitrePage.tsx/ReportsPage.tsx -- a bare
+  // topBy(..., 6) here previously dropped every category past the 6th
+  // with no indication anything was cut. The rule set has 21 distinct
+  // categories (as of this fix), so a "Rules" donut with no fold was
+  // silently hiding ~15 of them. topBy() itself is intentionally left
+  // unmodified: its other 2 call sites (AlertsPage's "most active rules",
+  // LogsPage's "Top hosts") are genuine top-N ranking lists, not
+  // total-implying donuts, and adding an unconditional "Other" bucket
+  // there would inject an unwanted row into a plain ranked list.
+  const allCategoryCounts = topBy(rules, (rule) => rule.category, Infinity)
+  const topCategoryCounts = allCategoryCounts.slice(0, 6)
+  const otherCategoryCount = allCategoryCounts.slice(6).reduce((sum, entry) => sum + entry.count, 0)
+  const categoryCounts = [
+    ...topCategoryCounts.map((entry, index) => ({
+      name: entry.label.replace(/_/g, ' '),
+      value: entry.count,
+      color: CATEGORICAL[index % CATEGORICAL.length],
+    })),
+    ...(otherCategoryCount > 0 ? [{ name: 'Other', value: otherCategoryCount, color: CATEGORICAL_OTHER }] : []),
+  ]
 
   const columns: Column<RuleInfo>[] = [
     {

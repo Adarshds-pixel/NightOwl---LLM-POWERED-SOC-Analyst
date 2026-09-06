@@ -289,6 +289,24 @@ SECURITY_RULE_CASES = [
         # touching the registry.
         {"ShareName": "\\\\*\\IPC$", "RelativeTargetName": "srvsvc"},
     ),
+    (
+        "Kernel-Mode Driver Installed as a Windows Service",
+        4697,
+        {"ServiceType": "0x00000001"},
+        # Benign look-alike: real value from the other 3 real 4697 samples
+        # in this project's corpus (ordinary user-mode/own-process
+        # services) -- not invented, drawn directly from the RDP-hijack,
+        # Meterpreter-stager, and SMBexec fixtures.
+        {"ServiceType": "0x00000010"},
+    ),
+    (
+        "Sensitive Domain Group Membership Change",
+        4728,
+        {"TargetSid": "S-1-5-21-4230534742-2542757381-3142984815-512"},
+        # Benign look-alike: real value from the 11-generic-group fixture
+        # (Group02, non-sensitive RID) -- not invented.
+        {"TargetSid": "S-1-5-21-4230534742-2542757381-3142984815-1135"},
+    ),
 ]
 
 # PowerShell/Operational-channel rules -- each declares `service:
@@ -340,8 +358,8 @@ def _event(event_id, event_data, channel="Microsoft-Windows-Sysmon/Operational")
     )
 
 
-def test_exactly_forty_one_rules_are_covered_by_this_matrix():
-    assert len(RULE_CASES) + len(SECURITY_RULE_CASES) + len(POWERSHELL_RULE_CASES) == 41
+def test_exactly_forty_three_rules_are_covered_by_this_matrix():
+    assert len(RULE_CASES) + len(SECURITY_RULE_CASES) + len(POWERSHELL_RULE_CASES) == 43
     rules = rule_loader.load_rules()
     covered_titles = (
         {title for title, *_ in RULE_CASES}
@@ -419,6 +437,64 @@ def test_powershell_rule_does_not_fire_on_benign_look_alike(title, event_id, mat
     matches = evaluate_event(event, rules)
 
     assert not any(m.title == title for m in matches), f"expected {title!r} NOT to fire on benign data"
+
+
+def test_kernel_driver_service_rule_uses_exact_match_not_contains():
+    """The rule matches ServiceType by exact equality (no `|contains`
+    modifier). Confirm a different, unequal-length-would-not-help-anyway
+    hex value that is NOT the kernel-driver ServiceType does not fire --
+    e.g. a hypothetical combined/different flag value -- and that the
+    match is still case-insensitive (engine.py lowercases both sides
+    regardless of modifier), matching real uppercase-hex EVTX exports."""
+    rules = rule_loader.load_rules()
+
+    non_matching = _event(4697, {"ServiceType": "0x00000011"}, channel="Security")
+    assert not any(
+        m.title == "Kernel-Mode Driver Installed as a Windows Service" for m in evaluate_event(non_matching, rules)
+    )
+
+    uppercase_match = _event(4697, {"ServiceType": "0X00000001"}, channel="Security")
+    assert any(
+        m.title == "Kernel-Mode Driver Installed as a Windows Service" for m in evaluate_event(uppercase_match, rules)
+    )
+
+
+def test_sensitive_domain_group_rule_also_fires_on_4756_universal_group_shape():
+    """The rule's category (sensitive_domain_group_membership_change)
+    covers both 4728 (global group) and 4756 (universal group) -- confirm
+    the second event ID, not just the one exercised by
+    SECURITY_RULE_CASES, also fires for a sensitive target. Real value:
+    Enterprise Admins, RID -519, from
+    ID4728-4756-Member added to sensitive domain groups.evtx."""
+    rules = rule_loader.load_rules()
+    event = _event(
+        4756,
+        {"TargetSid": "S-1-5-21-4230534742-2542757381-3142984815-519"},
+        channel="Security",
+    )
+
+    matches = evaluate_event(event, rules)
+
+    assert any(m.title == "Sensitive Domain Group Membership Change" for m in matches)
+
+
+def test_sensitive_domain_group_rule_rid_suffix_anchors_on_the_delimiter():
+    """`endswith` must anchor on the literal '-' RID delimiter, not just
+    the trailing digits -- a RID like -1512 must not false-match the -512
+    (Domain Admins) selection value just because it ends in the digits
+    "512". Confirms this holds by construction rather than by coincidence
+    of the current real sample set (none of which contains a RID shaped
+    like this)."""
+    rules = rule_loader.load_rules()
+    event = _event(
+        4728,
+        {"TargetSid": "S-1-5-21-4230534742-2542757381-3142984815-1512"},
+        channel="Security",
+    )
+
+    matches = evaluate_event(event, rules)
+
+    assert not any(m.title == "Sensitive Domain Group Membership Change" for m in matches)
 
 
 def test_sensitive_enumeration_rule_also_fires_on_4798_user_membership_shape():

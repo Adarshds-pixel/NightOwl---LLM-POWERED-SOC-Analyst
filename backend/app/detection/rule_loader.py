@@ -162,6 +162,49 @@ def _parse_tags(tags: object) -> tuple[str | None, list[str]]:
     return technique_id, tactics
 
 
+def _validate_modifiers(path: Path, rule_id: str, detections: dict[str, object]) -> None:
+    """Rejects a rule at load time if any selection field uses a modifier
+    chain engine.py's `_field_matches` can never evaluate (v1 supports only
+    a single trailing `|contains`/`|startswith`/`|endswith`, or no modifier
+    at all -- see engine.py's own module docstring). Without this check, a
+    rule like `field|contains|all: value` loads successfully with zero
+    warning, and then silently never matches anything, forever, at
+    evaluation time (only a repeated logger.warning, easy to miss in
+    practice) -- a rule that looks valid but can never fire. Unlike the
+    warn-only category/channel/MITRE-technique checks above, this is a
+    hard rejection (RuleLoadError, matching the malformed-YAML precedent
+    just above it in _load_one): a bad modifier isn't untrustworthy
+    metadata on an otherwise-working rule, it makes the *entire selection*
+    permanently unable to fire, so loading such a rule anyway would
+    silently mean "not actually detecting," not "detecting with weaker
+    provenance."
+    """
+    # Deferred import: engine.py imports LoadedRule from this module (same
+    # reason _validate_category's deferred import exists).
+    from app.detection.engine import _SUPPORTED_MODIFIERS
+
+    def _check(selection_body: object) -> None:
+        if isinstance(selection_body, list):
+            for item in selection_body:
+                _check(item)
+            return
+        if not isinstance(selection_body, dict):
+            return
+        for key in selection_body:
+            if not isinstance(key, str):
+                continue
+            field, _, modifier = key.partition("|")
+            modifier = modifier or None
+            if modifier not in _SUPPORTED_MODIFIERS:
+                raise RuleLoadError(
+                    f"{path}: rule {rule_id!r} field {field!r}: unsupported modifier {modifier!r} "
+                    "(v1 supports a single trailing |contains, |startswith, |endswith, or none)"
+                )
+
+    for selection_body in detections.values():
+        _check(selection_body)
+
+
 def _validate_with_pysigma(text: str, path: Path) -> SigmaRule:
     try:
         return SigmaRule.from_yaml(text)
@@ -192,6 +235,9 @@ def _load_one(path: Path) -> LoadedRule:
     if not detections:
         raise RuleLoadError(f"{path}: rule has no selections under 'detection'")
 
+    rule_id = str(sigma_rule.id) if sigma_rule.id else path.stem
+    _validate_modifiers(path, rule_id, detections)
+
     logsource = raw.get("logsource") or {}
     technique_id, tactics = _parse_tags(raw.get("tags"))
     _validate_technique(path, technique_id)
@@ -199,7 +245,7 @@ def _load_one(path: Path) -> LoadedRule:
     channel = _parse_channel(path, logsource.get("service"))
 
     return LoadedRule(
-        rule_id=str(sigma_rule.id) if sigma_rule.id else path.stem,
+        rule_id=rule_id,
         title=sigma_rule.title,
         level=sigma_rule.level.name.lower() if sigma_rule.level else "unknown",
         category=logsource.get("category"),

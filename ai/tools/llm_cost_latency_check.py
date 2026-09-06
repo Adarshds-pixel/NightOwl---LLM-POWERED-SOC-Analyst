@@ -15,14 +15,13 @@ directly) and a real LLM provider call via generate_with_metrics().
 Measures 5 incidents (a mix of playbook-covered and playbook-gap
 techniques per docs/research/hallucination-eval.md finding #3) x 2 calls
 each (draft + critique, mirroring rag/explain_service.generate_explanation's
-real shape) = 10 requests, half of Gemini's 20 req/day free-tier cap.
+real shape) = 10 requests -- originally sized against Gemini's 20 req/day
+free-tier cap back when Gemini was still a supported provider; NightOwl is
+Groq-only now (see rag/llm_client.py's module docstring), so this ceiling
+is no longer a hard constraint, just the number this tool has always used.
 
-**Provider note:** run against **Groq** if available (`LLM_PROVIDER=groq`
-in .env) to avoid competing with Gemini's tight 20 req/day cap for other
-manual testing -- same reasoning as the Day 10 hallucination spot-check.
-
-Run for real from the repository root (requires a real LLM key -- see
-.env's LLM_PROVIDER/LLM_API_KEY/GROQ_API_KEY -- no Postgres/Docker needed):
+Run for real from the repository root (requires a real Groq key -- see
+.env's GROQ_API_KEY -- no Postgres/Docker needed):
     ./backend/venv/Scripts/python.exe ai/tools/llm_cost_latency_check.py
 
 Writes full per-call data to ai/tools/llm_cost_latency_output.json for

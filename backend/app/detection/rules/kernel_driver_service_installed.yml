@@ -1,0 +1,47 @@
+title: Kernel-Mode Driver Installed as a Windows Service
+id: 7030683e-ef1f-4a43-8563-0e9ec2b6e559
+status: experimental
+description: >
+  Detects Windows Security Event ID 4697 (a service was installed on the
+  system) where ServiceType is 0x00000001 (SERVICE_KERNEL_DRIVER) --
+  installing a kernel-mode driver "as a service" is a well-known EDR-bypass
+  / rootkit-loading vector (see e.g. Mimikatz's own mimidrv.sys), distinct
+  from the far more common 0x00000010 (SERVICE_WIN32_OWN_PROCESS) ordinary
+  user-mode services. Scoped to this one ServiceType value rather than any
+  4697: of the 4 real 4697 samples this project has (RDP-hijack cmd.exe
+  service, a Meterpreter PowerShell-stager service, this Mimikatz driver,
+  and an SMBexec service), only the driver sample has any invariant this
+  project could verify without a real benign-4697 corpus to bound a
+  broader rule's false-positive rate against (none exists anywhere in this
+  project's fixture corpus) -- ServiceAccount is LocalSystem in all 4
+  (too common to discriminate alone), and ServiceName/ServiceFileName are
+  fully attacker-chosen in every sample (not safe to hardcode). A broader
+  LOLBin-service-command-line rule was considered and explicitly rejected
+  for the same reason. Verified against real content:
+  `ID4697-New service for Mimikatz.evtx` (1 record, ServiceName `mimidrv`,
+  ServiceFileName `C:\TOOLS\Security_tool\Mimikatz-fev-2020\mimidrv.sys`,
+  ServiceType `0x00000001`) -- and verified NOT to fire on the other 3 real
+  4697 records (all ServiceType `0x00000010`).
+  Uses a plain equality match (no `|contains`), not because `contains`
+  was found to misfire on the real data (checked directly: both values are
+  fixed-width 10-character hex strings, so `contains` reduces to exact
+  equality here and does not false-match `0x00000010` against
+  `0x00000001`) but because equality is the semantically correct operator
+  for a fixed-format bitmask field, and does not depend on every future
+  record continuing to share that same string width.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-06
+references:
+  - https://attack.mitre.org/techniques/T1543/003/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1543.003
+logsource:
+  category: kernel_driver_service_installed
+  service: security
+detection:
+  selection:
+    ServiceType: '0x00000001'
+  condition: selection
+level: high

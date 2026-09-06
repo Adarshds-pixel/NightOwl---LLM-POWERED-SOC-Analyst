@@ -177,6 +177,91 @@ KNOWN_MISS_CLASSIFICATION: dict[str, dict[str, object]] = {
             "sample is ever added."
         ),
     },
+    # -- 2026-09-06 pass: 7 new real-world fixtures added for 4697/4728/4756/
+    # 7045 (previously zero real samples anywhere in the corpus). Two new
+    # rules landed (kernel_driver_service_installed.yml,
+    # sensitive_domain_group_membership_change.yml) -- both deliberately
+    # narrow, evidence-bounded rules, not blanket-event-ID rules, so most
+    # of these new fixtures remain correctly, honestly uncovered. The 5th
+    # new fixture (ID4728-4756-Member added to sensitive domain groups.evtx)
+    # is NOT in this dict -- it correctly flips to a real HIT via the new
+    # sensitive-group rule.
+    "ID4697-MSF payload deployed via service.evtx": {
+        "categories": [7],
+        "reason": (
+            "Real content read directly: ServiceType 0x00000010 (ordinary "
+            "user-mode/own-process service), not the kernel-driver value "
+            "(0x00000001) kernel_driver_service_installed.yml is scoped to. "
+            "4697 IS covered as an event id/category (the new rule maps it), "
+            "so this is rule_too_narrow, not a coverage gap -- the rule was "
+            "deliberately scoped to the one real invariant this project's 4 "
+            "real 4697 samples actually share (only 1 of 4 is a kernel "
+            "driver); ServiceName/ServiceFileName are fully attacker-chosen "
+            "in all 4 samples and not safe to key a rule on, and no real "
+            "benign-4697 sample exists anywhere in the corpus to bound a "
+            "broader rule's false-positive rate against. Not pursued further "
+            "this pass -- see the rule file's own description."
+        ),
+    },
+    "ID4728-Massive account group membership change.evtx": {
+        "categories": [7],
+        "reason": (
+            "Real content read directly: 11x4728, same actor adding the same "
+            "member to 11 GENERIC groups (Group01..Group11, non-privileged "
+            "sequential RIDs) -- 4728 IS covered (the new rule maps it), so "
+            "this is rule_too_narrow/requires_sequence, not a coverage gap. "
+            "This file's real signal is pure VOLUME (11 adds by one subject "
+            "in one capture), not any single group's identity -- structurally "
+            "different from the sensitive-group pattern the new rule "
+            "targets, and correctly does not match it (none of these 11 "
+            "groups are sensitive). Building a volume/threshold rule here "
+            "would mean calibrating against exactly one real sample with no "
+            "benign-volume baseline -- the same overfitting risk this "
+            "project's sequence engine discipline explicitly avoids (extend "
+            "only on a 3rd real sequence-dependent miss, not speculatively). "
+            "This is the 1st such sample seen. Not pursued this pass."
+        ),
+    },
+    "ID4728-Member adding to a group by the same account.evtx": {
+        "categories": [7],
+        "reason": (
+            "Real content read directly: 1x4728, MemberSid == SubjectUserSid "
+            "(a self-add: the account added itself to a group) targeting "
+            "Group02, a GENERIC non-sensitive group. 4728 IS covered, so "
+            "this is rule_too_narrow, not a coverage gap. Self-add-to-own-"
+            "group is a real, generalizable behavioral indicator (self-"
+            "service privilege grab) independent of which group -- but this "
+            "is the only real sample of it, and it happens to target a "
+            "non-sensitive group, so it doesn't establish 'self-add is "
+            "independently suspicious' with this project's usual rigor (a "
+            "real population, not a 1-file case -- the same bar that kept "
+            "the samaccount_spoofing file's anomalous ServiceName from "
+            "becoming a rule). Flagged, not acted on, pending a second real "
+            "sample."
+        ),
+    },
+    "ID7045-4697-SMBexec service registration.evtx": {
+        "categories": [7],
+        "reason": (
+            "Real content read directly: this file's own 4697 record has "
+            "ServiceType 0x00000010 (ordinary), so it doesn't match "
+            "kernel_driver_service_installed.yml for the same reason as the "
+            "MSF-payload file above (both 4697 and 7045 are now covered "
+            "event ids/categories, so this is rule_too_narrow, not a "
+            "coverage gap). This file's own 7045 (System channel, Service "
+            "Control Manager) record was the only real System-channel "
+            "sample anywhere in the corpus -- normalizer.py's "
+            "CHANNEL_TOKEN_SUBSTRINGS gained a 'system' entry this pass so "
+            "it's no longer silently misrouted through the Sysmon dispatch "
+            "table, but no rule alerts on 7045 alone: a single real sample, "
+            "1:1-paired with this same file's own 4697, isn't enough to "
+            "justify either a standalone 7045 rule (underfitting risk, same "
+            "as raw 4697) or 4697+7045 correlation logic (would overfit to "
+            "the one file that happens to have both). Parsed, normalized, "
+            "and correctly reported as covered-but-not-matched -- not "
+            "silently treated as unsupported."
+        ),
+    },
 }
 
 

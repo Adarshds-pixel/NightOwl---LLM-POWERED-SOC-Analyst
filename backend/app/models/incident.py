@@ -7,7 +7,7 @@ a dialect-specific type.
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Integer, String
+from sqlalchemy import JSON, DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -30,3 +30,14 @@ class Incident(Base):
     # (Day 9) -- stored directly here rather than derived by joining
     # through alerts->events on every grouping lookup.
     host: Mapped[str] = mapped_column(String(255))
+
+    # incident_service.find_or_create_incident() runs one SELECT per rule/
+    # sequence match during ingest, filtered on exactly these 3 columns
+    # (host, status, created_at within the 1h grouping window) -- none were
+    # indexed before this (verified: absent from every migration touching
+    # `incidents`, not just this model). At this project's current fixture
+    # scale that N-queries-per-ingest pattern is measured as acceptable on
+    # its own (see ingest_service.py's comment above the per-match loop),
+    # but each of those N queries was a full sequential scan; this index is
+    # the actual fix for that cost, not a restructure of the query count.
+    __table_args__ = (Index("ix_incidents_host_status_created_at", "host", "status", "created_at"),)

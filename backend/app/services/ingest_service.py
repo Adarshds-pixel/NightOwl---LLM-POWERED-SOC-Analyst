@@ -245,6 +245,27 @@ def ingest_records(
             rule_matches += 1
             if match.title not in matched_titles:
                 matched_titles.append(match.title)
+            # find_or_create_incident() runs one SELECT (+ a flush on
+            # create) per call, i.e. once per (event, matching rule) pair --
+            # no in-call cache short-circuits repeat lookups for the same
+            # host. Deliberately not "fixed" by adding one: a naive
+            # host-only cache would be wrong, not just slow -- a single
+            # ingest call CAN legitimately produce multiple separate
+            # incidents for the same host (matched_at=None, events spanning
+            # more than the 1h grouping window -- see
+            # test_matched_at_none_uses_each_event_own_timestamp in
+            # tests/services/test_ingest_service.py, which exercises exactly
+            # this). Replicating that window-overlap logic correctly
+            # in-memory is real complexity for a benefit that only matters
+            # at match volumes this project's real fixture corpus doesn't
+            # reach today (at most a few dozen matches per file). The actual
+            # fix for this pattern's cost, not its count, is the composite
+            # index on Incident.host/status/created_at (models/incident.py)
+            # -- each of these N queries was a full sequential scan before
+            # that existed. Revisit a real in-call cache only if a future
+            # profiling run shows match volume growing enough for the count
+            # itself to matter, and build it against the window semantics
+            # above, not host alone.
             incident = find_or_create_incident(db, normalized_event.host, stamp, match)
             if incident.id not in incident_ids:
                 incident_ids.append(incident.id)

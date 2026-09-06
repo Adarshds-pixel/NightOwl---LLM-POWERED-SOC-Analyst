@@ -201,6 +201,54 @@ def test_format_chat_history_renders_role_and_content_lines():
     assert "assistant: PowerShell was used for execution." in rendered
 
 
+def test_format_chat_history_bounds_a_long_conversation_to_the_most_recent_turns():
+    """Prevents unbounded prompt growth (see bound_chat_history/
+    MAX_CHAT_HISTORY_MESSAGES) -- a long-running conversation must not
+    grow the rendered history indefinitely, and the turns kept must be the
+    most RECENT ones (history is oldest-first), not the oldest."""
+    from app.rag.prompts import MAX_CHAT_HISTORY_MESSAGES
+
+    # Distinct, non-overlapping content per turn -- avoids a numeric-suffix
+    # substring collision (e.g. "turn-1" is a substring of "turn-10").
+    words = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet",
+             "kilo", "lima", "mike", "november", "oscar", "papa", "quebec", "romeo", "sierra", "tango"]
+    long_history = [
+        {"role": "user", "content": f"marker-{words[i % len(words)]}-{i}"}
+        for i in range(MAX_CHAT_HISTORY_MESSAGES + 5)
+    ]
+
+    rendered = format_chat_history(long_history)
+
+    for i in range(5):  # the 5 oldest turns must be dropped
+        assert f"marker-{words[i % len(words)]}-{i}" not in rendered
+    for i in range(5, MAX_CHAT_HISTORY_MESSAGES + 5):  # the most recent MAX_CHAT_HISTORY_MESSAGES must remain
+        assert f"marker-{words[i % len(words)]}-{i}" in rendered
+
+
+def test_format_chat_history_does_not_bound_a_short_conversation():
+    short_history = [{"role": "user", "content": "question number 0"}, {"role": "assistant", "content": "answer 0"}]
+
+    rendered = format_chat_history(short_history)
+
+    assert "question number 0" in rendered
+    assert "answer 0" in rendered
+
+
+def test_build_chat_prompt_system_message_is_unaffected_by_history_length():
+    """Bounding history must never touch the system message -- it operates
+    purely on the string/list interpolated into the human template, so the
+    prompt-injection boundary (attacker-reachable content only ever in the
+    human message) can't be disturbed by how much history exists."""
+    long_history = [{"role": "user", "content": f"turn {i}"} for i in range(50)]
+
+    short_messages = build_chat_prompt(SAMPLE_INCIDENT, SAMPLE_CHUNKS, [], "Why was this flagged?")
+    long_messages = build_chat_prompt(SAMPLE_INCIDENT, SAMPLE_CHUNKS, long_history, "Why was this flagged?")
+
+    assert len(long_messages) == 2
+    assert isinstance(long_messages[0], SystemMessage)
+    assert long_messages[0].content == short_messages[0].content == CHAT_SYSTEM_PROMPT
+
+
 def test_build_chat_prompt_returns_system_and_human_messages():
     messages = build_chat_prompt(SAMPLE_INCIDENT, SAMPLE_CHUNKS, [], "Why was this flagged?")
 

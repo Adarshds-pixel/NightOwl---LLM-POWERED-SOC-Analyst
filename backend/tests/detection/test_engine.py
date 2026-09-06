@@ -10,6 +10,7 @@ import pytest
 from app.detection import rule_loader
 from app.detection.engine import (
     ConditionSyntaxError,
+    _field_matches,
     covered_event_ids,
     evaluate_condition,
     evaluate_event,
@@ -185,6 +186,54 @@ def test_evaluate_event_startswith_and_endswith():
     assert len(evaluate_event(match_event, [ends])) == 1
     assert evaluate_event(non_match_event, [starts]) == []
     assert evaluate_event(non_match_event, [ends]) == []
+
+
+# -- _field_matches: list-valued event fields -----------------------------
+#
+# NormalizedEvent.event_data is typed dict[str, str | None] (schemas/event.py)
+# and Pydantic genuinely rejects a list value there (verified directly:
+# constructing a NormalizedEvent with a list-valued event_data field raises
+# a ValidationError, "Input should be a valid string") -- so a list can
+# never actually reach _field_matches through the real evaluate_event()
+# entry point today. These tests call _field_matches directly (it's the
+# only way to exercise this logic at all, given the schema-level
+# unreachability) as a defensive regression test: if event_data's type
+# ever loosens, or another caller invokes _field_matches with raw
+# unvalidated data, list values must still match element-wise rather than
+# risking a false match on str(list)'s repr artifacts (`[`, `'`, `,`).
+
+
+def test_field_matches_scalar_behavior_is_unchanged():
+    """Every existing rule/test exercises only scalar event values --
+    confirm the list-handling addition didn't touch this path."""
+    assert _field_matches("C:\\Windows\\System32\\powershell.exe", "powershell", "contains") is True
+    assert _field_matches("notepad.exe", "powershell", "contains") is False
+    assert _field_matches("payload.exe", ".exe", "endswith") is True
+    assert _field_matches("C:\\Temp\\x", "C:\\Temp\\", "startswith") is True
+    assert _field_matches("Administrators", "Administrators", None) is True
+    assert _field_matches("ADMINISTRATORS", "administrators", None) is True  # case-insensitive
+    assert _field_matches(None, "anything", "contains") is False
+    assert _field_matches(4697, 4697, None) is True  # numeric scalars
+    assert _field_matches(True, True, None) is True  # boolean scalars
+
+
+def test_field_matches_list_event_value_matches_element_wise():
+    assert _field_matches(["foo", "bar"], "foo", "contains") is True
+    assert _field_matches(["foo", "bar"], "baz", "contains") is False
+
+
+def test_field_matches_list_event_value_does_not_false_match_on_repr_artifacts():
+    """Before the fix, str(['foo', 'bar']) == "['foo', 'bar']" and a rule
+    value of "[" would `contains`-match the collection's own repr
+    formatting rather than any real element -- confirm that no longer
+    happens."""
+    assert _field_matches(["foo", "bar"], "[", "contains") is False
+    assert _field_matches(["foo", "bar"], "'", "contains") is False
+
+
+def test_field_matches_tuple_event_value_matches_element_wise():
+    assert _field_matches(("a", "b"), "a", None) is True
+    assert _field_matches(("a", "b"), "c", None) is False
 
 
 # -- end-to-end against the real seed rule file ---------------------------

@@ -147,11 +147,12 @@ Chat (`rag/chat_service.py`) is a single call per turn, with no critique pass. C
 
 Prompts live together in `rag/prompts.py` (build_explanation_prompt, build_critique_prompt, build_chat_prompt). All three spell out the difference between general technique background and incident-specific fact, which is the fix for a real hallucination pattern described below.
 
-### Providers, timeouts, caching
+### Provider, timeouts, caching
 
-- `LLM_PROVIDER` selects gemini or groq; the call is fully abstracted behind `rag/llm_client.py`, so swapping providers touches one file.
-- Provider kwarg names differ and were verified against the installed packages: ChatGoogleGenerativeAI takes `timeout`, ChatGroq takes `request_timeout`. Passing the wrong one fails silently.
-- Two distinct caches. `rag/cache.py` is on by default, keyed on incident id (plus message for chat), TTL 900s, and sits at the route layer so a hit skips retrieval too. `llm_client._response_cache` is off by default and keyed on the rendered prompt hash, for repeated manual testing without spending quota.
+- Groq, exclusively (see the decision-log entries below) -- the call is fully abstracted behind `rag/llm_client.py`, so a future provider change would still touch only one file, but there is no automatic fallback to any other provider on failure: a Groq outage or missing key surfaces as a clean `LLMProviderError` -> 503, not a silent swap.
+- `ChatGroq`'s timeout kwarg is `request_timeout`, not `timeout` -- verified against the installed package. Passing the wrong name fails silently.
+- Two distinct caches. `rag/cache.py` is on by default, keyed on incident id (plus message and a bounded-history fingerprint for chat -- see below), TTL 900s, and sits at the route layer so a hit skips retrieval too. `llm_client._response_cache` is off by default and keyed on the rendered prompt hash, for repeated manual testing without spending quota.
+- Chat history sent to the LLM is bounded to the most recent 10 messages (`rag/prompts.py::bound_chat_history`) -- the full conversation is still stored and returned by `GET /incidents/{id}/chat`, only the prompt-building and cache-fingerprint paths apply the bound, so the user-facing history view is never silently truncated.
 - One retry with a 2s delay; LLMProviderError surfaces as a 503 carrying the provider's own message rather than a generic 500.
 
 ### What the model can and cannot see
@@ -243,6 +244,8 @@ Demo Mode is a one-shot, client-driven walkthrough, not a server-side simulation
 One entry per significant decision. Every one names its alternative and whether it is reversible.
 
 **LLM provider: free-tier Gemini via langchain-google-genai, with Groq as an alternate (2026-08-16).** Paid APIs were ruled out by project policy. Gemini needs no billing setup and plugs straight into the prompt templates; the model alias `gemini-flash-latest` avoids a forced migration when Google retires a pinned snapshot. Groq was added later as an alternate provider after the Gemini daily cap proved tight. Reversible: the call is abstracted behind one file.
+
+**LLM provider: Gemini removed, Groq-only (2026-09-06).** Groq had already been the actually-configured provider for some time (`.env`'s `LLM_PROVIDER=groq` since 2026-08-25) once Gemini's free tier proved structurally unreliable for this project's call volume -- a hard 20-req/day quota plus separate server-side 503/504 overload, both observed live, neither fixable from this side. The dual-provider branch in `rag/llm_client.py` (and the corresponding `LLM_API_KEY`/`LLM_MODEL`/`LLM_PROVIDER` settings, and the `langchain-google-genai` dependency) were fully removed rather than left dormant behind a switch nobody was using -- a dead conditional branch that can never be exercised is worse than no branch at all. No automatic fallback to Gemini (or any other provider) exists or is planned: a Groq failure is a clean 503, not a silent retry against something else. Reversible in the loose sense that the removed code is recoverable from git history, but re-adding Gemini support would mean re-adding the whole branch, not flipping a setting.
 
 **pySigma for validation, own evaluator for matching (2026-08-16).** See section 5. Reversible: only rule_loader and engine know about it.
 

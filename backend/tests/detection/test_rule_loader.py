@@ -38,7 +38,20 @@ logsource:
   category: process_creation
 """
 
-EXPECTED_RULE_COUNT = 41
+UNSUPPORTED_MODIFIER_CHAIN_RULE = """
+title: Bad Modifier Chain Rule
+id: 22222222-2222-2222-2222-222222222222
+status: experimental
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|contains|all: powershell
+  condition: selection
+level: high
+"""
+
+EXPECTED_RULE_COUNT = 43
 EXPECTED_CATEGORIES = {
     "process_creation",
     "network_connection",
@@ -61,6 +74,8 @@ EXPECTED_CATEGORIES = {
     "script_block_logging",
     "audit_policy_weakened",
     "remote_registry_access",
+    "kernel_driver_service_installed",
+    "sensitive_domain_group_membership_change",
 }
 
 
@@ -88,6 +103,23 @@ def test_load_rules_skips_malformed_and_keeps_valid(tmp_path):
 
     assert len(rules) == 1
     assert rules[0].title == "Test Rule"
+
+
+def test_load_rules_rejects_unsupported_modifier_chain_and_keeps_valid(tmp_path, caplog):
+    """field|contains|all is a modifier chain engine.py's _field_matches
+    can never evaluate (v1 supports a single trailing modifier only) --
+    confirm the rule is dropped at load time (like a malformed-YAML rule),
+    not silently loaded to fail forever at match time."""
+    (tmp_path / "valid.yml").write_text(VALID_RULE, encoding="utf-8")
+    (tmp_path / "bad_modifier.yml").write_text(UNSUPPORTED_MODIFIER_CHAIN_RULE, encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING):
+        rules = rule_loader.load_rules(tmp_path)
+
+    assert len(rules) == 1
+    assert rules[0].title == "Test Rule"
+    assert "unsupported modifier" in caplog.text
+    assert "Image" in caplog.text
 
 
 def test_load_rules_missing_directory_returns_empty(tmp_path):

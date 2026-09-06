@@ -1,9 +1,14 @@
 """Response cache for explain()/chat() results, keyed on incident id
-(+ message, for chat) -- Day 13 production hardening. Closes the caching
-gap `docs/decisions.md` already flagged at Day 8/11 but never implemented,
-protecting the free-tier LLM quota from repeated identical explain/chat
-calls (e.g. a user reopening the same incident, or a UI re-fetching on
-remount).
+(+ message + a bounded-conversation-history fingerprint, for chat) --
+Day 13 production hardening. Closes the caching gap `docs/decisions.md`
+already flagged at Day 8/11 but never implemented, protecting the
+free-tier LLM quota from repeated identical explain/chat calls (e.g. a
+user reopening the same incident, or a UI re-fetching on remount). The
+history fingerprint (added 2026-09-06) means the same question asked twice
+in one incident only hits the cache if the conversation state leading up
+to it is also the same -- otherwise a repeated question mid-conversation
+would incorrectly return the first call's answer regardless of what was
+said in between.
 
 Distinct from `rag/llm_client.py`'s cache (Day 12): that one is opt-in, off
 by default, keyed on the *exact rendered prompt* -- a manual-testing aid.
@@ -18,14 +23,35 @@ explanation/reply doesn't linger forever if an incident's underlying data
 changes.
 """
 
+import hashlib
+import json
 import time
 from threading import Lock
 
 from app.core.config import settings
+from app.rag.prompts import bound_chat_history
 
 _explain_cache: dict[int, tuple[float, object]] = {}
-_chat_cache: dict[tuple[int, str], tuple[float, object]] = {}
+# Keyed on (incident_id, message, history_fingerprint) -- the fingerprint
+# is a hash of the *bounded* prior conversation (bound_chat_history(),
+# shared with prompts.py's own history bound so the cache and the prompt
+# agree on what "the same conversation state" means). Without it, two
+# identical questions asked at different points in the same conversation
+# (e.g. "why was this flagged?" as a sanity re-check after several more
+# turns) would incorrectly hit the same cache entry and return the first
+# call's answer regardless of what was said in between.
+_chat_cache: dict[tuple[int, str, str], tuple[float, object]] = {}
 _lock = Lock()
+
+
+def _history_fingerprint(history: list[dict]) -> str:
+    """A short, non-reversible fingerprint of the bounded conversation
+    state -- deliberately not the raw history itself, so nothing sensitive
+    from the conversation ends up embedded in a cache key that could be
+    logged or inspected."""
+    bounded = bound_chat_history(history)
+    serialized = json.dumps(bounded, sort_keys=True, default=str)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:16]
 
 
 def _is_expired(stored_at: float) -> bool:
@@ -49,8 +75,12 @@ def set_explanation(incident_id: int, result) -> None:
         _explain_cache[incident_id] = (time.monotonic(), result)
 
 
-def get_chat_reply(incident_id: int, message: str):
-    key = (incident_id, message)
+def get_chat_reply(incident_id: int, message: str, history: list[dict]):
+    """`history` should be the same prior-turns list the caller is about to
+    pass to generate_chat_reply() -- only the bounded tail of it actually
+    affects the key (see _history_fingerprint), matching what the LLM
+    prompt itself will see."""
+    key = (incident_id, message, _history_fingerprint(history))
     with _lock:
         entry = _chat_cache.get(key)
         if entry is None:
@@ -62,9 +92,10 @@ def get_chat_reply(incident_id: int, message: str):
         return result
 
 
-def set_chat_reply(incident_id: int, message: str, result) -> None:
+def set_chat_reply(incident_id: int, message: str, history: list[dict], result) -> None:
+    key = (incident_id, message, _history_fingerprint(history))
     with _lock:
-        _chat_cache[(incident_id, message)] = (time.monotonic(), result)
+        _chat_cache[key] = (time.monotonic(), result)
 
 
 def clear() -> None:

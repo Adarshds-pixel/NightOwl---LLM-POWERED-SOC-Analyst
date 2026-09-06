@@ -13,7 +13,7 @@ This is a final-year major project built by a team of 4, AI-assisted, over a 30-
 - **Self-critique reasoning chain** — the LLM checks its own draft explanation against the retrieved sources before returning it, instead of a single-shot prompt
 - **Source-attribution UI** — every explanation shows the exact knowledge-base chunks + similarity scores it was grounded in
 - SOC console: overview dashboard, incident queue and investigation view, AI assistant, MITRE ATT&CK coverage, alerts, log explorer, rules engine, reports and settings
-- Runs entirely on **free-tier tools** (Gemini free tier / Groq for the LLM; everything else is open-source/self-hosted) — **$0 to build and run**
+- Runs entirely on **free-tier tools** (Groq free tier for the LLM; everything else is open-source/self-hosted) — **$0 to build and run**
 
 ## Repository structure
 
@@ -35,7 +35,7 @@ The RAG *runtime code* lives in `backend/app/rag/` because the API service impor
 ## Quick start
 
 ```bash
-cp .env.example .env      # add a free-tier LLM API key (Gemini or Groq)
+cp .env.example .env      # add a free-tier Groq API key
 docker compose up -d db   # PostgreSQL on host port 5433
 
 cd backend
@@ -60,13 +60,13 @@ To (re)build the knowledge base the AI layer retrieves from, run `python ai/tool
 | Database | PostgreSQL |
 | Detection | Sigma-style YAML rules (`pySigma`) |
 | ATT&CK mapping | MITRE ATT&CK (official STIX/JSON dataset) |
-| AI / RAG | LangChain, ChromaDB, Sentence Transformers, Gemini or Groq |
+| AI / RAG | LangChain, ChromaDB, Sentence Transformers, Groq |
 | Frontend | React 19, Vite, Tailwind CSS v4, Recharts |
 | Deployment | Docker Compose |
 
 ## Status
 
-Backend, detection, AI/RAG and the frontend console are built and working end to end: EVTX upload creates real incidents, the explain and chat endpoints answer from the knowledge base with source attribution, and the console renders all of it from live API data. The backend test suite is 487 tests. Detection accuracy is tracked against a real-world EVTX corpus (`backend/scripts/run_detection_benchmark.py`), not just synthetic fixtures — currently 47/54 (87.0%) with 0 false positives; see `docs/PROJECT_GUIDE.md`.
+Backend, detection, AI/RAG and the frontend console are built and working end to end: EVTX upload creates real incidents, the explain and chat endpoints answer from the knowledge base with source attribution, and the console renders all of it from live API data. The backend test suite is 510 tests. Detection accuracy is tracked against a real-world EVTX corpus (`backend/scripts/run_detection_benchmark.py`), not just synthetic fixtures — currently 50/61 (82.0%) with 0 false positives; this number moves as the corpus grows, so treat it as a snapshot and re-run the script for the current figure rather than trusting this line indefinitely. See `docs/PROJECT_GUIDE.md` and `backend/scripts/failure_matrix.md` (the generated, always-current source of truth) for the full breakdown.
 
 Deliberately **not** implemented, because nothing in the system could honestly back them: threat-intel feeds, a geographic attack map, host CPU/memory/disk telemetry, and user accounts. Where a design reference called for one of those, the UI shows a real equivalent instead — documented in the frontend phase notes.
 

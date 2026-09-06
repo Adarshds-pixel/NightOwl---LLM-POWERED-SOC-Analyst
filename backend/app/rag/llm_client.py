@@ -1,42 +1,44 @@
-"""LangChain-wired client for the free-tier LLM provider.
+"""LangChain-wired client for NightOwl's LLM provider: Groq, exclusively.
 
 Kept as a thin wrapper around the provider-specific LangChain chat client,
-rather than importing an SDK directly elsewhere, so:
-  - the rest of the app (explain_service.py, Day 8+) never imports
-    langchain_google_genai/langchain_groq directly -- swapping providers
-    only touches this one file.
+rather than importing the SDK directly elsewhere, so:
+  - the rest of the app (explain_service.py, chat_service.py) never
+    imports langchain_groq directly -- this is the one file that would
+    need to change if that ever stopped being true.
   - failures (missing key, quota, network) come back as one
     LLMProviderError instead of leaking provider-specific exceptions up
-    through unrelated call sites.
+    through unrelated call sites: app -> Groq client -> Groq API -> a
+    clean LLMProviderError (503 at the API layer, see core/errors.py) on
+    any failure. No automatic fallback to another provider on failure --
+    a provider outage is a clean, visible error, not a silent swap.
 
-Provider is picked by `settings.llm_provider` ("gemini", the project
-default, or "groq"). Groq was added for the Day 10 hallucination
-spot-check, where Gemini's 20 req/day free-tier cap can't reliably cover
-10 explain() calls (20 requests) -- both are explicitly allowed free-tier
-providers per the roadmap's Day 2 task.
+Groq-only as of 2026-09-06 (see docs/ARCHITECTURE.md's decision log): this
+project previously supported Gemini as an alternate provider behind
+`settings.llm_provider`, removed once Gemini's free tier proved
+structurally unreliable for this project's call volume (a hard 20-req/day
+quota plus separate server-side 503/504 overload, both observed live) --
+Groq had already been the actually-configured provider for some time
+before the Gemini code path was removed. Historical: git history has the
+removed dual-provider code if it's ever needed for reference.
 
-Day 12 robustness additions:
+Day 12 robustness additions (still apply, provider-agnostic):
   - An explicit `timeout` on client construction, so a hung provider call
     surfaces as a timeout exception (caught by generate()'s existing
-    retry/LLMProviderError wrapping) instead of blocking indefinitely --
-    "handle LLM API timeouts" per the roadmap.
+    retry/LLMProviderError wrapping) instead of blocking indefinitely.
   - An opt-in in-memory response cache (`settings.llm_cache_enabled`,
     default off) keyed on exact prompt content, to avoid burning through a
-    tight free-tier daily quota (e.g. Gemini's 20 req/day) on repeated
-    identical calls during manual testing.
+    tight free-tier daily quota on repeated identical calls during manual
+    testing.
   - `generate_with_metrics()`, alongside the existing `generate()`, for the
     Day 12 token-usage/latency measurement script -- kept separate so
     `generate()`'s `-> str` contract (and every existing caller/test) is
     unchanged.
 
-Also pins each client's own internal retry count to 1 attempt (0 for Groq's
-differently-named field -- see get_llm_client()): both SDKs otherwise retry
-several times internally with their own backoff before an exception ever
-reaches generate()'s retry-once, which stacks under it. Confirmed live: a
-429 RESOURCE_EXHAUSTED took 100s+ to surface (Gemini's SDK default is 6
-internal retries honoring the server's suggested ~14-29s backoff) even with
-the timeout above in place, because that timeout bounds a single HTTP call,
-not the SDK's own retry loop around it.
+Also pins the client's own internal retry count to 0 (see get_llm_client()):
+the SDK would otherwise retry several times internally with its own
+backoff before an exception ever reaches generate()'s retry-once, which
+stacks under it and can turn a single failed call into a very long wait
+before any error surfaces.
 """
 
 import hashlib
@@ -45,7 +47,6 @@ import time
 from dataclasses import dataclass
 
 from langchain_core.messages import BaseMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 
 from app.core.config import settings
@@ -57,11 +58,11 @@ _RETRY_DELAY_SECONDS = 2
 
 
 class LLMProviderError(Exception):
-    """Raised when the configured LLM provider can't produce a response
-    (missing/invalid API key, network failure, rate limit, empty response)."""
+    """Raised when Groq can't produce a response (missing/invalid API key,
+    network failure, rate limit, empty response)."""
 
 
-_client: ChatGoogleGenerativeAI | ChatGroq | None = None
+_client: ChatGroq | None = None
 
 # Day 12: opt-in response cache, keyed on a hash of the exact rendered
 # prompt content. Only ever populated on a *successful* call -- a failed
@@ -109,49 +110,32 @@ def _extract_text(content) -> str:
     return ""
 
 
-def get_llm_client() -> ChatGoogleGenerativeAI | ChatGroq:
-    """Return a cached chat client for the configured provider
-    (`settings.llm_provider`: "gemini" or "groq").
+def get_llm_client() -> ChatGroq:
+    """Return a cached Groq chat client.
 
-    Raises LLMProviderError immediately if no API key is configured for the
-    selected provider, rather than waiting for the SDK to fail with an
-    ambiguous auth error deep in a generate() call.
+    Raises LLMProviderError immediately if no API key is configured, rather
+    than waiting for the SDK to fail with an ambiguous auth error deep in a
+    generate() call. No fallback to any other provider -- a missing key or
+    a Groq-side failure surfaces as a clean error (see module docstring).
     """
     global _client
     if _client is not None:
         return _client
 
-    if settings.llm_provider == "groq":
-        if not settings.groq_api_key:
-            raise LLMProviderError(
-                "GROQ_API_KEY is not set -- add a free Groq API key from "
-                "https://console.groq.com/keys, or set LLM_PROVIDER=gemini"
-            )
-        # ChatGroq's timeout field is named `request_timeout`, not `timeout`
-        # (unlike ChatGoogleGenerativeAI below) -- confirmed against the
-        # installed langchain-groq version's Pydantic fields.
-        _client = ChatGroq(
-            model=settings.groq_model,
-            api_key=settings.groq_api_key,
-            request_timeout=settings.llm_timeout_seconds,
-            max_retries=0,  # generate() already retries once itself -- see module docstring
-        )
-        return _client
-
-    if not settings.llm_api_key:
+    if not settings.groq_api_key:
         raise LLMProviderError(
-            "LLM_API_KEY is not set -- copy .env.example to .env and add a free "
-            "Gemini API key from https://aistudio.google.com/apikey"
+            "GROQ_API_KEY is not set -- add a free Groq API key from https://console.groq.com/keys"
         )
-
-    _client = ChatGoogleGenerativeAI(
-        model=settings.llm_model,
-        google_api_key=settings.llm_api_key,
-        timeout=settings.llm_timeout_seconds,
-        # 1, not 0 -- a langchain-google-genai quirk: max_retries=0 is read as
-        # "use the Google SDK's own default (6)", not "no retries". 1 means
-        # exactly one attempt, no SDK-internal retry -- see module docstring.
-        max_retries=1,
+    # ChatGroq's timeout field is named `request_timeout`, not `timeout` --
+    # confirmed against the installed langchain-groq version's Pydantic
+    # fields. max_retries=0: generate() already retries once itself (see
+    # module docstring) -- stacking the SDK's own retries under that would
+    # turn one failed call into a very long wait.
+    _client = ChatGroq(
+        model=settings.groq_model,
+        api_key=settings.groq_api_key,
+        request_timeout=settings.llm_timeout_seconds,
+        max_retries=0,
     )
     return _client
 
@@ -216,7 +200,6 @@ def generate_with_metrics(messages: list[BaseMessage]) -> GenerationMetrics:
     elapsed = time.monotonic() - start
 
     usage = getattr(response, "usage_metadata", None) or {}
-    model = settings.groq_model if settings.llm_provider == "groq" else settings.llm_model
 
     return GenerationMetrics(
         text=text,
@@ -224,8 +207,8 @@ def generate_with_metrics(messages: list[BaseMessage]) -> GenerationMetrics:
         output_tokens=usage.get("output_tokens"),
         total_tokens=usage.get("total_tokens"),
         latency_seconds=elapsed,
-        provider=settings.llm_provider,
-        model=model,
+        provider="groq",
+        model=settings.groq_model,
     )
 
 

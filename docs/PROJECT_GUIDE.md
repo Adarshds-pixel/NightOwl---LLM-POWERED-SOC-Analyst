@@ -60,9 +60,8 @@ Everything lives in the repo-root `.env`; see `.env.example` for the annotated t
 | Variable | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | postgres on 5433 | SQLAlchemy connection string |
-| `LLM_PROVIDER` | `gemini` (example file sets `groq`) | Which provider `rag/llm_client.py` builds |
-| `LLM_API_KEY` / `GROQ_API_KEY` | empty | Provider credential; missing key gives a 503, not a crash |
-| `LLM_MODEL` / `GROQ_MODEL` | `gemini-flash-latest` / `openai/gpt-oss-120b` | Model override |
+| `GROQ_API_KEY` | empty | Groq credential; missing key gives a 503, not a crash |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Model override |
 | `LLM_TIMEOUT_SECONDS` | 30 | Per-call provider timeout |
 | `RESPONSE_CACHE_ENABLED` | true | Route-level explain/chat cache |
 | `API_KEY` | empty (auth disabled) | Shared secret checked as the `X-API-Key` header |
@@ -115,8 +114,10 @@ cd backend
                                                                  # scripts/failure_matrix.json/.md
 ```
 
-Current state: **47/54 detected (87.0%), 0 false positives** across all
-clean fixtures. Every miss in `failure_matrix.md` is hand-classified
+Current state (re-run the scripts above for the up-to-date number -- this
+line is a snapshot, not the source of truth): **50/61 detected (82.0%),
+0 false positives** across all clean fixtures. Every miss in
+`failure_matrix.md` is hand-classified
 (`channel_provider_gap`, `rule_missing`, etc.) with the real field values
 that were checked, not a guessed reason -- read that file before adding a
 new rule for a miss, it usually already explains exactly what's missing
@@ -180,14 +181,13 @@ A Postman collection covering every endpoint is in `docs/postman/`.
 | First run of the RAG tests or `build_kb.py` takes 1-2 minutes | sentence-transformers and the ATT&CK bundle downloading | Expected once; later runs use local caches |
 | Port 8000 still bound after stopping uvicorn | A reloader child process survived | `netstat -ano \| findstr :8000` then `taskkill /F /PID <pid>` |
 | `POST /ingest` returns 500 with `psycopg2.OperationalError ... port 5433` | No live Postgres | Start the database (section 2) |
-| `POST /incidents/{id}/explain` returns 503 with `429 RESOURCE_EXHAUSTED` | Free-tier daily quota exhausted; each explain costs two provider requests | Wait for the reset, or switch `LLM_PROVIDER` to the other provider |
+| `POST /incidents/{id}/explain` returns 503 with `429` / rate-limit text | Groq's free-tier quota exhausted; each explain costs two provider requests | Wait for the reset, or use a different `GROQ_API_KEY`. No automatic fallback to another provider -- NightOwl is Groq-only |
 | `LLMProviderError ... 503 UNAVAILABLE ... high demand` | Transient provider overload | Retry; the client already retries once automatically |
 | Explain returns 500 while the same call works in a script | Legacy console encoding could not write a log line containing typographic punctuation | Fixed: the JSON formatter escapes non-ASCII and the handler forces UTF-8 |
 | The console shows "rate limit exceeded" and will not recover for minutes | Token bucket drained; background pollers consumed the refill before a page could accumulate what it needed | Fixed: `/health` exempt, ceiling raised to 300/min, searches debounced, GETs de-duplicated, pollers pause when hidden and back off on 429 |
 | Any test using `tmp_path` fails with `PermissionError: [WinError 5]` | Broken Windows temp-directory ACL on the dev machine | Handled automatically by `tests/conftest.py`, which redirects `--basetemp` |
-| Tests hit the real LLM instead of mocks | `.env` left on `groq`, while the test file only mocks the Gemini branch | Set `LLM_PROVIDER=gemini` when you are done testing against Groq |
 | `docker compose build backend` fails with certificate errors from PyPI | Same TLS interception as section 1, but inside the container | Already handled in `backend/Dockerfile` via trusted-host flags |
-| `ChatGroq(timeout=...)` appears to do nothing | The field is `request_timeout` for Groq and `timeout` for Gemini | Use the right name per provider; the wrong one is silently ignored |
+| `ChatGroq(timeout=...)` appears to do nothing | The field is `request_timeout`, not `timeout` | Use `request_timeout`; the wrong name is silently ignored rather than erroring |
 | A backend Python change (a new rule file is the exception) doesn't seem to take effect, even after a fresh upload | The run command above starts plain `uvicorn`, **no `--reload`** -- new Sigma YAML rules are re-parsed from disk on every request so those take effect immediately, but any change to `app/*.py` (a new sequence pattern, a route, a service) is only picked up on the next process start | `netstat -ano \| findstr :8000`, `taskkill /F /PID <pid>`, restart uvicorn. Found live 2026-09-05: the sequence engine (`detection/sequences.py`) had been fully built and tested for a while before anyone noticed the *running* server was still serving a build from before it landed |
 
 ### Field note: capturing real Sysmon telemetry
@@ -213,7 +213,7 @@ A 30-day plan compressed to 26, run by a 4-person team as two rotating pairs (ba
 
 **Where things actually stand.** Backend, detection, AI/RAG and the console are built and working end to end; the backend suite is 471 tests. The console covers Overview, Incidents, Incident detail, AI Assistant, MITRE ATT&CK, Alerts, Logs, Rules Engine, Reports, Settings and Demo Mode, all bound to live API data.
 
-Detection accuracy against the real-world fixture corpus (see §4) has moved from an initial 3/32 to **33/39 (84.6%), 0 false positives**, driven by measuring against real captures rather than building speculatively -- see `pending.md` for the full trace of what each pass added and why. Landed this way: 4 new Sigma rules verified against real field values, the 3-pattern sequence engine (`detection/sequences.py`) for techniques no single-event rule can express, a bounded AI/RAG evidence package (process/parent-process/command-line/user/matched-rule/related-events) with a mechanical FACT/INFERENCE/UNCERTAINTY breakdown on every explanation, and `ParentImage` promoted to a real searchable column. A full visual QA pass (uploading all 39 fixtures through the actual running console, not just the API) also caught and fixed several bugs invisible to the offline test suite alone -- a KPI-staleness race condition, a whole MITRE tactic silently missing from every tactic-based view, and the backend's own no-`--reload` gotcha above.
+Detection accuracy against the real-world fixture corpus (see §4) moved from an initial 3/32 to 33/39 (84.6%) over this project's early passes, driven by measuring against real captures rather than building speculatively -- see `pending.md` for the full trace of what each pass added and why. Landed this way (as of that pass): 4 new Sigma rules verified against real field values, the sequence engine (`detection/sequences.py`) for techniques no single-event rule can express, a bounded AI/RAG evidence package (process/parent-process/command-line/user/matched-rule/related-events) with a mechanical FACT/INFERENCE/UNCERTAINTY breakdown on every explanation, and `ParentImage` promoted to a real searchable column. A full visual QA pass (uploading all 39 fixtures through the actual running console, not just the API) also caught and fixed several bugs invisible to the offline test suite alone -- a KPI-staleness race condition, a whole MITRE tactic silently missing from every tactic-based view, and the backend's own no-`--reload` gotcha above. The corpus and rule set have both grown substantially since (61 real-world fixtures, 43 rules as of this writing) -- current state is **50/61 (82.0%), 0 false positives**; re-run `run_detection_benchmark.py`/`build_failure_matrix.py` for the live number rather than trusting any hardcoded figure in this doc.
 
 Still open: a responsive and accessibility sweep at laptop and tablet widths, a frontend Dockerfile and full-stack compose, and the formal testing report.
 

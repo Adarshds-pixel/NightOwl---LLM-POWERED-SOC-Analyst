@@ -1,14 +1,22 @@
-"""Day 7 verification (Pair 2): rag/llm_client.py's Gemini wrapper.
+"""Day 7 verification (Pair 2): rag/llm_client.py's Groq wrapper.
 
-Day 12 adds: an explicit request timeout on both provider constructors, a
-Groq construction test (previously untested), the opt-in response cache,
-and generate_with_metrics() for the token-usage/latency measurement script.
-Also asserts max_retries=1 (Gemini) / max_retries=0 (Groq) on construction --
-disables each SDK's own internal retry-with-backoff, which otherwise stacks
-under generate()'s retry-once and turned a 429 into a 100s+ stall.
+Groq-only as of 2026-09-06 -- this project previously supported Gemini as
+an alternate provider behind `settings.llm_provider`; that whole code path
+(and this file's `FakeChatGoogleGenerativeAI`) was removed once Gemini's
+free tier proved structurally unreliable for this project's call volume.
+Groq had already been the actually-configured provider for some time
+before the dual-provider code was removed -- this file now only ever
+exercises the one remaining provider.
 
-Runs fully offline -- ChatGoogleGenerativeAI/ChatGroq are mocked
-throughout, no network call and no real API key is needed or used.
+Day 12 additions (still apply, provider-agnostic): an explicit request
+timeout on client construction, the opt-in response cache, and
+generate_with_metrics() for the token-usage/latency measurement script.
+Also asserts max_retries=0 on construction -- disables the SDK's own
+internal retry-with-backoff, which otherwise stacks under generate()'s
+retry-once.
+
+Runs fully offline -- ChatGroq is mocked throughout, no network call and
+no real API key is needed or used.
 """
 
 import pytest
@@ -23,24 +31,6 @@ class FakeResponse:
         self.content = content
         if usage_metadata is not None:
             self.usage_metadata = usage_metadata
-
-
-class FakeChatGoogleGenerativeAI:
-    """Records constructor kwargs; .invoke() behavior is set per-test."""
-
-    last_kwargs = None
-    invoke_side_effect = None
-
-    def __init__(self, **kwargs):
-        FakeChatGoogleGenerativeAI.last_kwargs = kwargs
-
-    def invoke(self, messages):
-        effect = FakeChatGoogleGenerativeAI.invoke_side_effect
-        if callable(effect):
-            return effect(messages)
-        if isinstance(effect, Exception):
-            raise effect
-        return FakeResponse(effect)
 
 
 class FakeChatGroq:
@@ -65,24 +55,11 @@ class FakeChatGroq:
 def reset_llm_client_state(monkeypatch):
     """llm_client caches its client (and, since Day 12, responses) in
     module-level globals -- reset them before and after every test so
-    tests don't leak state into each other.
-
-    Defaults llm_provider to "gemini" so every test below is explicit about
-    which provider it exercises, independent of whatever LLM_PROVIDER
-    happens to be set to in .env (the project default was Gemini through
-    Day 25, then switched to Groq -- see .env's comment -- and most of this
-    file's tests were written assuming the unstated default rather than
-    setting it themselves, which silently broke when that default changed).
-    The two Groq-specific tests below re-override this to "groq" in their
-    own body, which still wins for them."""
+    tests don't leak state into each other."""
     monkeypatch.setattr(llm_client, "_client", None)
     monkeypatch.setattr(llm_client, "_response_cache", {})
-    monkeypatch.setattr(llm_client, "ChatGoogleGenerativeAI", FakeChatGoogleGenerativeAI)
     monkeypatch.setattr(llm_client, "ChatGroq", FakeChatGroq)
-    monkeypatch.setattr(settings, "llm_provider", "gemini")
     monkeypatch.setattr(settings, "llm_cache_enabled", False)
-    FakeChatGoogleGenerativeAI.last_kwargs = None
-    FakeChatGoogleGenerativeAI.invoke_side_effect = None
     FakeChatGroq.last_kwargs = None
     FakeChatGroq.invoke_side_effect = None
     yield
@@ -91,47 +68,13 @@ def reset_llm_client_state(monkeypatch):
 
 
 def test_get_llm_client_raises_when_api_key_missing(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "")
-
-    with pytest.raises(LLMProviderError, match="LLM_API_KEY"):
-        get_llm_client()
-
-
-def test_get_llm_client_constructs_with_configured_model_and_key(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
-    monkeypatch.setattr(settings, "llm_model", "gemini-flash-latest")
-    monkeypatch.setattr(settings, "llm_timeout_seconds", 30.0)
-
-    client = get_llm_client()
-
-    assert isinstance(client, FakeChatGoogleGenerativeAI)
-    assert FakeChatGoogleGenerativeAI.last_kwargs == {
-        "model": "gemini-flash-latest",
-        "google_api_key": "fake-key",
-        "timeout": 30.0,
-        "max_retries": 1,
-    }
-
-
-def test_get_llm_client_is_cached(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
-
-    first = get_llm_client()
-    second = get_llm_client()
-
-    assert first is second
-
-
-def test_get_llm_client_raises_when_groq_api_key_missing(monkeypatch):
-    monkeypatch.setattr(settings, "llm_provider", "groq")
     monkeypatch.setattr(settings, "groq_api_key", "")
 
     with pytest.raises(LLMProviderError, match="GROQ_API_KEY"):
         get_llm_client()
 
 
-def test_get_llm_client_constructs_groq_with_configured_model_key_and_timeout(monkeypatch):
-    monkeypatch.setattr(settings, "llm_provider", "groq")
+def test_get_llm_client_constructs_with_configured_model_key_and_timeout(monkeypatch):
     monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
     monkeypatch.setattr(settings, "groq_model", "openai/gpt-oss-120b")
     monkeypatch.setattr(settings, "llm_timeout_seconds", 30.0)
@@ -147,9 +90,18 @@ def test_get_llm_client_constructs_groq_with_configured_model_key_and_timeout(mo
     }
 
 
+def test_get_llm_client_is_cached(monkeypatch):
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
+
+    first = get_llm_client()
+    second = get_llm_client()
+
+    assert first is second
+
+
 def test_generate_returns_mocked_content_on_success(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
-    FakeChatGoogleGenerativeAI.invoke_side_effect = "explanation text"
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
+    FakeChatGroq.invoke_side_effect = "explanation text"
 
     result = generate([])
 
@@ -157,7 +109,7 @@ def test_generate_returns_mocked_content_on_success(monkeypatch):
 
 
 def test_generate_retries_once_then_raises_after_repeated_failure(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
     monkeypatch.setattr(llm_client, "_RETRY_DELAY_SECONDS", 0)
     calls = []
 
@@ -165,7 +117,7 @@ def test_generate_retries_once_then_raises_after_repeated_failure(monkeypatch):
         calls.append(messages)
         raise RuntimeError("provider unavailable")
 
-    FakeChatGoogleGenerativeAI.invoke_side_effect = always_fail
+    FakeChatGroq.invoke_side_effect = always_fail
 
     with pytest.raises(LLMProviderError, match="failed after 2 attempts"):
         generate([])
@@ -174,7 +126,7 @@ def test_generate_retries_once_then_raises_after_repeated_failure(monkeypatch):
 
 
 def test_generate_recovers_if_retry_succeeds(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
     monkeypatch.setattr(llm_client, "_RETRY_DELAY_SECONDS", 0)
     attempts = {"count": 0}
 
@@ -184,7 +136,7 @@ def test_generate_recovers_if_retry_succeeds(monkeypatch):
             raise RuntimeError("transient error")
         return FakeResponse("recovered explanation")
 
-    FakeChatGoogleGenerativeAI.invoke_side_effect = fail_once_then_succeed
+    FakeChatGroq.invoke_side_effect = fail_once_then_succeed
 
     result = generate([])
 
@@ -193,20 +145,21 @@ def test_generate_recovers_if_retry_succeeds(monkeypatch):
 
 
 def test_generate_raises_on_empty_response(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
     monkeypatch.setattr(llm_client, "_RETRY_DELAY_SECONDS", 0)
-    FakeChatGoogleGenerativeAI.invoke_side_effect = ""
+    FakeChatGroq.invoke_side_effect = ""
 
     with pytest.raises(LLMProviderError, match="failed after 2 attempts"):
         generate([])
 
 
 def test_generate_extracts_text_from_content_block_list(monkeypatch):
-    """Real Gemini responses return `content` as a list of content blocks
-    (e.g. [{"type": "text", "text": ..., "extras": {...}}]), not a plain
-    string -- confirmed via a live call. generate() must unwrap this."""
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
-    FakeChatGoogleGenerativeAI.invoke_side_effect = [
+    """LangChain's cross-provider message content format allows `content`
+    to be a list of content blocks (e.g. [{"type": "text", "text": ...}])
+    rather than a plain string, not just for one specific provider --
+    generate() must unwrap this regardless of which provider produced it."""
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
+    FakeChatGroq.invoke_side_effect = [
         {"type": "text", "text": "part one. ", "extras": {"signature": "abc"}},
         {"type": "text", "text": "part two."},
     ]
@@ -219,14 +172,14 @@ def test_generate_extracts_text_from_content_block_list(monkeypatch):
 def test_generate_bypasses_cache_by_default(monkeypatch):
     """llm_cache_enabled defaults to False -- an identical call still hits
     the provider every time."""
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
     calls = []
 
     def count_calls(messages):
         calls.append(messages)
         return FakeResponse("same answer")
 
-    FakeChatGoogleGenerativeAI.invoke_side_effect = count_calls
+    FakeChatGroq.invoke_side_effect = count_calls
 
     generate([])
     generate([])
@@ -235,7 +188,7 @@ def test_generate_bypasses_cache_by_default(monkeypatch):
 
 
 def test_generate_caches_identical_calls_when_enabled(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
     monkeypatch.setattr(settings, "llm_cache_enabled", True)
     calls = []
 
@@ -243,7 +196,7 @@ def test_generate_caches_identical_calls_when_enabled(monkeypatch):
         calls.append(messages)
         return FakeResponse("cached answer")
 
-    FakeChatGoogleGenerativeAI.invoke_side_effect = count_calls
+    FakeChatGroq.invoke_side_effect = count_calls
 
     first = generate([])
     second = generate([])
@@ -255,7 +208,7 @@ def test_generate_caches_identical_calls_when_enabled(monkeypatch):
 def test_generate_cache_misses_on_different_message_content(monkeypatch):
     from langchain_core.messages import HumanMessage
 
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
     monkeypatch.setattr(settings, "llm_cache_enabled", True)
     calls = []
 
@@ -263,7 +216,7 @@ def test_generate_cache_misses_on_different_message_content(monkeypatch):
         calls.append(messages)
         return FakeResponse(f"answer for {messages[0].content}")
 
-    FakeChatGoogleGenerativeAI.invoke_side_effect = echo
+    FakeChatGroq.invoke_side_effect = echo
 
     generate([HumanMessage(content="question one")])
     generate([HumanMessage(content="question two")])
@@ -272,25 +225,24 @@ def test_generate_cache_misses_on_different_message_content(monkeypatch):
 
 
 def test_generate_never_caches_a_failed_call(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
     monkeypatch.setattr(settings, "llm_cache_enabled", True)
     monkeypatch.setattr(llm_client, "_RETRY_DELAY_SECONDS", 0)
 
-    FakeChatGoogleGenerativeAI.invoke_side_effect = RuntimeError("boom")
+    FakeChatGroq.invoke_side_effect = RuntimeError("boom")
     with pytest.raises(LLMProviderError):
         generate([])
 
-    FakeChatGoogleGenerativeAI.invoke_side_effect = "recovered"
+    FakeChatGroq.invoke_side_effect = "recovered"
     result = generate([])
 
     assert result == "recovered"
 
 
 def test_generate_with_metrics_captures_usage_and_latency(monkeypatch):
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
-    monkeypatch.setattr(settings, "llm_provider", "gemini")
-    monkeypatch.setattr(settings, "llm_model", "gemini-flash-latest")
-    FakeChatGoogleGenerativeAI.invoke_side_effect = lambda messages: FakeResponse(
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
+    monkeypatch.setattr(settings, "groq_model", "openai/gpt-oss-120b")
+    FakeChatGroq.invoke_side_effect = lambda messages: FakeResponse(
         "an explanation",
         usage_metadata={"input_tokens": 120, "output_tokens": 45, "total_tokens": 165},
     )
@@ -302,15 +254,15 @@ def test_generate_with_metrics_captures_usage_and_latency(monkeypatch):
     assert metrics.output_tokens == 45
     assert metrics.total_tokens == 165
     assert metrics.latency_seconds >= 0
-    assert metrics.provider == "gemini"
-    assert metrics.model == "gemini-flash-latest"
+    assert metrics.provider == "groq"
+    assert metrics.model == "openai/gpt-oss-120b"
 
 
 def test_generate_with_metrics_falls_back_to_none_when_usage_absent(monkeypatch):
     """A mocked/older response with no usage_metadata attribute at all
     shouldn't raise -- metrics come back as None, not an error."""
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
-    FakeChatGoogleGenerativeAI.invoke_side_effect = "an explanation"
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
+    FakeChatGroq.invoke_side_effect = "an explanation"
 
     metrics = generate_with_metrics([])
 
@@ -324,7 +276,7 @@ def test_generate_with_metrics_does_not_use_cache(monkeypatch):
     """Metrics are meant to measure a real call -- caching would make
     repeated measurements meaningless, so generate_with_metrics always
     invokes the provider even when llm_cache_enabled is on."""
-    monkeypatch.setattr(settings, "llm_api_key", "fake-key")
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
     monkeypatch.setattr(settings, "llm_cache_enabled", True)
     calls = []
 
@@ -332,7 +284,7 @@ def test_generate_with_metrics_does_not_use_cache(monkeypatch):
         calls.append(messages)
         return FakeResponse("answer")
 
-    FakeChatGoogleGenerativeAI.invoke_side_effect = count_calls
+    FakeChatGroq.invoke_side_effect = count_calls
 
     generate_with_metrics([])
     generate_with_metrics([])

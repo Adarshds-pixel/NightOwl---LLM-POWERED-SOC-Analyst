@@ -12,7 +12,14 @@ class Alert(Base):
     __tablename__ = "alerts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    event_id: Mapped[int] = mapped_column(ForeignKey("events.id"))
+    # Indexed: Postgres does not auto-index a foreign-key column (only the
+    # referenced primary-key side), and GET /events' alert-only/normal-only
+    # filter runs an EXISTS subquery on this column (see migration
+    # 707e52de18cf). `index=True` here keeps the model in agreement with
+    # that migration -- without it, a schema built via
+    # Base.metadata.create_all() (every in-memory SQLite test DB) silently
+    # lacks the index real Postgres has had since that migration.
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id"), index=True)
     rule_id: Mapped[str] = mapped_column(String(255))
     matched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     severity: Mapped[str] = mapped_column(String(50))

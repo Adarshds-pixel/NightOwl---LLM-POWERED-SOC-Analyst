@@ -294,15 +294,24 @@ the move: 482 passed, 1 skipped, unchanged.
   longer a "right file, wrong technique" case (see the updated note
   above). False positives: still 0/8.
 
-**Still open, in explicit priority order for next session**:
-1. Continue production hardening (auth/RBAC is explicitly out of scope;
-   rate limiting, upload validation limits, resource limits, secret
-   management, observability, DB indexes/retention are not).
-2. 4697/4728/4740 remain genuinely blocked -- zero real samples anywhere.
+**Still open, in explicit priority order for next session** (superseded in
+part by the 2026-09-06 pass below -- production hardening, upload
+handling, and the 4697/4728 gaps are now addressed; left here as the
+historical record of what this list said at the time):
+1. ~~Continue production hardening~~ -- **DONE (2026-09-06)**: upload
+   handling hardened (chunked-copy size enforcement, replacing a
+   redundant full in-memory read), `pool_pre_ping` + explicit
+   rollback-on-exception added to DB session handling, `Incident.host`/
+   `status`/`created_at` (the N+1 hot-path query's own filter columns)
+   indexed. Auth/RBAC remain explicitly out of scope, unchanged.
+2. ~~4697/4728/4740 remain genuinely blocked~~ -- **4697 and 4728/4756
+   addressed (2026-09-06)**, see the new benchmark entry above; **4740
+   remains genuinely blocked**, zero real samples anywhere in the corpus.
 3. `samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_
    securitylogs.evtx` remains a coincidental-only hit -- needs multi-event
    correlation (out of scope), or a second real 4769 sample before a
    single-event rule on its anomalous `ServiceName` could be justified.
+   Unchanged this pass.
 
 ---
 
@@ -694,6 +703,34 @@ the 5 clean `noise_*.evtx` fixtures throughout:
   **techniques credited 25 → 27**, and one of the two former
   "coincidental hit" files is now correctly attributed. Still 0 false
   positives across all 8 clean fixtures. 41 rules loaded, up from 39.
+
+- **Corpus grew 54 → 61 files** (7 more real-world fixtures, including the
+  first real samples anywhere in the corpus for Event IDs 4697/4728/4756/
+  7045 -- previously "genuinely blocked, zero real samples"). Two new
+  rules landed: `kernel_driver_service_installed.yml` (Security 4697,
+  scoped to the one real invariant across 4 samples -- ServiceType
+  0x00000001, a kernel-mode driver -- not a blanket 4697 rule, since no
+  real benign-4697 sample exists anywhere to bound a broader rule's
+  false-positive rate against) and `sensitive_domain_group_membership_
+  change.yml` (Security 4728/4756, well-known privileged-group RID
+  suffixes -512/-518/-519/-527, mirroring the existing
+  `low_privilege_account_added_to_admins.yml` pattern). Also: `System`
+  channel (Event ID 7045) added to `normalizer.py`'s
+  `CHANNEL_TOKEN_SUBSTRINGS` -- previously silently misrouted through the
+  Sysmon dispatch table via a `None` canonical channel, now correctly
+  normalized and classified as covered/uncovered, even though no rule
+  alerts on 7045 alone (single real sample, 1:1-paired with its own file's
+  4697 -- correlating them would overfit to that one file). Two real
+  fixtures deliberately still miss: a pure-volume 11-group 4728 pattern
+  (needs sequence-style aggregation, only 1 sample so not built per this
+  project's own "3rd sequence-dependent miss" threshold) and a
+  self-add-to-a-non-sensitive-group 4728 (a real, plausible independent
+  signal, but only 1 sample and it doesn't combine with a sensitive
+  target). **50/61 (82.0%)**, 0 false positives across all 8 clean
+  fixtures (cross-validated by both `run_detection_benchmark.py` and
+  `build_failure_matrix.py`), 29 techniques credited (up from 27),
+  43 rules loaded (up from 41). Full detail in each rule's own file and
+  `backend/scripts/failure_matrix.md`'s per-fixture classification.
 
 **Worth stating plainly, found while building the failure matrix**: 4 of
 the 26 "detected" hits (`discovery_bloodhound.evtx`,
