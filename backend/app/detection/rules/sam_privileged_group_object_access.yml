@@ -1,0 +1,62 @@
+title: SAM Privileged Group Object Access
+id: 057f13d8-c98f-42ac-baf1-7bc052243589
+status: experimental
+description: >
+  Detects Windows Security Event ID 4661 (a handle was requested to an
+  object) where the object is a SAM (Security Account Manager) group
+  object (ObjectType SAM_GROUP) and its own SID ends in one of Windows'
+  well-known, domain-independent privileged-group RIDs: Domain Admins
+  (-512), Schema Admins (-518), Enterprise Admins (-519), or Enterprise
+  Key Admins (-527) -- the same RID list this project's
+  sensitive_domain_group_membership_change.yml rule already uses, since
+  these are the identical well-known groups, just being read/enumerated
+  rather than modified. `net group "domain admins" /domain`-style
+  enumeration of a privileged group opens a SAM_GROUP handle before it can
+  read membership -- a real, well-precedented discovery step (T1069.002)
+  ahead of privilege escalation or lateral movement. `ProcessName` is
+  C:\Windows\System32\lsass.exe on every one of the 19 real 4661 records
+  in this project's corpus regardless of which account or tool triggered
+  the handle (SAM operations always run inside the LSA process), so it
+  cannot discriminate malicious from benign here and is deliberately not
+  part of the selection -- ObjectType + the privileged RID suffix is the
+  only real signal. Verified against real content:
+  `dicovery_4661_net_group_domain_admins_target.evtx` (16 real 4661
+  records: 2x ObjectType SAM_GROUP with ObjectName ending -512/"Domain
+  Admins" from a non-administrator account (`user01`), interleaved with
+  6x SAM_DOMAIN + 4x SAM_USER handle opens from an unrelated
+  administrator self-lookup session in the same capture -- confirming
+  ObjectType must gate the match, not RID suffix alone, since none of
+  those other 14 records share the SAM_GROUP shape). A second real file
+  carrying this event ID, `LM_ScheduledTask_ATSVC_target_host.evtx` (3
+  records), was checked directly rather than assumed clean: all 3 are
+  SAM_DOMAIN/SAM_USER self-lookup handles for the built-in Administrator
+  account (RID -500), no SAM_GROUP object at all -- this file correctly
+  stays silent under this rule and doesn't change its design.
+  Deliberately does NOT include the well-known local Administrators SID
+  (S-1-5-32-544, used by this project's own
+  low_privilege_account_added_to_admins.yml for a different event, 4732)
+  in the RID-suffix list: on a real Windows host, the local Administrators
+  alias is typed SAM_ALIAS, not SAM_GROUP, so combining it with this
+  rule's `ObjectType: SAM_GROUP` selection would silently never match
+  anything -- no real SAM_ALIAS sample exists in this project's corpus to
+  build that as its own rule yet.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-07
+references:
+  - https://attack.mitre.org/techniques/T1069/002/
+tags:
+  - attack.discovery
+  - attack.t1069.002
+logsource:
+  category: sam_privileged_group_object_access
+  service: security
+detection:
+  selection:
+    ObjectType: SAM_GROUP
+    ObjectName|endswith:
+      - '-512'
+      - '-518'
+      - '-519'
+      - '-527'
+  condition: selection
+level: low

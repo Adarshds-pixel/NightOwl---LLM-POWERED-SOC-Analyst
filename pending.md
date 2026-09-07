@@ -732,6 +732,63 @@ the 5 clean `noise_*.evtx` fixtures throughout:
   43 rules loaded (up from 41). Full detail in each rule's own file and
   `backend/scripts/failure_matrix.md`'s per-fixture classification.
 
+- **Full 80-file corpus audit pass** (Windows Security + Sysmon event-ID
+  coverage expansion, explicitly *not* "add a rule per event ID" -- see
+  each new rule's own file for the real-sample evidence): scanned all 80
+  real EVTX fixtures (160,327 events, 100 distinct `(channel, event_id)`
+  pairs) plus the full current rule/architecture inventory, then did
+  targeted real-field inspection of every borderline candidate. Result:
+  exactly 2 new rules were justified by real evidence --
+  `sam_privileged_group_object_access.yml` (Security 4661, SAM_GROUP
+  objects ending in a well-known privileged RID) and
+  `unmanaged_powershell_image_load.yml` (Sysmon 7, the PowerShell engine
+  DLL loaded into a non-PowerShell host). Both land on files that were
+  *already* HITs via other rules in the same capture (the coincidental-hit
+  pattern documented above), so the raw malicious-corpus detection rate
+  holds at **50/61 (82.0%)**, but technique attribution improves --
+  **T1069.002 newly credited**, techniques seen 29 → **30** -- and false
+  positives stay **0/8** across the full clean corpus, including
+  `sysmon_vm_capture.evtx` (the one real fixture that could exercise the
+  new Sysmon-7 rule's false-positive risk). **45 rules loaded, up from
+  43.** Two "explicitly not pursued" decisions from this same pass are
+  documented in the subsection immediately below.
+
+### Two explicit non-pursuits from this pass's evidence
+
+**Security 4688 (Security-channel process creation)**: real `CommandLine`
+is empty/`-` on every one of the 54 real observed records across 7 files
+in this corpus (matches this project's own existing documented
+uncertainty about `_SECURITY_FIELD_ALIASES`'s `ProcessCommandLine` alias).
+The architecture is already fully wired for this --
+`CATEGORY_TO_EVENT_ID["process_creation"]` already includes 4688, and
+`_SECURITY_EVENT_ID_DISPATCH`/`_SECURITY_FIELD_ALIASES` already promote
+the same `process`/`command_line`/`user` fields the 13 Sysmon
+process_creation rules use -- so mirroring those technique-specific rules
+(certutil download, mshta execution, encoded PowerShell, scheduled-task
+creation, etc.) to the Security channel is not justified until a real
+sample with a populated `CommandLine` exists. Ready, not built --
+documented, not silently skipped.
+
+**A 4th sequence/correlation pattern**: `detection/sequences.py`'s own
+stated bar for adding a pattern is a real corpus scan surfacing a 3rd
+sequence-dependent miss (exactly how the Kerberos-spray pattern itself
+got added). This pass's full 80-file scan didn't produce a comparable new
+multi-event chain. The context-only events considered (4624, 4634,
+4661's non-privileged occurrences, 5140, 5145, 5156, 5158, 4768/4769/4771
+-- the first two of which already partially feed the existing
+Kerberos-spray sequence) remain standalone-alert-free by design; they
+already reach the UI as investigation context via `GET /events/{id}`'s
+unconditional `raw_json`, no code change needed for that.
+
+**Also worth stating plainly**: Security 5379 ("Credential Manager
+credentials were read") and most of Security 4672 ("special privileges
+assigned to new logon") are, in this corpus, **entirely or almost
+entirely from the benign corpus itself** -- 22,689 of 22,689 real 5379
+occurrences and 2,087 of 2,109 real 4672 occurrences are in
+`nightowl_benign_security.evtx`. Concrete, corpus-derived evidence these
+are routine noise, never standalone-alert candidates, not just an
+assumption.
+
 **Worth stating plainly, found while building the failure matrix**: 4 of
 the 26 "detected" hits (`discovery_bloodhound.evtx`,
 `discovery_psloggedon.evtx`, `kerberos_pwd_spray_4771.evtx`,

@@ -179,6 +179,21 @@ RULE_CASES = [
         {"ImageLoaded": "C:\\Windows\\System32\\drivers\\RwDrv.sys", "Signed": "true", "Signature": "ChongKim Chan"},
         {"ImageLoaded": "C:\\Windows\\System32\\drivers\\ntfs.sys", "Signed": "true", "Signature": "Microsoft Windows"},
     ),
+    (
+        "Unmanaged PowerShell (System.Management.Automation Loaded into a Non-PowerShell Process)",
+        7,
+        {
+            "Image": "C:\\Windows\\System32\\notepad.exe",
+            "ImageLoaded": "C:\\Windows\\assembly\\NativeImages_v2.0.50727_32\\System.Management.A#\\4b93b6bd71723bed2fa9dd778436dd5e\\System.Management.Automation.ni.dll",
+        },
+        # Benign look-alike: identical real ImageLoaded path, but a
+        # legitimate PowerShell host process -- the normal, expected way
+        # this DLL loads.
+        {
+            "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            "ImageLoaded": "C:\\Windows\\assembly\\NativeImages_v2.0.50727_32\\System.Management.A#\\4b93b6bd71723bed2fa9dd778436dd5e\\System.Management.Automation.ni.dll",
+        },
+    ),
 ]
 
 
@@ -307,6 +322,18 @@ SECURITY_RULE_CASES = [
         # (Group02, non-sensitive RID) -- not invented.
         {"TargetSid": "S-1-5-21-4230534742-2542757381-3142984815-1135"},
     ),
+    (
+        "SAM Privileged Group Object Access",
+        4661,
+        {"ObjectType": "SAM_GROUP", "ObjectName": "S-1-5-21-1587066498-1489273250-1035260531-512"},
+        # Benign look-alike: real value from the same fixture -- a
+        # SAM_DOMAIN object handle (not SAM_GROUP), opened in the same
+        # capture by the same lsass.exe process -- confirms ObjectType
+        # gates the match, since ProcessName cannot (every real 4661
+        # sample in this project's corpus has ProcessName == lsass.exe
+        # regardless of caller).
+        {"ObjectType": "SAM_DOMAIN", "ObjectName": "DC=example,DC=corp"},
+    ),
 ]
 
 # PowerShell/Operational-channel rules -- each declares `service:
@@ -358,8 +385,8 @@ def _event(event_id, event_data, channel="Microsoft-Windows-Sysmon/Operational")
     )
 
 
-def test_exactly_forty_three_rules_are_covered_by_this_matrix():
-    assert len(RULE_CASES) + len(SECURITY_RULE_CASES) + len(POWERSHELL_RULE_CASES) == 43
+def test_exactly_forty_five_rules_are_covered_by_this_matrix():
+    assert len(RULE_CASES) + len(SECURITY_RULE_CASES) + len(POWERSHELL_RULE_CASES) == 45
     rules = rule_loader.load_rules()
     covered_titles = (
         {title for title, *_ in RULE_CASES}
@@ -495,6 +522,62 @@ def test_sensitive_domain_group_rule_rid_suffix_anchors_on_the_delimiter():
     matches = evaluate_event(event, rules)
 
     assert not any(m.title == "Sensitive Domain Group Membership Change" for m in matches)
+
+
+def test_sam_privileged_group_rule_requires_sam_group_object_type():
+    """A privileged RID suffix alone must not be enough -- confirms this
+    holds by construction: no real SAM_USER-with-a-512-suffix sample
+    exists in this project's corpus (its own real SAM_USER samples are
+    RID -500), so this is a deliberate regression test, not a
+    re-assertion of observed data."""
+    rules = rule_loader.load_rules()
+    event = _event(
+        4661,
+        {"ObjectType": "SAM_USER", "ObjectName": "S-1-5-21-1587066498-1489273250-1035260531-512"},
+        channel="Security",
+    )
+
+    matches = evaluate_event(event, rules)
+
+    assert not any(m.title == "SAM Privileged Group Object Access" for m in matches)
+
+
+def test_sam_privileged_group_rule_rid_suffix_anchors_on_the_delimiter():
+    """Same anchoring requirement as the sensitive-domain-group-membership
+    rule's own regression test above -- `endswith` must anchor on the
+    literal '-' RID delimiter, not just the trailing digits."""
+    rules = rule_loader.load_rules()
+    event = _event(
+        4661,
+        {"ObjectType": "SAM_GROUP", "ObjectName": "S-1-5-21-1587066498-1489273250-1035260531-1512"},
+        channel="Security",
+    )
+
+    matches = evaluate_event(event, rules)
+
+    assert not any(m.title == "SAM Privileged Group Object Access" for m in matches)
+
+
+def test_unmanaged_powershell_rule_also_excludes_pwsh_and_ise_hosts():
+    """The RULE_CASES benign look-alike only exercises powershell.exe --
+    confirm the other two legitimate PowerShell host binaries this rule's
+    own filter lists (pwsh.exe; powershell_ise.exe) are also excluded."""
+    rules = rule_loader.load_rules()
+    dll = (
+        "C:\\Windows\\assembly\\NativeImages_v2.0.50727_32\\System.Management.A#"
+        "\\4b93b6bd71723bed2fa9dd778436dd5e\\System.Management.Automation.ni.dll"
+    )
+    hosts = [
+        "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell_ise.exe",
+    ]
+    for host in hosts:
+        event = _event(7, {"Image": host, "ImageLoaded": dll})
+        matches = evaluate_event(event, rules)
+        assert not any(
+            m.title == "Unmanaged PowerShell (System.Management.Automation Loaded into a Non-PowerShell Process)"
+            for m in matches
+        ), host
 
 
 def test_sensitive_enumeration_rule_also_fires_on_4798_user_membership_shape():

@@ -42,6 +42,9 @@ CATEGORY_TO_EVENT_ID: dict[str, frozenset[int]] = {
     # (see known_abusable_driver_loaded.yml, which scopes it to a small,
     # named list of publicly documented BYOVD driver filenames).
     "driver_load": frozenset({6}),
+    # Sysmon Event ID 7, "ImageLoaded" -- no rule used this category before
+    # (see unmanaged_powershell_image_load.yml, which scopes it to the
+    # PowerShell automation engine DLL loading into a non-PowerShell host).
     "image_load": frozenset({7}),
     "create_remote_thread": frozenset({8}),
     # 10 = Sysmon process access, 4656/4663 = Security object (incl.
@@ -127,6 +130,14 @@ CATEGORY_TO_EVENT_ID: dict[str, frozenset[int]] = {
     # group-membership monitoring. Deliberately does not cover volume-only
     # or self-add patterns -- see the rule file's own description for why.
     "sensitive_domain_group_membership_change": frozenset({4728, 4756}),
+    # Security Event ID 4661 ("a handle was requested to an object") --
+    # scoped to SAM group-object handles specifically (see
+    # sam_privileged_group_object_access.yml), not blanket 4661
+    # monitoring: ProcessName is always lsass.exe regardless of the
+    # caller on every real sample in this project's corpus, so
+    # ObjectType + a well-known privileged-group RID suffix is the only
+    # real discriminator.
+    "sam_privileged_group_object_access": frozenset({4661}),
 }
 
 _SUPPORTED_MODIFIERS = {None, "contains", "startswith", "endswith"}

@@ -1,0 +1,53 @@
+title: Unmanaged PowerShell (System.Management.Automation Loaded into a Non-PowerShell Process)
+id: 091c570c-f856-465d-8527-21dfbc653f24
+status: experimental
+description: >
+  Detects the PowerShell automation engine DLL (System.Management.
+  Automation) being loaded into a process other than a legitimate
+  PowerShell host (powershell.exe, pwsh.exe, or powershell_ise.exe) --
+  the well-documented "Unmanaged PowerShell" / "PowerShell without
+  powershell.exe" technique, where an attacker hosts the .NET PowerShell
+  engine directly inside an arbitrary process via reflection/API hosting
+  rather than spawning powershell.exe, specifically to evade
+  command-line- and process-name-based PowerShell detection. Verified
+  against real content: `de_unmanagedpowershell_psinject_sysmon_7_8_10.evtx`'s
+  own single real Sysmon Event ID 7 record -- Image notepad.exe,
+  ImageLoaded ...\System.Management.A#\...\System.Management.Automation.ni.dll
+  (the NGEN native-image cache's own shortened "A#" folder naming for
+  "Automation," still ending in the literal
+  System.Management.Automation.ni.dll filename, so a `contains` match on
+  the full "System.Management.Automation" string still hits). Sysmon's
+  own embedded RuleName field on that same record independently reads
+  "Defense Evasion - Unmanaged PowerShell Detected," corroborating this
+  is a named, externally-recognized technique rather than an invented
+  pattern. Only one real sample exists in this project's corpus, but --
+  per this project's own known_abusable_driver_loaded.yml precedent -- a
+  single sample is accepted for a well-documented, publicly-named
+  technique rather than an internally-invented one. `image_load` (Sysmon
+  Event ID 7) is an existing category in engine.py's CATEGORY_TO_EVENT_ID
+  with zero rules using it before this one. No real clean-corpus sample
+  of a legitimate process loading this DLL from outside a real
+  PowerShell host exists in this project's corpus to bound this rule's
+  false-positive rate beyond the exclusion filter below -- flagged, not
+  hidden.
+author: NightOwl (Pair 1 -- Adarsh + Lisha)
+date: 2026-09-07
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+tags:
+  - attack.execution
+  - attack.defense_evasion
+  - attack.t1059.001
+logsource:
+  category: image_load
+  service: sysmon
+detection:
+  selection_dll:
+    ImageLoaded|contains: 'System.Management.Automation'
+  filter_legit_host:
+    Image|endswith:
+      - '\powershell.exe'
+      - '\pwsh.exe'
+      - '\powershell_ise.exe'
+  condition: selection_dll and not filter_legit_host
+level: high

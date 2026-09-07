@@ -528,15 +528,9 @@
     },
     "normalized_count": 4,
     "skipped_count": 0,
-    "covered_count": 3,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "Microsoft-Windows-Sysmon/Operational",
-        "event_id": 7,
-        "count": 1
-      }
-    ],
+    "covered_count": 4,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
     "matched_rule_ids": [
       "sequence-process-herpaderping"
     ],
@@ -749,35 +743,33 @@
     },
     "normalized_count": 84,
     "skipped_count": 0,
-    "covered_count": 83,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "Microsoft-Windows-Sysmon/Operational",
-        "event_id": 7,
-        "count": 1
-      }
-    ],
+    "covered_count": 84,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "034c5169-8d14-43af-9061-b7417bc636ca"
+      "034c5169-8d14-43af-9061-b7417bc636ca",
+      "091c570c-f856-465d-8527-21dfbc653f24"
     ],
     "matched_rule_titles": [
-      "Remote Thread Creation from Scripting Engine or Web Server Process"
+      "Remote Thread Creation from Scripting Engine or Web Server Process",
+      "Unmanaged PowerShell (System.Management.Automation Loaded into a Non-PowerShell Process)"
     ],
     "matched_technique_ids": [
-      "T1055"
+      "T1055",
+      "T1059.001"
     ],
-    "alerts_created": 82,
+    "alerts_created": 83,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1055"
+      "T1055",
+      "T1059.001"
     ],
     "detected": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Remote Thread Creation from Scripting Engine or Web Server Process",
+    "reason": "detected -- Remote Thread Creation from Scripting Engine or Web Server Process, Unmanaged PowerShell (System.Management.Automation Loaded into a Non-PowerShell Process)",
     "manual_review_needed": false
   },
   {
@@ -806,18 +798,13 @@
     },
     "normalized_count": 63,
     "skipped_count": 0,
-    "covered_count": 8,
-    "uncovered_count": 55,
+    "covered_count": 24,
+    "uncovered_count": 39,
     "uncovered_breakdown": [
       {
         "channel": "Security",
         "event_id": 5156,
         "count": 28
-      },
-      {
-        "channel": "Security",
-        "event_id": 4661,
-        "count": 16
       },
       {
         "channel": "Security",
@@ -841,25 +828,29 @@
       }
     ],
     "matched_rule_ids": [
+      "057f13d8-c98f-42ac-baf1-7bc052243589",
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
+      "SAM Privileged Group Object Access",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
+      "T1069.002",
       "T1685.005"
     ],
-    "alerts_created": 1,
+    "alerts_created": 3,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1069.002",
       "T1685.005"
     ],
     "detected": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Security Audit Log Cleared",
+    "reason": "detected -- SAM Privileged Group Object Access, Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -1384,15 +1375,9 @@
     },
     "normalized_count": 8,
     "skipped_count": 0,
-    "covered_count": 7,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "Microsoft-Windows-Sysmon/Operational",
-        "event_id": 7,
-        "count": 1
-      }
-    ],
+    "covered_count": 8,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
     "matched_rule_ids": [
       "49c6ddee-506c-4b31-9370-57437f62a3cf"
     ],
@@ -1938,8 +1923,8 @@
     },
     "normalized_count": 34,
     "skipped_count": 0,
-    "covered_count": 13,
-    "uncovered_count": 21,
+    "covered_count": 16,
+    "uncovered_count": 18,
     "uncovered_breakdown": [
       {
         "channel": "Security",
@@ -1960,11 +1945,6 @@
         "channel": "Security",
         "event_id": 4688,
         "count": 4
-      },
-      {
-        "channel": "Security",
-        "event_id": 4661,
-        "count": 3
       },
       {
         "channel": "Security",

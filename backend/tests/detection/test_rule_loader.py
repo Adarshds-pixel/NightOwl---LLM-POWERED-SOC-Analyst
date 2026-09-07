@@ -51,7 +51,7 @@ detection:
 level: high
 """
 
-EXPECTED_RULE_COUNT = 43
+EXPECTED_RULE_COUNT = 45
 EXPECTED_CATEGORIES = {
     "process_creation",
     "network_connection",
@@ -76,6 +76,8 @@ EXPECTED_CATEGORIES = {
     "remote_registry_access",
     "kernel_driver_service_installed",
     "sensitive_domain_group_membership_change",
+    "sam_privileged_group_object_access",
+    "image_load",
 }
 
 
