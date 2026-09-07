@@ -241,7 +241,12 @@ def test_normalize_event_channel_absent_leaves_none():
         ("Security", "security"),
         ("SECURITY", "security"),  # case-insensitive
         ("System", "system"),  # real Service Control Manager (Event ID 7045) channel
-        ("Application", None),
+        # Both added 2026-09-07 after a full-corpus scan (all 80 real EVTX
+        # fixtures) found 1,537 real Bits and 361 real Application events
+        # silently canonicalizing to None -- see normalizer.py's
+        # CHANNEL_TOKEN_SUBSTRINGS comment for the full evidence trail.
+        ("Microsoft-Windows-Bits-Client/Operational", "bits"),
+        ("Application", "application"),
         (None, None),
         ("", None),
     ],

@@ -77,16 +77,44 @@ def _extract_event_record_id(system: dict) -> int | None:
 # silently fell through to the Sysmon dispatch table in normalize_event()
 # below; System carries no dedicated dispatch table since its raw
 # EventData fields already land in event_data unconditionally, same as the
-# empty-but-present PowerShell dispatch table). Every call site that needs
-# a channel-scoping decision (rule_loader.py, engine.py, this module's own
-# per-channel dispatch, event_service.py's SQL-level coverage filter) must
-# derive from this one table rather than re-hardcoding a channel string
-# comparison independently.
+# empty-but-present PowerShell dispatch table).
+#
+# Bits -> 'Microsoft-Windows-Bits-Client/Operational' (contains "bits") and
+# Application -> 'Application' (contains "application") were added
+# 2026-09-07 after a corpus-wide scan of all 80 real EVTX fixtures found
+# 1,537 and 361 real events respectively canonicalizing to None -- i.e.
+# silently unrecognized, not merely uncovered by a rule. This is a
+# categorization/labeling fix only: recognizing these channels does not by
+# itself create rule coverage (covered_event_ids() in detection/engine.py
+# still requires an actual loaded rule per (channel, event_id) pair); it
+# only stops a real, named channel from being mislabeled as unrecognized,
+# which matters for correct channel-scoped rule matching if/when a rule
+# for either channel is ever added, and for accurate "Channels" reporting
+# in the Telemetry profile UI. No rules were added for either channel --
+# see this dict's own scoping contract: a rule's `logsource.service` still
+# has to name one of these tokens before it can evaluate anything on it.
+#
+# Deliberately NOT added: the 29,109-event "None" channel bucket from the
+# same scan is not an unrecognized channel name -- it is one file,
+# CA_PetiPotam_etw_rpc_efsr_5_6.evtx, whose raw records are a captured ETW
+# trace (Provider.@Name is empty, Channel is genuinely absent/null,
+# EventID is 0), not standard Windows Event Log channel telemetry at all.
+# ETW trace records have no Channel to recognize -- there is no substring
+# to add here, and EventID 0 carries no rule-evaluable semantics. This
+# stays correctly unrecognized/uncovered rather than being forced into a
+# model it doesn't fit.
+#
+# Every call site that needs a channel-scoping decision (rule_loader.py,
+# engine.py, this module's own per-channel dispatch, event_service.py's
+# SQL-level coverage filter) must derive from this one table rather than
+# re-hardcoding a channel string comparison independently.
 CHANNEL_TOKEN_SUBSTRINGS: dict[str, str] = {
     "sysmon": "sysmon",
     "security": "security",
     "powershell": "powershell",
     "system": "system",
+    "bits": "bits",
+    "application": "application",
 }
 
 
