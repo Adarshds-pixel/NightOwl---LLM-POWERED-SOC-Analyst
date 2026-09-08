@@ -1,3 +1,11 @@
+// NightOwl ingests historical EVTX archives -- a record's own timestamp can
+// legitimately be years before real wall-clock "now" (see the Dashboard's
+// activityAnchorMs fix for the same underlying fact). A bare "1665d ago"
+// reads as a broken app, not an old record, so both time-since helpers
+// below fall back to an absolute date once the gap exceeds this threshold
+// rather than ever printing a multi-year day count.
+const RELATIVE_TIME_DAY_CAP = 30
+
 export function formatRelativeTime(iso: string): string {
   const then = new Date(iso).getTime()
   const now = Date.now()
@@ -10,7 +18,8 @@ export function formatRelativeTime(iso: string): string {
   const diffHours = Math.round(diffMinutes / 60)
   if (diffHours < 24) return `${diffHours}h ago`
   const diffDays = Math.round(diffHours / 24)
-  return `${diffDays}d ago`
+  if (diffDays < RELATIVE_TIME_DAY_CAP) return `${diffDays}d ago`
+  return formatShortDate(new Date(then))
 }
 
 export function formatPercent(value: number, digits = 0): string {
@@ -80,7 +89,11 @@ export function formatLatency(ms: number | null): string {
 }
 
 /** Elapsed time between two ISO timestamps, e.g. "12m 34s" -- used for
- *  incident duration readouts where a relative "2h ago" isn't the point. */
+ *  incident duration readouts where a relative "2h ago" isn't the point.
+ *  Past RELATIVE_TIME_DAY_CAP days, switches to "Ny Nd" instead of
+ *  decomposing into a raw day count -- same historical-data reasoning as
+ *  formatRelativeTime above ("1664d 21h" reads as broken, "4y 208d"
+ *  reads as an old record). */
 export function formatDuration(fromIso: string, toIso?: string): string {
   const from = new Date(fromIso).getTime()
   const to = toIso ? new Date(toIso).getTime() : Date.now()
@@ -90,7 +103,10 @@ export function formatDuration(fromIso: string, toIso?: string): string {
   if (minutes < 60) return `${minutes}m ${seconds % 60}s`
   const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours}h ${minutes % 60}m`
-  return `${Math.floor(hours / 24)}d ${hours % 24}h`
+  const days = Math.floor(hours / 24)
+  if (days < RELATIVE_TIME_DAY_CAP) return `${days}d ${hours % 24}h`
+  const years = Math.floor(days / 365)
+  return years > 0 ? `${years}y ${days % 365}d` : `${days}d`
 }
 
 /** Incident id -> the display id analysts read out loud ("INC-0042").

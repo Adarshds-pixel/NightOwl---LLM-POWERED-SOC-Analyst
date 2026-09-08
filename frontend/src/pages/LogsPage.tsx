@@ -29,7 +29,7 @@ import { EMPTY_EVENT_FILTERS, useEvents, type EventFilters } from '../hooks/useE
 import { useEventTotals } from '../hooks/useEventTotals'
 import { activityByHour, eventMessage, eventTypeLabel, levelCounts, levelFor, timeSpan } from '../lib/events'
 import { formatDateTime } from '../lib/format'
-import { topBy } from '../lib/aggregations'
+import { activityAnchorMs, topBy } from '../lib/aggregations'
 import { ACCENT, SEVERITY_HEX } from '../lib/tokens'
 import { SYSMON_EVENT_TYPE_LABELS } from '../lib/constants'
 
@@ -78,7 +78,11 @@ function LogsPage() {
   const counts = levelCounts(rawEvents)
   const span = timeSpan(rawEvents)
   const hosts = topBy(rawEvents, (event) => event.host, 5)
-  const activity = activityByHour(rawEvents, 12).map((point) => ({ label: point.label, events: point.count }))
+  // Real EVTX timestamps, not upload time -- anchor to the most recent
+  // record on this page rather than Date.now(), same fix as the
+  // Dashboard's activity graphs (see DashboardPage.tsx).
+  const activityNow = activityAnchorMs(rawEvents.map((event) => event.timestamp))
+  const activity = activityByHour(rawEvents, 12, activityNow).map((point) => ({ label: point.label, events: point.count }))
 
   const levelSlices = [
     { name: 'Critical', value: counts.critical, color: ACCENT.red },
@@ -198,11 +202,11 @@ function LogsPage() {
             number into this row made "0 errors" sit beside "37 alerting
             events" and read like a contradiction. */}
         <StatCard
-          label="Detection rate"
+          label="Alerting event rate"
           value={detectionRatePercent}
           icon={<TriangleAlert className="h-4 w-4" />}
           accent="violet"
-          note={`${alertTotal.toLocaleString()} of ${eventTotal.toLocaleString()} events flagged`}
+          note={`${alertTotal.toLocaleString()} of ${eventTotal.toLocaleString()} events flagged -- not a detection-recall metric`}
           format={(v) => `${v.toFixed(2)}%`}
         />
       </div>

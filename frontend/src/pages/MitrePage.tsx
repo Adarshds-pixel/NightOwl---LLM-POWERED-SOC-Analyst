@@ -154,11 +154,11 @@ function MitrePage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Techniques in catalog"
+          label="ATT&CK catalog entries"
           value={techniques.length}
           icon={<Layers className="h-4 w-4" />}
           accent="primary"
-          note="Enterprise ATT&CK, loaded from the official bundle"
+          note="Enterprise ATT&CK, including deprecated/revoked entries"
         />
         <StatCard
           label="Techniques observed"

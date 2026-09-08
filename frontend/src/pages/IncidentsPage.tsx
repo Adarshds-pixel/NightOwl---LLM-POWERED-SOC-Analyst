@@ -25,7 +25,7 @@ import {
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
 import { usePreferences } from '../context/preferences/usePreferences'
-import { activityAnchorMs, bucketCounts, periodDelta, severityDistribution } from '../lib/aggregations'
+import { activityAnchorMs, bucketCounts, periodDelta } from '../lib/aggregations'
 import { SEVERITY_ACCENT } from '../lib/severity'
 import { filterIncidents, primaryTactic } from '../lib/filtering'
 import { formatDateTime, incidentRef } from '../lib/format'
@@ -56,7 +56,6 @@ function IncidentsPage() {
   const [pageSize, setPageSize] = useState(prefs.pageSize)
 
   const filtered = useMemo(() => filterIncidents(incidents, filters, byId), [incidents, filters, byId])
-  const distribution = severityDistribution(incidents)
   const times = incidents.map((incident) => incident.created_at)
   // Same historical-dataset anchor as the Dashboard (see DashboardPage.tsx)
   // instead of Date.now(): incident.created_at is the real historical
@@ -177,28 +176,28 @@ function IncidentsPage() {
             badges, heatmap cells and chart series. */}
         <StatCard
           label="Critical"
-          value={distribution.critical}
+          value={meta.totalCritical}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.critical}
           note="Highest severity band"
         />
         <StatCard
           label="High"
-          value={distribution.high}
+          value={meta.totalHigh}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.high}
           note="Needs triage today"
         />
         <StatCard
           label="Medium"
-          value={distribution.medium}
+          value={meta.totalMedium}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.medium}
           note="Queued for review"
         />
         <StatCard
           label="Low"
-          value={distribution.low}
+          value={meta.totalLow}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.low}
           note="Informational baseline"

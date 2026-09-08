@@ -45,10 +45,12 @@ function ReportsPage() {
   const { push } = useToast()
   // Defaults to 'all', not a recent-days window: this project's real
   // workload is batch-ingesting historical/public EVTX captures (the
-  // benchmark corpus is dated 2019-2021), so a wall-clock-relative default
-  // would show "0 incidents" out of the box for the project's actual
-  // primary use case -- every real incident's own event time is years
-  // before whatever "now" the browser thinks it is.
+  // benchmark corpus is dated 2019-2021), so even though buildReport()
+  // anchors the 24h/7d/30d windows to the dataset's own latest incident
+  // (not Date.now(), see lib/report.ts) rather than showing "0 incidents"
+  // out of the box, a first-time viewer almost always wants the full
+  // ingested history, not just whatever the most recent slice happens to
+  // contain.
   const [window_, setWindow] = useState<ReportWindow>('all')
   const [generatedAt, setGeneratedAt] = useState(() => new Date().toISOString())
 

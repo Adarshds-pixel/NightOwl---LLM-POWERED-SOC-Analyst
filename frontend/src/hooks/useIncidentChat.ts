@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, getChatHistory, postChatMessage, type SourceChunk } from '../api'
 
 // Unifies GET /chat's ChatHistoryMessage (has id/created_at, never sources --
@@ -24,12 +24,20 @@ export function useIncidentChat(incidentId: number) {
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  // Bumped every time the viewed incident changes -- guards both load()
+  // and send() below so a response for an incident the user has since
+  // switched away from can never overwrite the currently-viewed one's
+  // turns (the AI Assistant page lets you switch incidents via a
+  // dropdown while a request is still in flight).
+  const requestId = useRef(0)
 
   const load = useCallback(() => {
+    const thisRequest = ++requestId.current
     setLoading(true)
     setError(null)
     getChatHistory(incidentId)
       .then((res) => {
+        if (thisRequest !== requestId.current) return
         setTurns(
           res.messages.map((m) => ({
             key: `history-${m.id}`,
@@ -40,8 +48,12 @@ export function useIncidentChat(incidentId: number) {
           })),
         )
       })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false))
+      .catch((err: Error) => {
+        if (thisRequest === requestId.current) setError(err.message)
+      })
+      .finally(() => {
+        if (thisRequest === requestId.current) setLoading(false)
+      })
   }, [incidentId])
 
   useEffect(() => {
@@ -53,6 +65,7 @@ export function useIncidentChat(incidentId: number) {
       const trimmed = message.trim()
       if (!trimmed || sending) return
 
+      const thisRequest = requestId.current
       setSending(true)
       setSendError(null)
       const optimisticKey = `local-${++localTurnCounter}`
@@ -63,6 +76,11 @@ export function useIncidentChat(incidentId: number) {
 
       try {
         const res = await postChatMessage(incidentId, trimmed)
+        // The user may have switched to a different incident while this
+        // reply was in flight -- load() will have already replaced `turns`
+        // with the new incident's history, so applying this response now
+        // would silently attach the old incident's reply to it.
+        if (thisRequest !== requestId.current) return
         setTurns((prev) => [
           ...prev.map((t) => (t.key === optimisticKey ? { ...t, pending: false } : t)),
           {
@@ -74,12 +92,13 @@ export function useIncidentChat(incidentId: number) {
           },
         ])
       } catch (err) {
+        if (thisRequest !== requestId.current) return
         // Drop the optimistic bubble rather than leaving a stuck "sending..."
         // message with no real reply behind it.
         setTurns((prev) => prev.filter((t) => t.key !== optimisticKey))
         setSendError(err instanceof ApiError ? err.detail : 'Failed to send message')
       } finally {
-        setSending(false)
+        if (thisRequest === requestId.current) setSending(false)
       }
     },
     [incidentId, sending],

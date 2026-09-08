@@ -26,6 +26,10 @@ export function useExplain(incidentId: number) {
   const [result, setResult] = useState<ExplainResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Bumped on every incidentId change and every run() call, so a response
+  // for an incident/run the user has since navigated away from can never
+  // land on the currently-viewed incident.
+  const requestId = useRef(0)
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -35,6 +39,7 @@ export function useExplain(incidentId: number) {
   }, [])
 
   const run = useCallback(() => {
+    const thisRequest = ++requestId.current
     setStatus('loading')
     setStageIndex(0)
     setError(null)
@@ -45,17 +50,34 @@ export function useExplain(incidentId: number) {
 
     explainIncident(incidentId)
       .then((res) => {
+        if (thisRequest !== requestId.current) return
         setResult(res)
         setStatus('success')
       })
       .catch((err: Error) => {
+        if (thisRequest !== requestId.current) return
         setError(err.message)
         setStatus('error')
       })
-      .finally(clearTimer)
+      .finally(() => {
+        if (thisRequest === requestId.current) clearTimer()
+      })
   }, [incidentId, clearTimer])
 
   useEffect(() => clearTimer, [clearTimer])
+
+  // Switching the viewed incident (the AI Assistant page's dropdown) must
+  // never keep showing the previous incident's analysis -- invalidate any
+  // in-flight run() and reset to idle rather than leaving a stale result
+  // on screen until the user happens to click "Run AI analysis" again.
+  useEffect(() => {
+    requestId.current += 1
+    setStatus('idle')
+    setStageIndex(0)
+    setResult(null)
+    setError(null)
+    clearTimer()
+  }, [incidentId, clearTimer])
 
   const selfCritiqueFlagged = result?.explanation.includes(CONFIDENCE_CHECK_MARKER) ?? false
 

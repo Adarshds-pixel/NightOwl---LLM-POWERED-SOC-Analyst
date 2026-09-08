@@ -28,7 +28,7 @@ import { useRules } from '../hooks/useRules'
 import { activityByHour, eventTypeLabel, levelFor } from '../lib/events'
 import { formatDateTime, incidentRef } from '../lib/format'
 import { SEVERITY_HEX, severityLabel, FILTERABLE_SEVERITIES } from '../lib/severity'
-import { topBy } from '../lib/aggregations'
+import { activityAnchorMs, topBy } from '../lib/aggregations'
 import { ACCENT } from '../lib/tokens'
 
 /**
@@ -84,7 +84,11 @@ function AlertsPage() {
   })).filter((slice) => slice.value > 0)
 
   const topRules = topBy(events, (event) => event.rule_title, 7)
-  const activity = activityByHour(events, 12).map((point) => ({ label: point.label, alerts: point.count }))
+  // Real EVTX timestamps, not upload time -- anchor to the most recent
+  // alert on this page rather than Date.now(), same fix as the
+  // Dashboard's activity graphs (see DashboardPage.tsx).
+  const activityNow = activityAnchorMs(events.map((event) => event.timestamp))
+  const activity = activityByHour(events, 12, activityNow).map((point) => ({ label: point.label, alerts: point.count }))
 
   const columns: Column<AlertRow>[] = [
     {

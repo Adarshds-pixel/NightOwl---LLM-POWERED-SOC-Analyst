@@ -1,5 +1,5 @@
 import type { IncidentSummary, MitreTechnique, RuleInfo } from '../api'
-import { severityDistribution, statusDistribution, tacticActivityCounts } from './aggregations'
+import { activityAnchorMs, severityDistribution, statusDistribution, tacticActivityCounts } from './aggregations'
 import { incidentRef } from './format'
 
 /**
@@ -48,7 +48,13 @@ export function buildReport(
   window: ReportWindow,
 ): ReportSnapshot {
   const hours = WINDOW_HOURS[window]
-  const cutoff = hours === null ? null : Date.now() - hours * 3600_000
+  // Real historical EVTX timestamps, not upload time -- anchor "last 24h/
+  // 7d/30d" to the most recent incident actually in the dataset rather
+  // than Date.now(), same fix as the Dashboard/Logs/Alerts activity
+  // graphs elsewhere in this app. Without this, every window but "all"
+  // silently showed zero incidents for any real (non-live) corpus.
+  const anchor = activityAnchorMs(incidents.map((i) => i.created_at))
+  const cutoff = hours === null ? null : anchor - hours * 3600_000
   const scoped = cutoff === null ? incidents : incidents.filter((i) => new Date(i.created_at).getTime() >= cutoff)
 
   const hostCounts = new Map<string, number>()

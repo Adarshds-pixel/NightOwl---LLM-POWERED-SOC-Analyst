@@ -4,6 +4,9 @@ import type { IncidentSummary } from '../../api'
 export interface IncidentsMeta {
   totalAll: number
   totalCritical: number
+  totalHigh: number
+  totalMedium: number
+  totalLow: number
   totalOpen: number
   totalInvestigating: number
   fetchedCount: number

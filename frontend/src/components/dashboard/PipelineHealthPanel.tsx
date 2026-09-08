@@ -65,8 +65,8 @@ export function PipelineHealthPanel({
         />
         <RingGauge
           value={Math.min(100, detectionRate * 10)}
-          label="Detection"
-          sublabel={`${detectionRate.toFixed(2)}% of events`}
+          label="Alerting"
+          sublabel={`${detectionRate.toFixed(2)}% of events flagged`}
           accent="violet"
           unit=""
         />
