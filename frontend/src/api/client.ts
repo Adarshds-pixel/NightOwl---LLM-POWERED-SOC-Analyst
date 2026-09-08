@@ -2,6 +2,7 @@ import type {
   AiOpinionResponse,
   AlertListResponse,
   AuditLogResponse,
+  DemoFixturesResponse,
   DemoResetResponse,
   EventDetailResponse,
   ChatHistoryResponse,
@@ -30,6 +31,29 @@ export class ApiError extends Error {
     this.status = status
     this.detail = detail
   }
+}
+
+/**
+ * Global 401 hook. `AuthProvider` registers a handler here on mount so that
+ * ANY request anywhere in the app that comes back 401 (a session that has
+ * expired or been invalidated server-side mid-use, not just the one request
+ * that happened to notice) flips the app's auth state and sends the user
+ * back to /login -- rather than each of the dozens of independent
+ * data-fetching hooks in this codebase separately deciding what a 401 means.
+ *
+ * Deliberately NOT fired for `/auth/login` or `/auth/me`: a login attempt
+ * failing with 401 is an expected, locally-handled outcome (wrong
+ * password), not a "your existing session just died" event, and `/auth/me`
+ * returning 401 is the normal, expected way AuthProvider itself discovers
+ * "not currently logged in" on first load -- neither should trigger a
+ * "session expired" toast or an extra redirect on top of what's already
+ * happening.
+ */
+const UNAUTHORIZED_EXEMPT_PATHS = new Set(['/auth/login', '/auth/me'])
+let onUnauthorized: (() => void) | null = null
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler
 }
 
 /** Message shown for HTTP 429. Exported (rather than matched by substring)
@@ -87,13 +111,20 @@ async function rawFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   // Empty API_KEY = disabled, matching backend/app/core/auth.py's convention.
   if (API_KEY) headers.set('X-API-Key', API_KEY)
 
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
+  // Required for the browser to send/receive the signed session cookie
+  // (Starlette SessionMiddleware, see backend/app/main.py) -- without this,
+  // every request would be treated as logged-out regardless of a real
+  // session existing, since fetch omits cookies by default for
+  // cross-origin requests (the dev server on :5173 calling the API on
+  // :8000 counts as cross-origin even though both are localhost).
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, credentials: 'include' })
 
   if (!res.ok) {
     // 429 is a temporary, self-healing condition rather than a failure of the
     // request itself, so it gets its own wording -- "rate limit exceeded" read
     // like a bug report in the middle of an otherwise working console.
     if (res.status === 429) throw new ApiError(429, RATE_LIMIT_MESSAGE)
+    if (res.status === 401 && !UNAUTHORIZED_EXEMPT_PATHS.has(path)) onUnauthorized?.()
     const body = await res.json().catch(() => ({ detail: res.statusText }))
     throw new ApiError(res.status, body.detail ?? res.statusText)
   }
@@ -353,4 +384,58 @@ export async function pingHealth(): Promise<{ ok: boolean; latencyMs: number; th
 
 export function resetDemoData() {
   return apiFetch<DemoResetResponse>('/demo/reset', { method: 'POST' })
+}
+
+export function getDemoFixtures() {
+  return apiFetch<DemoFixturesResponse>('/demo/fixtures')
+}
+
+/** Downloads one real fixture's raw bytes as a Blob so the caller can wrap
+ *  it in a File and re-upload it through the real POST /ingest, same as a
+ *  manual upload. Not routed through apiFetch/rawFetch -- those always
+ *  parse the response as JSON, which a binary EVTX file is not -- but
+ *  mirrors their auth headers and credentials handling by hand. */
+export async function fetchDemoFixtureBytes(filename: string): Promise<Blob> {
+  const headers = new Headers()
+  if (API_KEY) headers.set('X-API-Key', API_KEY)
+  const res = await fetch(`${API_BASE_URL}/demo/fixtures/${encodeURIComponent(filename)}`, {
+    headers,
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    if (res.status === 401) onUnauthorized?.()
+    const body = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new ApiError(res.status, body.detail ?? res.statusText)
+  }
+  return res.blob()
+}
+
+// --- Admin auth (single admin, no registration -- see
+// backend/app/api/routes_auth.py) ---------------------------------------
+
+export interface SessionResponse {
+  username: string
+}
+
+/** Not routed through apiFetch's in-flight GET de-dup / mutation-epoch
+ *  bookkeeping -- that machinery exists for the app's own data endpoints,
+ *  and login/logout are one-shot actions, not something two components
+ *  would ever race to call at once. */
+export function login(username: string, password: string) {
+  return rawFetch<SessionResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export function logout() {
+  return rawFetch<{ ok: boolean }>('/auth/logout', { method: 'POST' })
+}
+
+/** Whether a valid session currently exists -- resolves with the logged-in
+ *  username, or throws a 401 ApiError if not (never fires the global
+ *  onUnauthorized handler for this one path, see UNAUTHORIZED_EXEMPT_PATHS
+ *  above -- this call IS how AuthProvider finds that out safely). */
+export function getCurrentSession() {
+  return rawFetch<SessionResponse>('/auth/me')
 }

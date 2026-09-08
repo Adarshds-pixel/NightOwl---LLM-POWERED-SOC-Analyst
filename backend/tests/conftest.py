@@ -15,6 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.auth import require_session_auth
 from app.core.rate_limit import reset_rate_limiter
 from app.db.base import Base
 from app.db.session import get_db
@@ -78,6 +79,15 @@ def api_client():
     """Yields (TestClient, sessionmaker) -- the sessionmaker lets a test
     open its own session afterward to inspect rows the request persisted.
     Dependency override is cleared on teardown regardless of pass/fail.
+
+    `require_session_auth` is overridden to a no-op here, the same way
+    `require_api_key` is effectively a no-op by default (settings.api_key
+    is "" unless a test opts in via monkeypatch, see tests/core/test_auth.py).
+    This fixture predates admin login entirely and every test using it is
+    about its own route's behavior, not about auth -- real enforcement of
+    require_session_auth is covered separately in
+    tests/api/test_auth_routes.py, which builds its own TestClient without
+    this override.
     """
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -95,6 +105,7 @@ def api_client():
             db.close()
 
     app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[require_session_auth] = lambda: None
     try:
         yield TestClient(app), TestingSessionLocal
     finally:

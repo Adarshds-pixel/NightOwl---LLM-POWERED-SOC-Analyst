@@ -3,6 +3,7 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { AnalystAvatar, NightOwlMark } from '../components/brand/NightOwlMark'
 import { ActivityIndicator, StatusDot, Tooltip } from '../components/ui'
+import { useAuth } from '../context/auth/useAuth'
 import { useHealth } from '../context/health/useHealth'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { computeThreatLevel } from '../lib/aggregations'
@@ -10,12 +11,12 @@ import { PRIMARY_NAV, SECONDARY_NAV, type NavEntry } from '../lib/navigation'
 
 /**
  * The application rail: brand, primary navigation, a live system-status
- * block and the deployment identity card.
+ * block and the identity card.
  *
- * The identity card says what is actually true -- NightOwl has no accounts,
- * sessions or roles, only an optional shared API key -- so it describes the
- * deployment rather than inventing a signed-in user with an email address
- * and an ADMIN badge.
+ * The identity card shows the real, currently-authenticated admin session
+ * (see context/auth) -- NightOwl has exactly one admin account, so this
+ * always reads the same username, but it comes from the live session
+ * rather than being hardcoded.
  */
 export function Sidebar({
   collapsed,
@@ -26,9 +27,9 @@ export function Sidebar({
 }) {
   const { status } = useHealth()
   const { incidents } = useIncidentsSnapshot()
+  const { username } = useAuth()
   const threat = computeThreatLevel(incidents)
   const healthy = status === 'healthy'
-  const apiKeyConfigured = Boolean(import.meta.env.VITE_API_KEY)
 
   return (
     <aside
@@ -101,11 +102,9 @@ export function Sidebar({
           <AnalystAvatar size={collapsed ? 30 : 36} />
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-meta font-medium text-text">Administrator</p>
+              <p className="truncate text-meta font-medium text-text">{username ?? 'Administrator'}</p>
               <p className="truncate text-micro tracking-[0.14em] text-accent-magenta uppercase">NightOwl SOC</p>
-              <p className="mt-0.5 truncate text-micro text-text-faint">
-                {apiKeyConfigured ? 'API key configured' : 'Local deployment - no auth'}
-              </p>
+              <p className="mt-0.5 truncate text-micro text-text-faint">Signed in</p>
             </div>
           )}
         </div>

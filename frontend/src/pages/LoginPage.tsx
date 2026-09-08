@@ -1,31 +1,19 @@
-import {
-  ArrowRight,
-  BrainCircuit,
-  Crosshair,
-  Eye,
-  EyeOff,
-  FileText,
-  Lock,
-  Mail,
-  Shield,
-  ShieldCheck,
-} from 'lucide-react'
+import { ArrowRight, BrainCircuit, Crosshair, Eye, EyeOff, FileText, Lock, Shield, ShieldCheck, User } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { NightOwlMark } from '../components/brand/NightOwlMark'
-import { AmbientBackground, Button, CursorGlow, Reflection } from '../components/ui'
+import { AmbientBackground, Button, CursorGlow, Reflection, TextInput } from '../components/ui'
+import { useAuth } from '../context/auth/useAuth'
 
 /**
  * The NightOwl sign-in screen.
  *
- * IMPORTANT: this is the visual shell only. NightOwl has no accounts,
- * sessions or roles yet (see lib/preferences.ts and the Settings page's
- * "Auth model" row) -- authentication is tracked as future work. Nothing
- * here validates a credential and no route is gated by it: submitting the
- * form simply enters the console, exactly as navigating to "/" always has.
- * The page exists so the design system has a front door and so the intended
- * end state can be demonstrated; the footer says as much on screen rather
- * than implying a security control that does not exist.
+ * Real authentication: submitting calls POST /auth/login (via
+ * AuthProvider's `login`), which sets a signed HttpOnly session cookie on
+ * success. There is exactly one admin account, configured entirely through
+ * environment variables (ADMIN_USERNAME / ADMIN_PASSWORD_HASH) -- no
+ * registration, no password reset, no SSO, matching this deployment's
+ * single-admin scope.
  *
  * Built from the same tokens as the rest of the app, so it belongs to one
  * product rather than being a detached splash screen.
@@ -54,15 +42,34 @@ const FEATURES = [
   },
 ]
 
+const FIELD_SIZE = 'h-12 pr-3.5 pl-11 text-label'
+
 export function LoginPage() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const location = useLocation()
+  const { login, error } = useAuth()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const redirectTo = (location.state as { from?: string } | null)?.from ?? '/'
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    navigate('/')
+    if (submitting) return
+    setSubmitting(true)
+    try {
+      await login(username, password)
+      navigate(redirectTo, { replace: true })
+    } catch {
+      // AuthProvider already recorded a generic, user-facing message in
+      // `error` -- nothing else to do here except stop showing "Signing
+      // in...". The password is deliberately left in place (not cleared)
+      // so a mistyped username doesn't force retyping both fields.
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -137,25 +144,27 @@ export function LoginPage() {
               </span>
             </div>
 
-            <h2 className="mt-6 text-center text-[1.75rem] leading-tight font-bold text-text">Welcome Back</h2>
+            <h2 className="mt-6 text-center text-[1.75rem] leading-tight font-bold text-text">Admin Login</h2>
             <p className="mt-1.5 text-center text-label text-text-muted">Sign in to continue to NightOwl</p>
 
             <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="login-email" className="text-meta font-semibold text-text-dim">
-                  Email Address
+                <label htmlFor="login-username" className="text-meta font-semibold text-text-dim">
+                  Username
                 </label>
                 <div className="relative">
-                  <Mail className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-text-muted" />
-                  <input
-                    id="login-email"
-                    type="email"
+                  <User className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                  <TextInput
+                    id="login-username"
+                    type="text"
                     required
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                    className="h-12 w-full rounded-control border border-line bg-bg-deep/80 pr-3.5 pl-11 text-label text-text backdrop-blur-md placeholder:text-text-faint transition-all duration-200 focus:border-accent-violet/65 focus:shadow-glow-primary focus:outline-none"
+                    autoComplete="username"
+                    autoFocus
+                    disabled={submitting}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter your username"
+                    className={FIELD_SIZE}
                   />
                 </div>
               </div>
@@ -166,15 +175,16 @@ export function LoginPage() {
                 </label>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-text-muted" />
-                  <input
+                  <TextInput
                     id="login-password"
                     type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete="current-password"
+                    disabled={submitting}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
-                    className="h-12 w-full rounded-control border border-line bg-bg-deep/80 pr-11 pl-11 text-label text-text backdrop-blur-md placeholder:text-text-faint transition-all duration-200 focus:border-accent-violet/65 focus:shadow-glow-primary focus:outline-none"
+                    className={`${FIELD_SIZE} pr-11`}
                   />
                   <button
                     type="button"
@@ -187,49 +197,23 @@ export function LoginPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  className="text-meta font-medium text-accent-violet transition-colors hover:text-accent-magenta"
-                >
-                  Forgot password?
-                </button>
-              </div>
+              {error && (
+                <p role="alert" className="rounded-control border border-accent-red/30 bg-accent-red/10 px-3.5 py-2.5 text-meta text-accent-red">
+                  {error}
+                </p>
+              )}
 
               <Button
                 type="submit"
                 variant="primary"
                 size="lg"
                 className="mt-1 w-full"
+                disabled={submitting}
                 icon={<ArrowRight className="h-4 w-4" />}
               >
-                Sign In
+                {submitting ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
-
-            <div className="my-6 flex items-center gap-3">
-              <span className="h-px flex-1 bg-line" />
-              <span className="text-micro font-semibold tracking-[0.18em] text-text-muted uppercase">or</span>
-              <span className="h-px flex-1 bg-line" />
-            </div>
-
-            <Button
-              variant="secondary"
-              size="lg"
-              className="w-full"
-              icon={<Shield className="h-4 w-4" />}
-              onClick={() => navigate('/')}
-            >
-              Sign in with SSO
-            </Button>
-
-            <p className="mt-7 text-center text-meta text-text-muted">
-              Don&apos;t have an account?{' '}
-              <span className="font-medium text-accent-violet">Contact your administrator</span>
-            </p>
-            <p className="mt-3 text-center text-micro leading-relaxed text-text-faint">
-              Interface preview - NightOwl does not enforce authentication yet, so this form does not verify credentials.
-            </p>
           </div>
         </section>
       </div>

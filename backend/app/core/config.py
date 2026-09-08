@@ -84,6 +84,30 @@ class Settings(BaseSettings):
     # destructive reset endpoint is not acceptable.
     demo_mode_enabled: bool = True
 
+    # Admin login (single admin, no registration -- see api/routes_auth.py).
+    # `admin_password_hash` holds a bcrypt hash, never a plaintext password;
+    # empty (default) means no password can ever match, so a freshly cloned
+    # repo with no .env correctly has login disabled rather than accepting
+    # some baked-in default credential. `session_secret_key` signs the
+    # session cookie (Starlette's SessionMiddleware, itsdangerous under the
+    # hood) -- also empty by default; app startup rejects an empty secret
+    # once real routes are gated on it, rather than silently signing
+    # sessions with a guessable key.
+    admin_username: str = "admin"
+    admin_password_hash: str = ""
+    session_secret_key: str = ""
+    # 12 hours -- long enough that a real analyst's working day, including a
+    # browser refresh or a laptop sleep/wake, doesn't force a re-login, short
+    # enough that a stolen session cookie doesn't stay valid indefinitely.
+    session_max_age_seconds: int = 12 * 60 * 60
+
+    # Login-attempt throttling (api/routes_auth.py), deliberately separate
+    # from rate_limit_per_minute above: that bucket is shared across every
+    # route and sized for normal dashboard traffic (hundreds/minute), which
+    # would make brute-forcing a password trivial if login attempts drew
+    # from the same budget. This one is scoped to POST /auth/login only.
+    login_rate_limit_per_minute: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

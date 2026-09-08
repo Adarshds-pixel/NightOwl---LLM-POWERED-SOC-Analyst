@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { RedirectIfAuthenticated } from './context/auth/RedirectIfAuthenticated'
+import { RequireAuth } from './context/auth/RequireAuth'
 import AppLayout from './layout/AppLayout'
 import DashboardPage from './pages/DashboardPage'
 
@@ -30,9 +32,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Sits outside AppLayout: the sign-in screen has no sidebar or
-            topbar. It is presentation only -- NightOwl has no accounts yet,
-            so this route gates nothing and every route below stays
-            reachable directly, exactly as before.
+            topbar. RedirectIfAuthenticated sends an already-logged-in admin
+            straight to the Dashboard instead of showing the form again.
 
             It carries its own Suspense because the only other boundary in
             the app lives inside AppLayout, which this route deliberately
@@ -40,12 +41,21 @@ function App() {
         <Route
           path="/login"
           element={
-            <Suspense fallback={null}>
-              <LoginPage />
-            </Suspense>
+            <RedirectIfAuthenticated>
+              <Suspense fallback={null}>
+                <LoginPage />
+              </Suspense>
+            </RedirectIfAuthenticated>
           }
         />
-        <Route element={<AppLayout />}>
+        {/* Every route below requires a real, currently-valid session --
+            RequireAuth redirects to /login otherwise. This is the frontend
+            half of the gate only: the backend independently rejects any
+            request without a valid session cookie regardless of what the
+            UI shows (see require_session_auth in backend/app/core/auth.py),
+            so this route guard is a UX convenience, not the actual
+            enforcement boundary. */}
+        <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/incidents" element={<IncidentsPage />} />
           <Route path="/incidents/:id" element={<IncidentDetailPage />} />

@@ -10,11 +10,17 @@ import '@fontsource/jetbrains-mono/600.css'
 import './index.css'
 import App from './App.tsx'
 import { AppProviders } from './context/AppProviders'
+import { AuthProvider } from './context/auth/AuthProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AppProviders>
-      <App />
-    </AppProviders>
+    {/* Outermost: available on /login (which none of AppProviders' other
+        contexts need to be, see App.tsx) and to every route guard inside
+        the router that AppProviders wraps. */}
+    <AuthProvider>
+      <AppProviders>
+        <App />
+      </AppProviders>
+    </AuthProvider>
   </StrictMode>,
 )

@@ -320,3 +320,17 @@ export interface EventDetailResponse {
 export interface DemoResetResponse {
   deleted: Record<string, number>
 }
+
+// --- Demo fixtures (GET /demo/fixtures, backend/app/api/routes_demo.py) --
+// The real-world fixtures the *current* rule set detects -- see that
+// route's own docstring for why this list is sourced from
+// failure_matrix.json rather than a second, hand-maintained pool.
+export interface DemoFixtureInfo {
+  filename: string
+  label: string
+  technique_ids: string[]
+}
+
+export interface DemoFixturesResponse {
+  fixtures: DemoFixtureInfo[]
+}

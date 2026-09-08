@@ -1,8 +1,8 @@
 /**
  * Local, per-browser preferences.
  *
- * There is no user/accounts concept in NightOwl (no auth beyond a shared
- * API key), so "settings" genuinely means "this browser's preferences" --
+ * NightOwl's single admin account has no per-user profile or settings
+ * endpoint, so "settings" genuinely means "this browser's preferences" --
  * they live in localStorage and nothing is ever sent to the backend. Every
  * value here is actually honoured somewhere in the UI; a preference that
  * doesn't change behaviour doesn't belong in this file.

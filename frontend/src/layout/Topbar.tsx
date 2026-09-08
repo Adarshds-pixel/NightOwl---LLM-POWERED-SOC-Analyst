@@ -1,9 +1,10 @@
 import clsx from 'clsx'
-import { Bell, Bot, Clock, Menu, Search, Settings, Sparkles, UserRound } from 'lucide-react'
+import { Bell, Bot, Clock, LogOut, Menu, Search, Settings, Sparkles, UserRound } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { NotificationPanel } from '../components/notifications/NotificationPanel'
 import { Popover, StatusDot, Tooltip } from '../components/ui'
+import { useAuth } from '../context/auth/useAuth'
 import { useHealth } from '../context/health/useHealth'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { usePreferences } from '../context/preferences/usePreferences'
@@ -19,13 +20,30 @@ import { matchNavEntry } from '../lib/navigation'
  */
 export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => void; onOpenSidebar: () => void }) {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const { prefs } = usePreferences()
   const { status } = useHealth()
   const { incidents } = useIncidentsSnapshot()
   const { unseen, unseenCount, markAllSeen, markSeen } = useUnseenIncidents(incidents)
+  const { username, logout } = useAuth()
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const now = useClock()
+
+  async function handleLogout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    setProfileOpen(false)
+    // logout() clears local auth state even if the backend call fails (see
+    // AuthProvider), so this navigate is safe to fire unconditionally --
+    // RequireAuth will bounce back to /login anyway if it somehow isn't.
+    try {
+      await logout()
+    } finally {
+      navigate('/login', { replace: true })
+    }
+  }
 
   const entry = matchNavEntry(pathname)
   const title = entry?.title ?? entry?.label ?? 'NightOwl'
@@ -130,7 +148,7 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
           <button
             type="button"
             onClick={() => setProfileOpen((open) => !open)}
-            aria-label="Deployment menu"
+            aria-label="Account menu"
             aria-expanded={profileOpen}
             className={clsx(
               'flex h-10 w-10 items-center justify-center rounded-control border bg-surface-2/50 transition-colors',
@@ -141,10 +159,9 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
           </button>
           <Popover open={profileOpen} onClose={() => setProfileOpen(false)} className="w-64">
             <div className="border-b border-line px-3.5 py-3">
-              <p className="text-body font-medium text-text">Local analyst</p>
+              <p className="text-body font-medium text-text">{username ?? 'Admin'}</p>
               <p className="mt-0.5 text-micro text-text-faint">
-                NightOwl runs as a single-user local deployment. There is no account system, so there is no profile to
-                sign in or out of.
+                NightOwl has a single administrator account. Signing out ends this session on this device.
               </p>
             </div>
             <div className="flex items-center justify-between px-3.5 py-2 text-meta text-text-muted">
@@ -162,6 +179,15 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
               <Settings className="h-3.5 w-3.5" />
               Settings and preferences
             </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="flex w-full items-center gap-2 border-t border-line px-3.5 py-2.5 text-left text-meta text-text-dim transition-colors hover:bg-accent-red/10 hover:text-accent-red disabled:opacity-60"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              {loggingOut ? 'Signing out...' : 'Sign out'}
+            </button>
           </Popover>
         </div>
       </div>

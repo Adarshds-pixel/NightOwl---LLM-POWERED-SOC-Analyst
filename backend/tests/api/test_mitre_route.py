@@ -2,9 +2,22 @@
 technique catalog from mitre/loader.py's cached lookup.
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.core.auth import require_session_auth
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _bypass_session_auth():
+    """This file doesn't use the `api_client` fixture (no DB needed), so it
+    needs its own require_session_auth override -- these tests are about
+    the MITRE catalog route, not about auth. See conftest.py's api_client
+    fixture for the same rationale."""
+    app.dependency_overrides[require_session_auth] = lambda: None
+    yield
+    app.dependency_overrides.pop(require_session_auth, None)
 
 FAKE_LOOKUP = {
     "T1059.001": {

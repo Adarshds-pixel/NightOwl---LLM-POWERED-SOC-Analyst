@@ -27,3 +27,10 @@ python-multipart>=0.0.9
 # NightOwl's own engine.py does the actual per-event matching (see docs/decisions.md)
 pysigma>=0.11.0
 PyYAML>=6.0
+
+# Admin authentication (single admin, signed-cookie session -- see
+# app/api/routes_auth.py). itsdangerous is Starlette's own SessionMiddleware
+# dependency (not previously a direct requirement); bcrypt was already an
+# installed transitive dependency but never pinned directly.
+itsdangerous>=2.2.0
+bcrypt>=4.0.0

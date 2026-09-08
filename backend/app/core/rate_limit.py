@@ -35,6 +35,12 @@ class _TokenBucket:
 
 _buckets: dict[str, _TokenBucket] = {}
 
+# A second, separate bucket store for login attempts specifically (see
+# `allow_login_attempt` below) -- deliberately not the same dict as
+# `_buckets`, so a burst of normal dashboard traffic from one host can never
+# spend down the budget meant to slow down password guessing, or vice versa.
+_login_buckets: dict[str, _TokenBucket] = {}
+
 # Not rate limited (see module docstring). Kept as an exact-match set rather
 # than a prefix check so a future "/healthz/expensive-subcheck" cannot slip
 # through by accident.
@@ -43,16 +49,16 @@ EXEMPT_PATHS = frozenset({"/health"})
 
 def reset_rate_limiter() -> None:
     _buckets.clear()
+    _login_buckets.clear()
 
 
-def _allow(key: str) -> bool:
-    capacity = settings.rate_limit_per_minute
+def _consume(buckets: dict[str, _TokenBucket], key: str, capacity: int) -> bool:
     if capacity <= 0:
         return True
 
     refill_per_sec = capacity / 60.0
     now = time.monotonic()
-    bucket = _buckets.setdefault(key, _TokenBucket(tokens=capacity, last_refill=now))
+    bucket = buckets.setdefault(key, _TokenBucket(tokens=capacity, last_refill=now))
     bucket.tokens = min(capacity, bucket.tokens + (now - bucket.last_refill) * refill_per_sec)
     bucket.last_refill = now
 
@@ -60,6 +66,18 @@ def _allow(key: str) -> bool:
         return False
     bucket.tokens -= 1
     return True
+
+
+def _allow(key: str) -> bool:
+    return _consume(_buckets, key, settings.rate_limit_per_minute)
+
+
+def allow_login_attempt(key: str) -> bool:
+    """Brute-force throttle for POST /auth/login, called directly by the
+    route handler (not the global middleware) -- see
+    `login_rate_limit_per_minute`'s own docstring in config.py for why this
+    needs its own, much smaller budget."""
+    return _consume(_login_buckets, key, settings.login_rate_limit_per_minute)
 
 
 async def rate_limit_middleware(request: Request, call_next):
