@@ -33,7 +33,7 @@ references:
   - https://attack.mitre.org/techniques/T1685/001/
   - https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4719
 tags:
-  - attack.defense_impairment
+  - attack.defense_evasion
   - attack.t1685.001
 logsource:
   category: audit_policy_weakened

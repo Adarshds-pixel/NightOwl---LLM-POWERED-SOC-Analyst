@@ -17,7 +17,9 @@ from pathlib import Path
 
 from app.detection.rule_loader import get_loaded_rules
 
-FIXTURES_DIR = Path(__file__).resolve().parents[1] / "sample_logs" / "real_world_fixtures" / "malicious"
+# real_world_fixtures/ splits into detected/undetected/benign (2026-09-08) --
+# this fixture is a real, currently-detected sample (Process Herpaderping).
+FIXTURES_DIR = Path(__file__).resolve().parents[1] / "sample_logs" / "real_world_fixtures" / "detected"
 
 
 def _record(event_id, command_line, computer="WORKSTATION01"):

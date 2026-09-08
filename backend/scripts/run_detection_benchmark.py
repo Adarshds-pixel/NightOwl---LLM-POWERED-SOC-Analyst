@@ -17,10 +17,15 @@ directories (2026-09-05 -- previously mixed by filename convention alone,
 which invited exactly the kind of "which of these is actually safe to
 call clean" confusion this split now makes structurally impossible):
 
-  malicious  sample_logs/real_world_fixtures/malicious/    real-world
-             attack captures (public ATT&CK sample corpus). EVERY file
-             here is malicious, so a file with zero matches is a false
-             negative -- never a correct verdict.
+  malicious  sample_logs/real_world_fixtures/{detected,undetected}/
+             real-world attack captures (public ATT&CK sample corpus).
+             Split into two directories (2026-09-08) purely so the repo
+             itself shows which fixtures the *current* rule set catches --
+             this script still scans both together and scores every file
+             as malicious regardless of which directory it's in, so a file
+             with zero matches is still a false negative, never a correct
+             verdict. detected/undetected is this script's own output
+             recorded as a filesystem location, not an input filter.
 
   clean      sample_logs/demo_fixtures/noise_*.evtx    5 slices of ordinary
              workstation activity, verified clean at generation time by
@@ -67,7 +72,7 @@ from app.models.event import Event  # noqa: E402
 
 SAMPLE_LOGS = Path(__file__).resolve().parents[1] / "sample_logs"
 REAL_WORLD_DIR = SAMPLE_LOGS / "real_world_fixtures"
-MALICIOUS_DIR = REAL_WORLD_DIR / "malicious"
+MALICIOUS_DIRS = (REAL_WORLD_DIR / "detected", REAL_WORLD_DIR / "undetected")
 CLEAN_GLOB = sorted((SAMPLE_LOGS / "demo_fixtures").glob("noise_*.evtx")) + sorted(
     (REAL_WORLD_DIR / "benign").glob("*.evtx")
 )
@@ -182,9 +187,9 @@ def main() -> int:
     rules = get_loaded_rules()
     print(f"Loaded {len(rules)} detection rules")
 
-    malicious_files = sorted(MALICIOUS_DIR.glob("*.evtx"))
+    malicious_files = sorted(p for d in MALICIOUS_DIRS for p in d.glob("*.evtx"))
     if not malicious_files:
-        print(f"No fixtures found in {MALICIOUS_DIR}", file=sys.stderr)
+        print(f"No fixtures found in {MALICIOUS_DIRS}", file=sys.stderr)
         return 1
 
     print(f"Scanning {len(malicious_files)} malicious + {len(CLEAN_GLOB)} clean fixtures "

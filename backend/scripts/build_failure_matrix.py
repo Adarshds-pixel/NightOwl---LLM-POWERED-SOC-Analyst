@@ -59,11 +59,15 @@ from app.models.incident import Incident  # noqa: E402
 from app.services.ingest_service import ingest_records  # noqa: E402
 
 SAMPLE_LOGS = Path(__file__).resolve().parents[1] / "sample_logs"
-# real_world_fixtures/ splits malicious/ and benign/ into separate
-# directories (2026-09-05) -- this script's whole premise is "every
-# fixture here is malicious, classify its miss," so it only ever reads
-# the malicious/ side.
-MALICIOUS_DIR = SAMPLE_LOGS / "real_world_fixtures" / "malicious"
+# real_world_fixtures/ splits into detected/, undetected/ and benign/
+# (2026-09-08, previously a single malicious/ + benign/ split) -- this
+# script's whole premise is "every fixture in detected/undetected is
+# malicious, classify its miss," so it reads both malicious subdirectories
+# (never benign/) and reports on the full corpus regardless of a file's
+# current detected/undetected status -- that status is this script's own
+# output, not an input filter.
+REAL_WORLD_DIR = SAMPLE_LOGS / "real_world_fixtures"
+MALICIOUS_DIRS = (REAL_WORLD_DIR / "detected", REAL_WORLD_DIR / "undetected")
 
 FAILURE_CATEGORIES: dict[int, str] = {
     1: "parser_gap",
@@ -548,9 +552,9 @@ def main() -> int:
     rules = get_loaded_rules()
     print(f"Loaded {len(rules)} detection rules")
 
-    fixture_paths = sorted(MALICIOUS_DIR.glob("*.evtx"))
+    fixture_paths = sorted(p for d in MALICIOUS_DIRS for p in d.glob("*.evtx"))
     if not fixture_paths:
-        print(f"No fixtures found in {MALICIOUS_DIR}", file=sys.stderr)
+        print(f"No fixtures found in {MALICIOUS_DIRS}", file=sys.stderr)
         return 1
 
     print(f"Analyzing {len(fixture_paths)} fixtures (large files take a while)...")

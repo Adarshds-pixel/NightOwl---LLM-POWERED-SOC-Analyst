@@ -122,139 +122,6 @@
     "manual_review_needed": false
   },
   {
-    "name": "bits_openvpn.evtx",
-    "behavior_hint": "bits openvpn",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 1537,
-    "channels": [
-      "Microsoft-Windows-Bits-Client/Operational"
-    ],
-    "providers": [
-      "Microsoft-Windows-Bits-Client"
-    ],
-    "event_id_counts": {
-      "3": 254,
-      "4": 125,
-      "5": 84,
-      "59": 162,
-      "60": 129,
-      "61": 492,
-      "209": 101,
-      "306": 150,
-      "310": 40
-    },
-    "normalized_count": 1537,
-    "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 1537,
-    "uncovered_breakdown": [
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 61,
-        "count": 492
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 3,
-        "count": 254
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 59,
-        "count": 162
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 306,
-        "count": 150
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 60,
-        "count": 129
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 4,
-        "count": 125
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 209,
-        "count": 101
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 5,
-        "count": 84
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 310,
-        "count": 40
-      }
-    ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      2
-    ],
-    "classification_labels": [
-      "channel_provider_gap"
-    ],
-    "reason": "Bits-Client/Operational channel, not Sysmon or Security.",
-    "manual_review_needed": false
-  },
-  {
-    "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
-    "behavior_hint": "CA 4624 4625 LogonType2 LogonProc chrome",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 4,
-    "channels": [
-      "Security"
-    ],
-    "providers": [
-      "Microsoft-Windows-Security-Auditing"
-    ],
-    "event_id_counts": {
-      "4624": 3,
-      "4625": 1
-    },
-    "normalized_count": 4,
-    "skipped_count": 0,
-    "covered_count": 3,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 4625,
-        "count": 1
-      }
-    ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      10
-    ],
-    "classification_labels": [
-      "insufficient_telemetry"
-    ],
-    "reason": "Real content read directly: 3 successful LogonType 2 (interactive) logons via chrome.exe as the logon process, plus exactly 1 failed logon (4625) -- 4 events total. 4624/4625 are fully covered event IDs (no channel/parser gap), but this file's own signal is too thin to justify a rule: 1 failure is not a brute-force pattern (the project's own Kerberos-spray rule requires 4 distinct targets in a window, well below the real spray sample's 10, specifically to avoid firing on normal single mistypes), and nothing about the 3 successful logons is anomalous on its own. Writing a rule here would mean inventing a threshold with no real population of logon-failure samples to calibrate or benign-test it against -- exactly the overfitting this project's own discipline avoids. Not pursued this pass; revisit if a real, higher-volume failed-logon sample is ever added.",
-    "manual_review_needed": false
-  },
-  {
     "name": "CA_DCSync_4662.evtx",
     "behavior_hint": "CA DCSync 4662",
     "parsed_ok": true,
@@ -337,82 +204,6 @@
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- LSASS Handle Access via Security Auditing",
-    "manual_review_needed": false
-  },
-  {
-    "name": "CA_PetiPotam_etw_rpc_efsr_5_6.evtx",
-    "behavior_hint": "CA PetiPotam etw rpc efsr 5 6",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 29109,
-    "channels": [],
-    "providers": [
-      "Microsoft-Windows-RPC"
-    ],
-    "event_id_counts": {
-      "0": 1,
-      "1": 8,
-      "5": 14508,
-      "6": 14550,
-      "9": 1,
-      "14": 39,
-      "16": 2
-    },
-    "normalized_count": 29109,
-    "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 29109,
-    "uncovered_breakdown": [
-      {
-        "channel": null,
-        "event_id": 6,
-        "count": 14550
-      },
-      {
-        "channel": null,
-        "event_id": 5,
-        "count": 14508
-      },
-      {
-        "channel": null,
-        "event_id": 14,
-        "count": 39
-      },
-      {
-        "channel": null,
-        "event_id": 1,
-        "count": 8
-      },
-      {
-        "channel": null,
-        "event_id": 16,
-        "count": 2
-      },
-      {
-        "channel": null,
-        "event_id": 0,
-        "count": 1
-      },
-      {
-        "channel": null,
-        "event_id": 9,
-        "count": 1
-      }
-    ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      2
-    ],
-    "classification_labels": [
-      "channel_provider_gap"
-    ],
-    "reason": "ETW/RPC channel (System.Channel is empty/None on these records, not Sysmon or Security) -- PetiPotam/EFSRPC coercion telemetry isn't in either currently-covered channel.",
     "manual_review_needed": false
   },
   {
@@ -1074,78 +865,6 @@
     "manual_review_needed": false
   },
   {
-    "name": "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
-    "behavior_hint": "Discovery Remote System NamedPipes Sysmon 18",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 20,
-    "channels": [
-      "Microsoft-Windows-Sysmon/Operational"
-    ],
-    "providers": [
-      "Microsoft-Windows-Sysmon"
-    ],
-    "event_id_counts": {
-      "18": 20
-    },
-    "normalized_count": 20,
-    "skipped_count": 0,
-    "covered_count": 20,
-    "uncovered_count": 0,
-    "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      6
-    ],
-    "classification_labels": [
-      "rule_missing"
-    ],
-    "reason": "Event ID 18 (pipe connect) IS covered (pipe_event category), but the only loaded pipe_event rule targets spoolss specifically. Confirmed real content: PipeName=\\lsass, Image=System -- a remote SMB named-pipe connection to \\lsass, not \\spoolss. No rule exists for this pattern; writing one needs care since System connecting to \\lsass/\\srvsvc over SMB is also fairly common legitimate traffic -- likely needs a remote-vs-local or frequency signal to stay low-noise, not a blanket PipeName match.",
-    "manual_review_needed": false
-  },
-  {
-    "name": "discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx",
-    "behavior_hint": "discovery sysmon 18 Invoke UserHunter NetSessionEnum DC-srvsvc",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 1,
-    "channels": [
-      "Microsoft-Windows-Sysmon/Operational"
-    ],
-    "providers": [
-      "Microsoft-Windows-Sysmon"
-    ],
-    "event_id_counts": {
-      "18": 1
-    },
-    "normalized_count": 1,
-    "skipped_count": 0,
-    "covered_count": 1,
-    "uncovered_count": 0,
-    "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      6
-    ],
-    "classification_labels": [
-      "rule_missing"
-    ],
-    "reason": "Same gap as Discovery_Remote_System_NamedPipes_Sysmon_18.evtx. Confirmed real content: PipeName=\\srvsvc, Image=System -- PowerView's Invoke-UserHunter NetSessionEnum technique connects to \\srvsvc, not \\spoolss.",
-    "manual_review_needed": false
-  },
-  {
     "name": "discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx",
     "behavior_hint": "discovery sysmon 3 Invoke UserHunter SourceMachine",
     "parsed_ok": true,
@@ -1452,42 +1171,6 @@
     "manual_review_needed": false
   },
   {
-    "name": "ID4697-MSF payload deployed via service.evtx",
-    "behavior_hint": "ID4697-MSF payload deployed via service",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 1,
-    "channels": [
-      "Security"
-    ],
-    "providers": [
-      "Microsoft-Windows-Security-Auditing"
-    ],
-    "event_id_counts": {
-      "4697": 1
-    },
-    "normalized_count": 1,
-    "skipped_count": 0,
-    "covered_count": 1,
-    "uncovered_count": 0,
-    "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      7
-    ],
-    "classification_labels": [
-      "rule_too_narrow"
-    ],
-    "reason": "Real content read directly: ServiceType 0x00000010 (ordinary user-mode/own-process service), not the kernel-driver value (0x00000001) kernel_driver_service_installed.yml is scoped to. 4697 IS covered as an event id/category (the new rule maps it), so this is rule_too_narrow, not a coverage gap -- the rule was deliberately scoped to the one real invariant this project's 4 real 4697 samples actually share (only 1 of 4 is a kernel driver); ServiceName/ServiceFileName are fully attacker-chosen in all 4 samples and not safe to key a rule on, and no real benign-4697 sample exists anywhere in the corpus to bound a broader rule's false-positive rate against. Not pursued further this pass -- see the rule file's own description.",
-    "manual_review_needed": false
-  },
-  {
     "name": "ID4697-New service for Mimikatz.evtx",
     "behavior_hint": "ID4697-New service for Mimikatz",
     "parsed_ok": true,
@@ -1576,123 +1259,6 @@
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Sensitive Domain Group Membership Change",
-    "manual_review_needed": false
-  },
-  {
-    "name": "ID4728-Massive account group membership change.evtx",
-    "behavior_hint": "ID4728-Massive account group membership change",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 11,
-    "channels": [
-      "Security"
-    ],
-    "providers": [
-      "Microsoft-Windows-Security-Auditing"
-    ],
-    "event_id_counts": {
-      "4728": 11
-    },
-    "normalized_count": 11,
-    "skipped_count": 0,
-    "covered_count": 11,
-    "uncovered_count": 0,
-    "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      7
-    ],
-    "classification_labels": [
-      "rule_too_narrow"
-    ],
-    "reason": "Real content read directly: 11x4728, same actor adding the same member to 11 GENERIC groups (Group01..Group11, non-privileged sequential RIDs) -- 4728 IS covered (the new rule maps it), so this is rule_too_narrow/requires_sequence, not a coverage gap. This file's real signal is pure VOLUME (11 adds by one subject in one capture), not any single group's identity -- structurally different from the sensitive-group pattern the new rule targets, and correctly does not match it (none of these 11 groups are sensitive). Building a volume/threshold rule here would mean calibrating against exactly one real sample with no benign-volume baseline -- the same overfitting risk this project's sequence engine discipline explicitly avoids (extend only on a 3rd real sequence-dependent miss, not speculatively). This is the 1st such sample seen. Not pursued this pass.",
-    "manual_review_needed": false
-  },
-  {
-    "name": "ID4728-Member adding to a group by the same account.evtx",
-    "behavior_hint": "ID4728-Member adding to a group by the same account",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 1,
-    "channels": [
-      "Security"
-    ],
-    "providers": [
-      "Microsoft-Windows-Security-Auditing"
-    ],
-    "event_id_counts": {
-      "4728": 1
-    },
-    "normalized_count": 1,
-    "skipped_count": 0,
-    "covered_count": 1,
-    "uncovered_count": 0,
-    "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      7
-    ],
-    "classification_labels": [
-      "rule_too_narrow"
-    ],
-    "reason": "Real content read directly: 1x4728, MemberSid == SubjectUserSid (a self-add: the account added itself to a group) targeting Group02, a GENERIC non-sensitive group. 4728 IS covered, so this is rule_too_narrow, not a coverage gap. Self-add-to-own-group is a real, generalizable behavioral indicator (self-service privilege grab) independent of which group -- but this is the only real sample of it, and it happens to target a non-sensitive group, so it doesn't establish 'self-add is independently suspicious' with this project's usual rigor (a real population, not a 1-file case -- the same bar that kept the samaccount_spoofing file's anomalous ServiceName from becoming a rule). Flagged, not acted on, pending a second real sample.",
-    "manual_review_needed": false
-  },
-  {
-    "name": "ID7045-4697-SMBexec service registration.evtx",
-    "behavior_hint": "ID7045-4697-SMBexec service registration",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 2,
-    "channels": [
-      "Security",
-      "System"
-    ],
-    "providers": [
-      "Microsoft-Windows-Security-Auditing",
-      "Service Control Manager"
-    ],
-    "event_id_counts": {
-      "4697": 1,
-      "7045": 1
-    },
-    "normalized_count": 2,
-    "skipped_count": 0,
-    "covered_count": 1,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "System",
-        "event_id": 7045,
-        "count": 1
-      }
-    ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      7
-    ],
-    "classification_labels": [
-      "rule_too_narrow"
-    ],
-    "reason": "Real content read directly: this file's own 4697 record has ServiceType 0x00000010 (ordinary), so it doesn't match kernel_driver_service_installed.yml for the same reason as the MSF-payload file above (both 4697 and 7045 are now covered event ids/categories, so this is rule_too_narrow, not a coverage gap). This file's own 7045 (System channel, Service Control Manager) record was the only real System-channel sample anywhere in the corpus -- normalizer.py's CHANNEL_TOKEN_SUBSTRINGS gained a 'system' entry this pass so it's no longer silently misrouted through the Sysmon dispatch table, but no rule alerts on 7045 alone: a single real sample, 1:1-paired with this same file's own 4697, isn't enough to justify either a standalone 7045 rule (underfitting risk, same as raw 4697) or 4697+7045 correlation logic (would overfit to the one file that happens to have both). Parsed, normalized, and correctly reported as covered-but-not-matched -- not silently treated as unsupported.",
     "manual_review_needed": false
   },
   {
@@ -2127,48 +1693,6 @@
     "manual_review_needed": false
   },
   {
-    "name": "MSSQL_multiple_failed_logon_EventID_18456.evtx",
-    "behavior_hint": "MSSQL multiple failed logon EventID 18456",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 10,
-    "channels": [
-      "Application"
-    ],
-    "providers": [
-      "MSSQLSERVER"
-    ],
-    "event_id_counts": {
-      "18456": 10
-    },
-    "normalized_count": 10,
-    "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 10,
-    "uncovered_breakdown": [
-      {
-        "channel": "Application",
-        "event_id": 18456,
-        "count": 10
-      }
-    ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      2
-    ],
-    "classification_labels": [
-      "channel_provider_gap"
-    ],
-    "reason": "Application channel (MSSQLSERVER provider), not Sysmon or Security.",
-    "manual_review_needed": false
-  },
-  {
     "name": "Network_Service_Guest_added_to_admins_4732.evtx",
     "behavior_hint": "Network Service Guest added to admins 4732",
     "parsed_ok": true,
@@ -2590,56 +2114,6 @@
     "manual_review_needed": false
   },
   {
-    "name": "rogue_msi_url_1040_1042.evtx",
-    "behavior_hint": "rogue msi url 1040 1042",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 351,
-    "channels": [
-      "Application"
-    ],
-    "providers": [
-      "Microsoft-Windows-Security-SPP",
-      "MsiInstaller",
-      "Office Software Protection Platform Service"
-    ],
-    "event_id_counts": {
-      "1040": 178,
-      "1042": 173
-    },
-    "normalized_count": 351,
-    "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 351,
-    "uncovered_breakdown": [
-      {
-        "channel": "Application",
-        "event_id": 1040,
-        "count": 178
-      },
-      {
-        "channel": "Application",
-        "event_id": 1042,
-        "count": 173
-      }
-    ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      2
-    ],
-    "classification_labels": [
-      "channel_provider_gap"
-    ],
-    "reason": "Application channel (MsiInstaller provider), not Sysmon or Security.",
-    "manual_review_needed": false
-  },
-  {
     "name": "samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_securitylogs.evtx",
     "behavior_hint": "samaccount spoofing CVE-2021-42287 CVE-2021-42278 DC securitylogs",
     "parsed_ok": true,
@@ -3038,6 +2512,532 @@
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Scheduled Task Created with Hidden Flag",
+    "manual_review_needed": false
+  },
+  {
+    "name": "bits_openvpn.evtx",
+    "behavior_hint": "bits openvpn",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1537,
+    "channels": [
+      "Microsoft-Windows-Bits-Client/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Bits-Client"
+    ],
+    "event_id_counts": {
+      "3": 254,
+      "4": 125,
+      "5": 84,
+      "59": 162,
+      "60": 129,
+      "61": 492,
+      "209": 101,
+      "306": 150,
+      "310": 40
+    },
+    "normalized_count": 1537,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 1537,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 61,
+        "count": 492
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 3,
+        "count": 254
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 59,
+        "count": 162
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 306,
+        "count": 150
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 60,
+        "count": 129
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 4,
+        "count": 125
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 209,
+        "count": 101
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 5,
+        "count": 84
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 310,
+        "count": 40
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      2
+    ],
+    "classification_labels": [
+      "channel_provider_gap"
+    ],
+    "reason": "Bits-Client/Operational channel, not Sysmon or Security.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
+    "behavior_hint": "CA 4624 4625 LogonType2 LogonProc chrome",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 4,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4624": 3,
+      "4625": 1
+    },
+    "normalized_count": 4,
+    "skipped_count": 0,
+    "covered_count": 3,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 4625,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      10
+    ],
+    "classification_labels": [
+      "insufficient_telemetry"
+    ],
+    "reason": "Real content read directly: 3 successful LogonType 2 (interactive) logons via chrome.exe as the logon process, plus exactly 1 failed logon (4625) -- 4 events total. 4624/4625 are fully covered event IDs (no channel/parser gap), but this file's own signal is too thin to justify a rule: 1 failure is not a brute-force pattern (the project's own Kerberos-spray rule requires 4 distinct targets in a window, well below the real spray sample's 10, specifically to avoid firing on normal single mistypes), and nothing about the 3 successful logons is anomalous on its own. Writing a rule here would mean inventing a threshold with no real population of logon-failure samples to calibrate or benign-test it against -- exactly the overfitting this project's own discipline avoids. Not pursued this pass; revisit if a real, higher-volume failed-logon sample is ever added.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "CA_PetiPotam_etw_rpc_efsr_5_6.evtx",
+    "behavior_hint": "CA PetiPotam etw rpc efsr 5 6",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 29109,
+    "channels": [],
+    "providers": [
+      "Microsoft-Windows-RPC"
+    ],
+    "event_id_counts": {
+      "0": 1,
+      "1": 8,
+      "5": 14508,
+      "6": 14550,
+      "9": 1,
+      "14": 39,
+      "16": 2
+    },
+    "normalized_count": 29109,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 29109,
+    "uncovered_breakdown": [
+      {
+        "channel": null,
+        "event_id": 6,
+        "count": 14550
+      },
+      {
+        "channel": null,
+        "event_id": 5,
+        "count": 14508
+      },
+      {
+        "channel": null,
+        "event_id": 14,
+        "count": 39
+      },
+      {
+        "channel": null,
+        "event_id": 1,
+        "count": 8
+      },
+      {
+        "channel": null,
+        "event_id": 16,
+        "count": 2
+      },
+      {
+        "channel": null,
+        "event_id": 0,
+        "count": 1
+      },
+      {
+        "channel": null,
+        "event_id": 9,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      2
+    ],
+    "classification_labels": [
+      "channel_provider_gap"
+    ],
+    "reason": "ETW/RPC channel (System.Channel is empty/None on these records, not Sysmon or Security) -- PetiPotam/EFSRPC coercion telemetry isn't in either currently-covered channel.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
+    "behavior_hint": "Discovery Remote System NamedPipes Sysmon 18",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 20,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "18": 20
+    },
+    "normalized_count": 20,
+    "skipped_count": 0,
+    "covered_count": 20,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      6
+    ],
+    "classification_labels": [
+      "rule_missing"
+    ],
+    "reason": "Event ID 18 (pipe connect) IS covered (pipe_event category), but the only loaded pipe_event rule targets spoolss specifically. Confirmed real content: PipeName=\\lsass, Image=System -- a remote SMB named-pipe connection to \\lsass, not \\spoolss. No rule exists for this pattern; writing one needs care since System connecting to \\lsass/\\srvsvc over SMB is also fairly common legitimate traffic -- likely needs a remote-vs-local or frequency signal to stay low-noise, not a blanket PipeName match.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx",
+    "behavior_hint": "discovery sysmon 18 Invoke UserHunter NetSessionEnum DC-srvsvc",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "18": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      6
+    ],
+    "classification_labels": [
+      "rule_missing"
+    ],
+    "reason": "Same gap as Discovery_Remote_System_NamedPipes_Sysmon_18.evtx. Confirmed real content: PipeName=\\srvsvc, Image=System -- PowerView's Invoke-UserHunter NetSessionEnum technique connects to \\srvsvc, not \\spoolss.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID4697-MSF payload deployed via service.evtx",
+    "behavior_hint": "ID4697-MSF payload deployed via service",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4697": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      7
+    ],
+    "classification_labels": [
+      "rule_too_narrow"
+    ],
+    "reason": "Real content read directly: ServiceType 0x00000010 (ordinary user-mode/own-process service), not the kernel-driver value (0x00000001) kernel_driver_service_installed.yml is scoped to. 4697 IS covered as an event id/category (the new rule maps it), so this is rule_too_narrow, not a coverage gap -- the rule was deliberately scoped to the one real invariant this project's 4 real 4697 samples actually share (only 1 of 4 is a kernel driver); ServiceName/ServiceFileName are fully attacker-chosen in all 4 samples and not safe to key a rule on, and no real benign-4697 sample exists anywhere in the corpus to bound a broader rule's false-positive rate against. Not pursued further this pass -- see the rule file's own description.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID4728-Massive account group membership change.evtx",
+    "behavior_hint": "ID4728-Massive account group membership change",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 11,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4728": 11
+    },
+    "normalized_count": 11,
+    "skipped_count": 0,
+    "covered_count": 11,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      7
+    ],
+    "classification_labels": [
+      "rule_too_narrow"
+    ],
+    "reason": "Real content read directly: 11x4728, same actor adding the same member to 11 GENERIC groups (Group01..Group11, non-privileged sequential RIDs) -- 4728 IS covered (the new rule maps it), so this is rule_too_narrow/requires_sequence, not a coverage gap. This file's real signal is pure VOLUME (11 adds by one subject in one capture), not any single group's identity -- structurally different from the sensitive-group pattern the new rule targets, and correctly does not match it (none of these 11 groups are sensitive). Building a volume/threshold rule here would mean calibrating against exactly one real sample with no benign-volume baseline -- the same overfitting risk this project's sequence engine discipline explicitly avoids (extend only on a 3rd real sequence-dependent miss, not speculatively). This is the 1st such sample seen. Not pursued this pass.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID4728-Member adding to a group by the same account.evtx",
+    "behavior_hint": "ID4728-Member adding to a group by the same account",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4728": 1
+    },
+    "normalized_count": 1,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      7
+    ],
+    "classification_labels": [
+      "rule_too_narrow"
+    ],
+    "reason": "Real content read directly: 1x4728, MemberSid == SubjectUserSid (a self-add: the account added itself to a group) targeting Group02, a GENERIC non-sensitive group. 4728 IS covered, so this is rule_too_narrow, not a coverage gap. Self-add-to-own-group is a real, generalizable behavioral indicator (self-service privilege grab) independent of which group -- but this is the only real sample of it, and it happens to target a non-sensitive group, so it doesn't establish 'self-add is independently suspicious' with this project's usual rigor (a real population, not a 1-file case -- the same bar that kept the samaccount_spoofing file's anomalous ServiceName from becoming a rule). Flagged, not acted on, pending a second real sample.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "ID7045-4697-SMBexec service registration.evtx",
+    "behavior_hint": "ID7045-4697-SMBexec service registration",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 2,
+    "channels": [
+      "Security",
+      "System"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing",
+      "Service Control Manager"
+    ],
+    "event_id_counts": {
+      "4697": 1,
+      "7045": 1
+    },
+    "normalized_count": 2,
+    "skipped_count": 0,
+    "covered_count": 1,
+    "uncovered_count": 1,
+    "uncovered_breakdown": [
+      {
+        "channel": "System",
+        "event_id": 7045,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      7
+    ],
+    "classification_labels": [
+      "rule_too_narrow"
+    ],
+    "reason": "Real content read directly: this file's own 4697 record has ServiceType 0x00000010 (ordinary), so it doesn't match kernel_driver_service_installed.yml for the same reason as the MSF-payload file above (both 4697 and 7045 are now covered event ids/categories, so this is rule_too_narrow, not a coverage gap). This file's own 7045 (System channel, Service Control Manager) record was the only real System-channel sample anywhere in the corpus -- normalizer.py's CHANNEL_TOKEN_SUBSTRINGS gained a 'system' entry this pass so it's no longer silently misrouted through the Sysmon dispatch table, but no rule alerts on 7045 alone: a single real sample, 1:1-paired with this same file's own 4697, isn't enough to justify either a standalone 7045 rule (underfitting risk, same as raw 4697) or 4697+7045 correlation logic (would overfit to the one file that happens to have both). Parsed, normalized, and correctly reported as covered-but-not-matched -- not silently treated as unsupported.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "MSSQL_multiple_failed_logon_EventID_18456.evtx",
+    "behavior_hint": "MSSQL multiple failed logon EventID 18456",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 10,
+    "channels": [
+      "Application"
+    ],
+    "providers": [
+      "MSSQLSERVER"
+    ],
+    "event_id_counts": {
+      "18456": 10
+    },
+    "normalized_count": 10,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 10,
+    "uncovered_breakdown": [
+      {
+        "channel": "Application",
+        "event_id": 18456,
+        "count": 10
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      2
+    ],
+    "classification_labels": [
+      "channel_provider_gap"
+    ],
+    "reason": "Application channel (MSSQLSERVER provider), not Sysmon or Security.",
+    "manual_review_needed": false
+  },
+  {
+    "name": "rogue_msi_url_1040_1042.evtx",
+    "behavior_hint": "rogue msi url 1040 1042",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 351,
+    "channels": [
+      "Application"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-SPP",
+      "MsiInstaller",
+      "Office Software Protection Platform Service"
+    ],
+    "event_id_counts": {
+      "1040": 178,
+      "1042": 173
+    },
+    "normalized_count": 351,
+    "skipped_count": 0,
+    "covered_count": 0,
+    "uncovered_count": 351,
+    "uncovered_breakdown": [
+      {
+        "channel": "Application",
+        "event_id": 1040,
+        "count": 178
+      },
+      {
+        "channel": "Application",
+        "event_id": 1042,
+        "count": 173
+      }
+    ],
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "classification_codes": [
+      2
+    ],
+    "classification_labels": [
+      "channel_provider_gap"
+    ],
+    "reason": "Application channel (MsiInstaller provider), not Sysmon or Security.",
     "manual_review_needed": false
   }
 ]
