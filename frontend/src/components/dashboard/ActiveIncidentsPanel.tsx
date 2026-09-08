@@ -23,7 +23,7 @@ export function ActiveIncidentsPanel({ incidents }: { incidents: IncidentSummary
       icon={<ShieldAlert className="h-3.5 w-3.5" />}
       accent="primary"
       action={<ViewAllLink to="/incidents" />}
-      bodyClassName="px-2 pb-3"
+      bodyClassName="flex flex-col justify-center px-2 pb-3"
     >
       {active.length === 0 ? (
         <EmptyState message="No active incidents" hint="Everything ingested so far is resolved or closed." />

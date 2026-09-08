@@ -26,7 +26,7 @@ export function RecentAlertsPanel({
       icon={<Bell className="h-3.5 w-3.5" />}
       accent="amber"
       action={<ViewAllLink to="/alerts" />}
-      bodyClassName="px-2 pb-3"
+      bodyClassName="flex flex-col justify-center px-2 pb-3"
     >
       {loading ? (
         <SkeletonRows rows={5} />

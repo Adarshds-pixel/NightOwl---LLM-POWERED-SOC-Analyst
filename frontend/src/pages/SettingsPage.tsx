@@ -11,6 +11,7 @@ import {
   StatusDot,
   Toggle,
 } from '../components/ui'
+import { useAuth } from '../context/auth/useAuth'
 import { useHealth } from '../context/health/useHealth'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
@@ -33,15 +34,18 @@ const SECTIONS: { value: Section; label: string; icon: typeof Monitor }[] = [
 /**
  * Settings.
  *
- * NightOwl has no accounts and no settings endpoint, so this is honestly
- * scoped as *this browser's* preferences: every control here changes real
- * behaviour immediately and persists to localStorage, and everything the
- * page cannot change (LLM provider, rule set, API key) is presented as
- * read-only fact with a note about where it actually lives. There is no
- * Account or Security section, because there is nothing behind one.
+ * NightOwl has exactly one admin account and no settings endpoint, so this
+ * is honestly scoped as *this browser's* preferences: every control here
+ * changes real behaviour immediately and persists to localStorage, and
+ * everything the page cannot change (LLM provider, rule set, API key,
+ * session) is presented as read-only fact with a note about where it
+ * actually lives. There is no Account or Security section beyond the
+ * read-only facts in Connection -- session sign-in/out lives in the top
+ * bar's account menu, not here, since there is nothing else to manage.
  */
 function SettingsPage() {
   const { prefs, setPref, reset } = usePreferences()
+  const { username } = useAuth()
   const { status, latencyMs, samples } = useHealth()
   const { rules } = useRules()
   const { techniques } = useMitreCatalog()
@@ -143,7 +147,7 @@ function SettingsPage() {
           )}
 
           {section === 'data' && (
-            <Card title="Data and refresh" accent="magenta">
+            <Card title="Data and refresh" accent="violet">
               <div className="flex flex-col divide-y divide-line-soft">
                 <Row
                   label="Incident refresh"
@@ -222,17 +226,19 @@ function SettingsPage() {
                 />
                 <KeyValue label="Latency" value={formatLatency(latencyMs)} mono />
                 <KeyValue label="Samples this session" value={samples.length} mono />
+                <KeyValue label="Signed in as" value={username ?? '—'} mono />
+                <KeyValue label="Auth model" value="Single-admin session login (signed, HttpOnly cookie)" />
                 <KeyValue
-                  label="API key"
+                  label="Shared API key"
                   value={apiKeyConfigured ? <Badge accent="green">Configured</Badge> : <Badge accent="neutral">Not set</Badge>}
                 />
-                <KeyValue label="Auth model" value="Single shared key, no user accounts" />
               </dl>
               <p className="mt-4 text-meta text-text-muted">
-                Both values come from build-time environment variables (VITE_API_BASE_URL, VITE_API_KEY in
-                frontend/.env.local), so changing them means editing that file and restarting the dev server -- not
-                typing into this page. The key is baked into the bundle, which is why it is a deployment secret, not
-                a per-user credential.
+                Sign-in is a real admin login (POST /auth/login sets the session cookie); use the account menu in
+                the top bar to sign out. The API base URL and shared key below are separate, build-time environment
+                variables (VITE_API_BASE_URL, VITE_API_KEY in frontend/.env.local) -- an additional, optional header
+                check the backend can require alongside the session cookie, not a substitute for it. Changing them
+                means editing that file and restarting the dev server, not typing into this page.
               </p>
             </Card>
           )}
@@ -241,7 +247,7 @@ function SettingsPage() {
             <Card title="About this deployment" accent="neutral">
               <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <KeyValue label="Detection rules loaded" value={rules.length} mono />
-                <KeyValue label="MITRE techniques in catalog" value={techniques.length.toLocaleString()} mono />
+                <KeyValue label="ATT&CK catalog entries" value={techniques.length.toLocaleString()} mono />
                 <KeyValue label="Incidents stored" value={meta.totalAll.toLocaleString()} mono />
                 <KeyValue label="Rule source" value="backend/app/detection/rules/*.yml" mono />
                 <KeyValue label="Data store" value="PostgreSQL, plus ChromaDB for the knowledge base" />

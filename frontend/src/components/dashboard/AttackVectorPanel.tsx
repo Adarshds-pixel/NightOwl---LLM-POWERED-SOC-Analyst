@@ -26,7 +26,13 @@ export function AttackVectorPanel({
   }))
 
   return (
-    <Card title="Top attack vectors" subtitle="By MITRE tactic" icon={<Crosshair className="h-3.5 w-3.5" />} accent="violet">
+    <Card
+      title="Top attack vectors"
+      subtitle="By MITRE tactic"
+      icon={<Crosshair className="h-3.5 w-3.5" />}
+      accent="violet"
+      bodyClassName="flex items-center justify-center"
+    >
       {slices.length === 0 ? (
         <EmptyState message="No techniques attributed yet" />
       ) : (

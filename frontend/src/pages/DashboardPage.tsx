@@ -153,7 +153,7 @@ function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <div className="xl:col-span-3">
-          <SeverityDonutPanel incidents={incidents} />
+          <SeverityDonutPanel meta={meta} />
         </div>
         <Card
           title="MITRE ATT&CK heatmap"
@@ -162,6 +162,7 @@ function DashboardPage() {
           accent="magenta"
           action={<ViewAllLink to="/mitre" label="Full matrix" />}
           className="xl:col-span-5"
+          bodyClassName="flex flex-col justify-center"
         >
           <HeatmapGrid incidents={incidents} techniqueById={byId} compact maxRows={7} />
         </Card>
@@ -197,6 +198,7 @@ function DashboardPage() {
           icon={<Network className="h-3.5 w-3.5" />}
           accent="magenta"
           className="xl:col-span-3"
+          bodyClassName="flex flex-col justify-center"
         >
           <HostGraph nodes={graph.nodes} edges={graph.edges} />
           <HostGraphLegend />
