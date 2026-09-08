@@ -30,7 +30,13 @@ export function SearchInput({
 }) {
   return (
     <div className={clsx('relative', className)}>
-      <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
+      {/* z-10: a sibling <input> with no explicit stacking level still
+          paints over an absolutely-positioned icon before it in some
+          browsers (observed on `type="search"` here and on the login
+          page's username/password fields) regardless of DOM order --
+          without this the icon is invisible even though it's correctly
+          positioned and never actually hidden by CSS. */}
+      <Search className="pointer-events-none absolute top-1/2 left-3 z-10 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
       <input
         type="search"
         value={value}

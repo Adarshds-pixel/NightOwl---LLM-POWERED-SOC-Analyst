@@ -1,7 +1,8 @@
 import clsx from 'clsx'
-import { Bell, Bot, Clock, LogOut, Menu, Search, Settings, Sparkles, UserRound } from 'lucide-react'
+import { Bell, Bot, Clock, LogOut, Menu, Search, Settings, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { AnalystAvatar } from '../components/brand/NightOwlMark'
 import { NotificationPanel } from '../components/notifications/NotificationPanel'
 import { Popover, StatusDot, Tooltip } from '../components/ui'
 import { useAuth } from '../context/auth/useAuth'
@@ -151,11 +152,11 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
             aria-label="Account menu"
             aria-expanded={profileOpen}
             className={clsx(
-              'flex h-10 w-10 items-center justify-center rounded-control border bg-surface-2/50 transition-colors',
-              profileOpen ? 'border-accent-primary/50 text-text' : 'border-line text-text-dim hover:text-text',
+              'flex h-10 w-10 items-center justify-center rounded-full border p-0.5 transition-colors',
+              profileOpen ? 'border-accent-primary/50' : 'border-line hover:border-accent-primary/40',
             )}
           >
-            <UserRound className="h-4 w-4" />
+            <AnalystAvatar size={34} />
           </button>
           <Popover open={profileOpen} onClose={() => setProfileOpen(false)} className="w-64">
             <div className="border-b border-line px-3.5 py-3">

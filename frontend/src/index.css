@@ -251,6 +251,26 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Chrome/Edge/Safari paint a hardcoded light background on an autofilled
+   input the instant a saved credential fills it (the login form especially
+   -- it autofills on load for any returning visitor), which otherwise
+   paints straight over this app's own dark field background and any icon
+   sitting inside it. `background-color`/`background` cannot override this;
+   an enormous inset box-shadow in the field's own colour is the only
+   reliable cross-browser fix, paired with `-webkit-text-fill-color` since
+   autofill also hardcodes the text colour. `transition-delay` covers Chrome
+   applying the autofill style itself on a delayed animation frame after
+   the initial style contains it. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--color-bg-deep) inset;
+  box-shadow: 0 0 0 1000px var(--color-bg-deep) inset;
+  -webkit-text-fill-color: var(--color-text);
+  caret-color: var(--color-text);
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
 /* The atmosphere itself lives in components/ui/AmbientBackground.tsx rather
    than on body::before/::after: it needs several independently-animated
    layers (two drifting aurora orbs, a grid, a particle field, a vignette),

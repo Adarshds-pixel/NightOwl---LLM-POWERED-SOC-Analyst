@@ -133,7 +133,7 @@ export function LoginPage() {
         <div className="flex flex-1 items-center py-10">
           <div className="grid w-full items-center gap-12 lg:grid-cols-2 lg:gap-10">
             {/* ---------------- Brand / value panel ---------------- */}
-            <section className="hidden flex-col lg:flex">
+            <section className="hidden flex-col lg:flex lg:pl-6 xl:pl-12">
               <span className="inline-flex w-fit items-center gap-2 rounded-full border border-accent-violet/35 bg-accent-violet/10 px-3.5 py-1.5 text-micro font-medium text-text-dim backdrop-blur-md">
                 <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent-magenta shadow-glow-magenta" />
                 Smarter Security. Always On.
@@ -212,7 +212,7 @@ export function LoginPage() {
                       Username
                     </label>
                     <div className="relative">
-                      <User className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                      <User className="pointer-events-none absolute top-1/2 left-3.5 z-10 h-4 w-4 -translate-y-1/2 text-text-muted" />
                       <TextInput
                         id="login-username"
                         type="text"
@@ -233,7 +233,7 @@ export function LoginPage() {
                       Password
                     </label>
                     <div className="relative">
-                      <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                      <Lock className="pointer-events-none absolute top-1/2 left-3.5 z-10 h-4 w-4 -translate-y-1/2 text-text-muted" />
                       <TextInput
                         id="login-password"
                         type={showPassword ? 'text' : 'password'}
