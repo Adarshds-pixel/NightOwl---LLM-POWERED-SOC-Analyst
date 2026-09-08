@@ -2,15 +2,18 @@ import { useCallback, useRef, useState } from 'react'
 import {
   ApiError,
   explainIncident,
+  fetchDemoFixtureBytes,
+  getDemoFixtures,
   ingestEvtxFile,
   postChatMessage,
   type ChatMessageResponse,
+  type DemoFixtureInfo,
   type ExplainResponse,
   type IngestResponse,
 } from '../api'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { selectMostActionableIncident } from '../lib/aggregations'
-import { DEMO_CHAT_QUESTION, nextDemoFixture, type DemoFixture } from '../lib/constants'
+import { DEMO_CHAT_QUESTION, nextDemoFixture } from '../lib/constants'
 
 export type DemoStageId = 'ingest' | 'resolve' | 'explain' | 'chat'
 export type DemoRunStatus = 'idle' | 'running' | 'success' | 'error'
@@ -24,14 +27,12 @@ export const DEMO_STAGE_ORDER: DemoStageId[] = ['ingest', 'resolve', 'explain', 
 
 let logCounter = 0
 
-// Fetches the fixture as a static asset (frontend/public/demo/...) and wraps
-// it in a real File, so the actual upload below goes through the same
-// multipart POST /ingest path a human dragging in a file would use -- no
-// mocked ingest response.
-async function fetchDemoFixtureFile(fixture: DemoFixture): Promise<File> {
-  const res = await fetch(fixture.url)
-  if (!res.ok) throw new Error(`Failed to load demo fixture (${res.status})`)
-  const blob = await res.blob()
+// Downloads the real fixture's bytes from GET /demo/fixtures/{filename}
+// (backend/app/api/routes_demo.py) and wraps them in a real File, so the
+// actual upload below goes through the same multipart POST /ingest path a
+// human dragging in a file would use -- no mocked ingest response.
+async function fetchDemoFixtureFile(fixture: DemoFixtureInfo): Promise<File> {
+  const blob = await fetchDemoFixtureBytes(fixture.filename)
   return new File([blob], fixture.filename, { type: 'application/octet-stream' })
 }
 
@@ -49,7 +50,17 @@ export function useDemoMode() {
   const [chatResult, setChatResult] = useState<ChatMessageResponse | null>(null)
   const [primaryIncidentId, setPrimaryIncidentId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [activeFixture, setActiveFixture] = useState<DemoFixture | null>(null)
+  const [activeFixture, setActiveFixture] = useState<DemoFixtureInfo | null>(null)
+  // Set only when the fallback branch below fires -- distinct from
+  // primaryIncidentId being non-null, since that's also true on the
+  // genuine fresh-detection path. The UI (DemoModePage.tsx) uses this to
+  // show an explicit banner rather than silently pairing a "0 events
+  // ingested" result with an AI explanation of some other, older
+  // incident -- a real point of confusion found in manual QA (the fixture
+  // pool is now real-world samples this deployment's shared demo database
+  // has very likely already ingested at some point, so this path fires
+  // far more often than the old small synthetic pool ever did).
+  const [fallbackIncident, setFallbackIncident] = useState<{ id: number; title: string } | null>(null)
   const runningRef = useRef(false)
 
   const appendLog = useCallback((text: string, tone: DemoLogLine['tone'] = 'info') => {
@@ -66,11 +77,20 @@ export function useDemoMode() {
     setExplainResult(null)
     setChatResult(null)
     setPrimaryIncidentId(null)
-
-    const fixture = nextDemoFixture()
-    setActiveFixture(fixture)
+    setFallbackIncident(null)
 
     try {
+      appendLog('Loading the current detected real-world sample pool...')
+      const { fixtures } = await getDemoFixtures()
+      if (fixtures.length === 0) {
+        appendLog('No detected real-world fixtures available -- run backend/scripts/build_failure_matrix.py.', 'error')
+        setError('No detected real-world fixtures available.')
+        setStatus('error')
+        return
+      }
+      const fixture = nextDemoFixture(fixtures)
+      setActiveFixture(fixture)
+
       setCurrentStage('ingest')
       appendLog(`Scenario: ${fixture.label}`)
       appendLog(`Fetching ${fixture.filename}...`)
@@ -94,18 +114,32 @@ export function useDemoMode() {
         targetId = ingest.incident_ids[0]
         appendLog(`Resolved incident #${targetId} for the rest of this run.`, 'success')
       } else {
-        // Defensive fallback, not the expected path with any pool fixture
-        // (each one is individually verified to trip its declared
-        // techniques -- see backend/scripts/build_demo_evtx_fixtures.py) --
-        // kept in case a future fixture swap or a rule change ever yields
-        // zero matches, so explain/chat still have real data to run against.
-        appendLog('This fixture triggered no detection rule this run.')
+        // Defensive fallback, not the expected path -- every fixture in the
+        // pool is one build_failure_matrix.py itself marked `detected: true`
+        // in its own isolated fresh-DB run, so a zero-match result here
+        // would mean the shared demo database's accumulated state changed
+        // the outcome, not that the fixture is genuinely undetectable.
+        // `events_ingested === 0` specifically means every record in this
+        // fixture already existed in the DB (ingestion dedupes by content)
+        // -- almost certainly why this fires often once a deployment's demo
+        // database has been used for a while, since the pool now draws from
+        // the same real-world corpus this project's own testing repeatedly
+        // uploads. Kept so explain/chat still have real data to run against
+        // either way, but the UI (DemoModePage.tsx) must show this plainly
+        // via `fallbackIncident` -- silently pairing "0 events" with an AI
+        // explanation of some other, older incident reads as broken.
+        appendLog(
+          ingest.events_ingested === 0
+            ? 'Every event in this fixture was already ingested in an earlier run -- nothing new to detect.'
+            : 'This fixture triggered no detection rule this run.',
+        )
         const fallback = selectMostActionableIncident(incidents)
         if (!fallback) {
           appendLog('No existing incident to fall back to either -- stopping before explain/chat.', 'error')
           setStatus('success')
           return
         }
+        setFallbackIncident({ id: fallback.id, title: fallback.title })
         targetId = fallback.id
         appendLog(`Continuing with existing incident #${targetId} ("${fallback.title}") instead.`, 'success')
       }
@@ -144,6 +178,7 @@ export function useDemoMode() {
     setPrimaryIncidentId(null)
     setError(null)
     setActiveFixture(null)
+    setFallbackIncident(null)
   }, [])
 
   return {
@@ -155,6 +190,7 @@ export function useDemoMode() {
     chatResult,
     primaryIncidentId,
     activeFixture,
+    fallbackIncident,
     error,
     run,
     reset,

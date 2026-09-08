@@ -12,14 +12,28 @@ import { invalidateRulesCache } from '../hooks/useRules'
 import { DEMO_CHAT_QUESTION } from '../lib/constants'
 
 /**
- * Demo Mode runs the real pipeline end to end against a bundled Sysmon
- * fixture: the file is uploaded through POST /ingest, detection runs
- * server-side, and the explanation and chat answer come from real LLM
- * calls. Nothing here is a scripted animation.
+ * Demo Mode runs the real pipeline end to end against a real-world attack
+ * capture: GET /demo/fixtures lists every fixture the current rule set
+ * detects (backend/app/api/routes_demo.py, sourced from
+ * backend/scripts/build_failure_matrix.py's own output), one is picked
+ * without repeating the last one shown, and it's uploaded through POST
+ * /ingest -- detection runs server-side, and the explanation and chat
+ * answer come from real LLM calls. Nothing here is a scripted animation.
  */
 function DemoModePage() {
-  const { status, currentStage, log, ingestResult, explainResult, chatResult, primaryIncidentId, activeFixture, run, reset } =
-    useDemoMode()
+  const {
+    status,
+    currentStage,
+    log,
+    ingestResult,
+    explainResult,
+    chatResult,
+    primaryIncidentId,
+    activeFixture,
+    fallbackIncident,
+    run,
+    reset,
+  } = useDemoMode()
   const { refresh: refreshIncidents } = useIncidentsSnapshot()
   const { push } = useToast()
   const running = status === 'running'
@@ -69,7 +83,9 @@ function DemoModePage() {
 
       <Card
         title="Pipeline run"
-        subtitle={activeFixture ? `Scenario: ${activeFixture.label}` : 'Rotates through 7 real attack scenarios each run'}
+        subtitle={
+          activeFixture ? `Scenario: ${activeFixture.label}` : 'Picks one new real-world attack sample each run'
+        }
         accent="magenta"
       >
         <div className="flex flex-wrap items-center gap-4">
@@ -105,6 +121,15 @@ function DemoModePage() {
 
       {status === 'success' && ingestResult && (
         <Card title="Results" accent="primary">
+          {fallbackIncident && (
+            <p className="mb-3 rounded-control border border-accent-amber/30 bg-accent-amber/10 px-3.5 py-2.5 text-meta text-text-dim">
+              This fixture's events were already ingested in an earlier demo run, so there was nothing new to detect
+              this time (0 across the board below is correct, not broken). The AI explanation and chat further down
+              continue with an existing incident instead — <strong>{fallbackIncident.title}</strong> — so there's
+              still real data to analyze. Click <strong>Reset demo data</strong> above for a clean slate that lets
+              every fixture create a fresh incident again.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MiniStat label="Events ingested" value={ingestResult.events_ingested.toLocaleString()} />
             <MiniStat label="Rule matches" value={ingestResult.rule_matches} />

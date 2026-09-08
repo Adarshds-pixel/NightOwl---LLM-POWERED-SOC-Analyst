@@ -22,103 +22,84 @@ export const SYSMON_EVENT_TYPE_LABELS: Record<number, string> = {
 
 export const HEALTH_POLL_INTERVAL_MS = 15_000
 
-// Day 19 Demo Mode: every fixture below is a real EVTX file, committed
-// under frontend/public/ so Vite serves it at the site root and the
-// browser can fetch() it and re-upload it through the real POST /ingest
-// pipeline -- no mocked ingest response.
-//
-// As of 2026-08-29, this is a pool of 7 real fixture files (see
-// backend/scripts/build_demo_evtx_fixtures.py), each independently
-// verified to trip a distinct, real subset of NightOwl's detection rules --
-// useDemoMode.ts cycles through them round-robin so "Run demo" no longer
-// re-uploads the exact same file every click. `full_kill_chain` is the
-// unmodified original fixture (all 10 techniques it covers); 5 more are
-// natural, chronologically contiguous slices of it (one attack-stage
-// narrative each), not hand-picked events. The 7th, `missing_rules_...`,
-// covers the 1 of 3 rules (Certutil Download) that never fired anywhere in
-// the original capture and had to be generated separately (see
-// backend/scripts/generate_missing_rule_events.ps1) -- 2 registry-based
-// rules (Registry Run Key Persistence, Registry IFEO Debugger Hijack)
-// remain uncovered by any fixture: this machine's Sysmon config, like the
-// original capture VM's, has no RegistryEvent rule enabled, so EventID 13
-// is never logged regardless of what registry keys get written; closing
-// that gap needs an actual Sysmon config change (`sysmon -c`), not more
-// fixture generation. Together these fixtures cover 13/15 rules. The
-// earlier benign fixture (sysmon_demo.evtx) is kept alongside for
-// reference -- see docs/05_NightOwl_Manual_Testing_Guide.md §7.2/§12.7.
-export interface DemoFixture {
-  url: string
-  filename: string
-  label: string
-  techniques: string[]
+// Demo Mode fixture pool: reworked 2026-09-08 to draw from the real
+// real-world fixture corpus (backend/sample_logs/real_world_fixtures/
+// detected/) instead of a small bundled set of synthetic/sliced files.
+// GET /demo/fixtures (backend/app/api/routes_demo.py) returns exactly the
+// fixtures the *current* rule set detects, sourced live from
+// build_failure_matrix.py's own output -- see that route's docstring.
+// `nextDemoFixture` below is a pure shuffle-bag picker over whatever list
+// comes back, so there's no second, hand-maintained pool here to go stale
+// against the real one.
+import type { DemoFixtureInfo } from '../api'
+
+const SHUFFLE_ORDER_KEY = 'nightowl:demo-fixture-shuffle-order'
+const SHUFFLE_POINTER_KEY = 'nightowl:demo-fixture-shuffle-pointer'
+
+function shuffled<T>(items: T[]): T[] {
+  const copy = [...items]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
 }
 
-export const DEMO_FIXTURE_POOL: DemoFixture[] = [
-  {
-    url: '/demo/full_kill_chain.evtx',
-    filename: 'full_kill_chain.evtx',
-    label: 'Full incident: multi-stage kill chain',
-    techniques: ['T1059.001', 'T1105', 'T1218.005', 'T1053.005', 'T1071.001', 'T1003.001', 'T1003.002', 'T1021.001', 'T1021.002', 'T1021.006'],
-  },
-  {
-    url: '/demo/initial_execution_encoded_powershell.evtx',
-    filename: 'initial_execution_encoded_powershell.evtx',
-    label: 'Initial execution: encoded PowerShell',
-    techniques: ['T1059.001', 'T1105'],
-  },
-  {
-    url: '/demo/execution_policy_bypass.evtx',
-    filename: 'execution_policy_bypass.evtx',
-    label: 'Execution: PowerShell policy bypass',
-    techniques: ['T1059.001', 'T1105'],
-  },
-  {
-    url: '/demo/persistence_and_lolbin_beacon.evtx',
-    filename: 'persistence_and_lolbin_beacon.evtx',
-    label: 'Persistence & LOLBin beacon',
-    techniques: ['T1053.005', 'T1071.001', 'T1105'],
-  },
-  {
-    url: '/demo/credential_access_mshta_lsass_sam.evtx',
-    filename: 'credential_access_mshta_lsass_sam.evtx',
-    label: 'Credential access: mshta → LSASS → SAM',
-    techniques: ['T1218.005', 'T1003.001', 'T1003.002'],
-  },
-  {
-    url: '/demo/lateral_movement_rdp_admin_winrm.evtx',
-    filename: 'lateral_movement_rdp_admin_winrm.evtx',
-    label: 'Lateral movement: RDP, admin share & WinRM',
-    techniques: ['T1021.001', 'T1021.002', 'T1021.006', 'T1071.001'],
-  },
-  {
-    url: '/demo/missing_rules_registry_certutil.evtx',
-    filename: 'missing_rules_registry_certutil.evtx',
-    label: 'Command and control: certutil LOLBin download',
-    techniques: ['T1105'],
-  },
-]
+// Shuffle-bag, not round-robin-by-index -- the pool itself can change
+// between clicks (a rule addition/removal changes which fixtures are
+// "detected"), so persisting an index would silently point at the wrong
+// fixture once the list shifts. Guarantees every fixture in the current
+// pool is shown exactly once before any repeat, and the reshuffle at the
+// end of a pass is nudged so the pass boundary itself never repeats the
+// fixture that was just shown. Wrapped in try/catch: same defensive
+// posture as hooks/useUnseenIncidents.ts's localStorage access -- a
+// storage failure just means every click reshuffles, never a crash.
+export function nextDemoFixture(fixtures: DemoFixtureInfo[]): DemoFixtureInfo {
+  if (fixtures.length === 0) throw new Error('No detected demo fixtures available')
+  if (fixtures.length === 1) return fixtures[0]
 
-const LAST_FIXTURE_INDEX_KEY = 'nightowl:last-demo-fixture-index'
+  const filenames = fixtures.map((f) => f.filename)
+  let order: string[] = []
+  let pointer = 0
+  let lastServed: string | null = null
 
-// Round-robin, not random -- guarantees the very next click differs from
-// the last one, rather than a 1-in-6 chance of repeating it. Persisted so
-// the sequence continues across reloads instead of always restarting at
-// index 0. Wrapped in try/catch: same defensive posture as
-// hooks/useUnseenIncidents.ts's localStorage access.
-export function nextDemoFixture(): DemoFixture {
-  let last = -1
   try {
-    last = Number(localStorage.getItem(LAST_FIXTURE_INDEX_KEY) ?? '-1')
+    const storedOrder = JSON.parse(localStorage.getItem(SHUFFLE_ORDER_KEY) ?? '[]') as string[]
+    const storedPointer = Number(localStorage.getItem(SHUFFLE_POINTER_KEY) ?? '0')
+    const sameSet =
+      storedOrder.length === filenames.length && filenames.every((name) => storedOrder.includes(name))
+    if (sameSet) {
+      order = storedOrder
+      pointer = storedPointer
+      lastServed = pointer > 0 ? storedOrder[pointer - 1] : null
+    }
   } catch {
-    // Storage unavailable -- falls back to always starting from index 0.
+    // Storage unavailable or corrupt -- falls back to a fresh shuffle below.
   }
-  const next = (last + 1) % DEMO_FIXTURE_POOL.length
+
+  if (order.length === 0 || pointer >= order.length) {
+    order = shuffled(filenames)
+    // Never let a reshuffle put the just-served fixture right back at the
+    // front -- that would repeat it on the very next click, which is
+    // exactly what this mechanism exists to prevent.
+    if (lastServed && order[0] === lastServed) {
+      const swapWith = 1 + Math.floor(Math.random() * (order.length - 1))
+      ;[order[0], order[swapWith]] = [order[swapWith], order[0]]
+    }
+    pointer = 0
+  }
+
+  const filename = order[pointer]
+  pointer += 1
+
   try {
-    localStorage.setItem(LAST_FIXTURE_INDEX_KEY, String(next))
+    localStorage.setItem(SHUFFLE_ORDER_KEY, JSON.stringify(order))
+    localStorage.setItem(SHUFFLE_POINTER_KEY, String(pointer))
   } catch {
     // Sequence just will not persist across reloads.
   }
-  return DEMO_FIXTURE_POOL[next]
+
+  return fixtures.find((f) => f.filename === filename) ?? fixtures[0]
 }
 
 // A fixed, visibly-scripted prompt -- Demo Mode narrates that this question
