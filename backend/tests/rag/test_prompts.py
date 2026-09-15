@@ -17,8 +17,11 @@ from app.rag.prompts import (
     build_critique_prompt,
     build_explanation_prompt,
     build_uncovered_opinion_prompt,
+    extract_assessment_label,
     extract_confidence_breakdown,
     extract_recommended_response,
+    extract_uncovered_limitations,
+    format_already_detected,
     format_chat_history,
     format_chunks,
     format_event_samples,
@@ -357,6 +360,96 @@ def test_build_uncovered_opinion_prompt_handles_no_samples_or_chunks():
     human_text = messages[1].content
     assert "no sample events available" in human_text
     assert "no relevant knowledge base context retrieved" in human_text
+
+
+def test_format_already_detected_no_titles():
+    assert format_already_detected([]) == "(no rule matched anywhere in this file)"
+    assert format_already_detected(None) == "(no rule matched anywhere in this file)"
+
+
+def test_format_already_detected_renders_titles():
+    rendered = format_already_detected(["Rule A", "Rule B"])
+    assert "- Rule A" in rendered
+    assert "- Rule B" in rendered
+
+
+def test_build_uncovered_opinion_prompt_embeds_matched_rule_titles():
+    """Guardrail-1 scoping tie-in: when other events in the file already
+    matched a rule, the opinion's prompt must say so, so the model stays
+    scoped to the remaining uncovered slice."""
+    messages = build_uncovered_opinion_prompt(
+        "suspicious.evtx", SAMPLE_EVENT_SAMPLES, SAMPLE_CHUNKS, matched_rule_titles=["Certutil Download"]
+    )
+
+    human_text = messages[1].content
+    assert "Certutil Download" in human_text
+    assert "not your concern" in human_text.lower()
+
+
+def test_build_uncovered_opinion_prompt_defaults_matched_rule_titles_to_none_matched():
+    messages = build_uncovered_opinion_prompt("suspicious.evtx", SAMPLE_EVENT_SAMPLES, SAMPLE_CHUNKS)
+
+    human_text = messages[1].content
+    assert "no rule matched anywhere in this file" in human_text
+
+
+# --- Assessment / Limitations extraction ------------------------------------
+
+
+def test_extract_assessment_label_worth_reviewing():
+    response = "Something looks off here.\n\n## Assessment: Worth reviewing"
+    assert extract_assessment_label(response) == "worth_reviewing"
+
+
+def test_extract_assessment_label_nothing_unusual():
+    response = "Nothing stands out.\n\n## Assessment: Nothing unusual noted"
+    assert extract_assessment_label(response) == "nothing_unusual"
+
+
+def test_extract_assessment_label_uncertain_insufficient_information():
+    response = "Too little to go on.\n\n## Assessment: Uncertain -- insufficient information"
+    assert extract_assessment_label(response) == "uncertain"
+
+
+def test_extract_assessment_label_defaults_to_uncertain_on_malformed_output():
+    """No recognized heading at all -- the documented safe default, since
+    silently treating this as "nothing_unusual" could hide something the
+    model actually flagged."""
+    assert extract_assessment_label("just some unstructured prose with no heading") == "uncertain"
+    assert extract_assessment_label("") == "uncertain"
+
+
+def test_extract_uncovered_limitations_present():
+    response = (
+        "Something looks off.\n\n"
+        "## Assessment: Worth reviewing\n\n"
+        "## Limitations\n- Only a handful of events were sampled.\n- No network context was available."
+    )
+    limitations = extract_uncovered_limitations(response)
+    assert "handful of events" in limitations
+    assert "network context" in limitations
+
+
+def test_extract_uncovered_limitations_missing_heading_returns_empty_string():
+    """Malformed/missing heading -- "" back, never a raised exception (same
+    documented degradation as extract_recommended_response/
+    extract_confidence_breakdown)."""
+    assert extract_uncovered_limitations("just some unstructured prose") == ""
+    assert extract_uncovered_limitations("") == ""
+
+
+def test_extract_uncovered_limitations_coexists_with_any_assessment():
+    """The core guardrail this heading exists to satisfy: a 'worth
+    reviewing' assessment and an 'insufficient telemetry' limitation must
+    both be extractable from the same response -- they are not mutually
+    exclusive the way the three Assessment headings are."""
+    response = (
+        "Unusual PowerShell activity observed.\n\n"
+        "## Assessment: Worth reviewing\n\n"
+        "## Limitations\n- The available telemetry is insufficient to establish malicious intent."
+    )
+    assert extract_assessment_label(response) == "worth_reviewing"
+    assert "insufficient to establish malicious intent" in extract_uncovered_limitations(response)
 
 
 # --- Prompt-injection inertness (pending.md item 5) -------------------------

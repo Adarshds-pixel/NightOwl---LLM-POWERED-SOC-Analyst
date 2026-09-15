@@ -1,6 +1,6 @@
 # NightOwl — Documentation
 
-Everything about how NightOwl is built, why, how to run and test it, and how it got here. This is the single reference document for the project — it replaces what used to be five separate files (`ARCHITECTURE.md`, `PROJECT_GUIDE.md`, `FRONTEND_KPI_AUDIT.md`, `final_plan.md`, `pending.md`), merged and curated into one place now that the project is complete. `docs/interview-prep.md` remains separate (personal viva prep notes, not project documentation).
+Everything about how NightOwl is built, why, how to run and test it, and how it got here. This is the single reference document for the project — it replaces what used to be five separate files (`ARCHITECTURE.md`, `PROJECT_GUIDE.md`, `FRONTEND_KPI_AUDIT.md`, `final_plan.md`, `pending.md`), merged and curated into one place now that the project is complete.
 
 ---
 
@@ -42,7 +42,7 @@ Every number the console shows is derived from this pipeline. Nothing is simulat
 ├── frontend/       React + Vite + Tailwind SOC console
 ├── ai/             AI layer: RAG knowledge base, ATT&CK dataset, vector
 │                   store, and the build/evaluation tooling
-├── docs/           This file, interview-prep.md, Postman collection
+├── docs/           This file, Postman collection, audits/
 └── docker-compose.yml
 ```
 

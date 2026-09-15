@@ -10,6 +10,20 @@ const ASSESSMENT_META: Record<AiOpinionAssessment, { label: string; accent: Acce
 }
 
 /**
+ * `summary` is the model's entire raw response, including the trailing
+ * "## Assessment: ..." and "## Limitations" headings the prompt requires
+ * (rag/prompts.py) -- those are parsed into `assessment_label`/
+ * `limitations` separately and rendered as their own elements below, so
+ * showing them again verbatim inside the free-text body would just be
+ * raw markdown leaking into a plain-text paragraph. This mirrors how the
+ * backend's own `_extract_section` finds a heading boundary: the first
+ * "\n## " marks where the structured tail begins.
+ */
+function stripTrailingHeadings(summary: string): string {
+  return summary.split(/\n## /)[0]?.trim() ?? summary.trim()
+}
+
+/**
  * A deliberately separate visual language from every real-detection
  * surface on this page: its own `violet` accent (the app's fixed AI/RAG
  * channel, never reused for a real Alert/Incident), its own icon, and a
@@ -34,7 +48,7 @@ export function AiOpinionPanel({
    *  showing the wrong one. */
   hasUncoveredEvents?: boolean
 }) {
-  const { opinion, error } = useAiOpinion(opinionId)
+  const { opinion, error, stalled } = useAiOpinion(opinionId)
 
   if (opinionId === null) return null
 
@@ -45,9 +59,21 @@ export function AiOpinionPanel({
       : 'Not a verified detection — an AI second look at a narrow pattern worth reviewing'
   const thinkingLabel = hasUncoveredEvents ?? true ? 'Reviewing uncovered events' : 'Reviewing flagged pattern'
 
+  // A response that never reached a terminal status (still "pending" or
+  // absent) but the poll gave up anyway -- see useAiOpinion's `stalled`
+  // docstring for the two cases this covers. Checked before the pending
+  // branch below so a stuck poll doesn't spin forever.
+  const isStalled = stalled && (!opinion || opinion.status === 'pending')
+
   return (
     <Card title="AI second opinion" subtitle={subtitle} icon={<Sparkles className="h-4 w-4" />} accent="violet">
-      {!opinion || opinion.status === 'pending' ? (
+      {isStalled ? (
+        <EmptyState
+          message="AI opinion timed out"
+          hint={error ?? 'No response after several attempts -- the model call may still finish; check back later.'}
+          icon={<HelpCircle className="h-5 w-5" />}
+        />
+      ) : !opinion || opinion.status === 'pending' ? (
         <AIThinking label={thinkingLabel} />
       ) : opinion.status === 'failed' ? (
         <EmptyState
@@ -63,7 +89,29 @@ export function AiOpinionPanel({
               {assessment.label}
             </Badge>
           )}
-          <p className="whitespace-pre-wrap text-meta text-text-dim">{opinion.summary}</p>
+          <p className="whitespace-pre-wrap text-meta text-text-dim">
+            {opinion.summary ? stripTrailingHeadings(opinion.summary) : opinion.summary}
+          </p>
+          {opinion.attack_candidate_ids && opinion.attack_candidate_ids.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-micro font-medium uppercase tracking-wide text-text-faint">
+                ATT&CK candidates (from retrieved reference material, not a detection)
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {opinion.attack_candidate_ids.map((id) => (
+                  <Badge key={id} accent="violet">
+                    {id}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          {opinion.limitations && (
+            <div className="rounded-control border border-line bg-surface-2/40 px-3 py-2">
+              <span className="text-micro font-medium uppercase tracking-wide text-text-faint">Limitations</span>
+              <p className="mt-1 whitespace-pre-wrap text-meta text-text-dim">{opinion.limitations}</p>
+            </div>
+          )}
         </div>
       )}
     </Card>

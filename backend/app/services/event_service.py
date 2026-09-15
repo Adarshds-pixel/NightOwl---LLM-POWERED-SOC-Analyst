@@ -84,7 +84,7 @@ def save_events(db: Session, events: list[NormalizedEvent]) -> list[Event]:
     if not events:
         return []
     rows = [create_event(db, event) for event in events]
-    db.commit()
+    db.flush()
     logger.info("ingested %d events", len(rows))
     return rows
 

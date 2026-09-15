@@ -24,16 +24,6 @@ ai/tools/*_output.json
 frontend/node_modules/
 frontend/dist/
 
-# Working material, deliberately not part of the repository:
-# design references handed over for the frontend build, and personal
-# interview preparation notes.
-frontend design images/
-docs/interview-prep.md
-final_plan.md
-
-# Claude Code local session/config state -- machine-local, not project source.
-.claude/
-
 # Real (not synthetic) clean-corpus captures from a contributor's own PC
 # (backend/scripts/run_detection_benchmark.py, build_failure_matrix.py) --
 # these carry the owner's real Windows username/hostname baked into the

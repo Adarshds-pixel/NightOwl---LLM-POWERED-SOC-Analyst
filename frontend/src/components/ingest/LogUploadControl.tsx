@@ -44,27 +44,32 @@ export function LogUploadControl({
         return
       }
 
-      // Same three-way split TelemetryProfilePanel's verdict banner shows
-      // (lib/verdict.ts) -- one shared source of truth for "which of the
-      // three categories applies," not a second, independently-drifting
-      // tone ternary. "0 alerts" here does NOT mean verified clean (an
-      // Inconclusive file must never read as success), so the tone only
-      // ever says success for a genuinely fully-evaluated, clean file.
+      // Same verdict-kind split TelemetryProfilePanel's banner shows
+      // (lib/verdict.ts) -- one shared source of truth for "which category
+      // applies," not a second, independently-drifting tone ternary. "0
+      // alerts" here does NOT mean verified clean (an Inconclusive file
+      // must never read as success), so the tone only ever says success
+      // for a genuinely fully-evaluated, clean file. A real detection
+      // stays a warning even when other events in the same file were
+      // never checked (detected_with_uncovered) -- the match is still real.
       const verdict = computeVerdict(result)
-      const tone = verdict.kind === 'detected' ? 'warning' : verdict.kind === 'inconclusive' ? 'info' : 'success'
+      const isDetected = verdict.kind === 'detected' || verdict.kind === 'detected_with_uncovered'
+      const tone = isDetected ? 'warning' : verdict.kind === 'inconclusive' ? 'info' : 'success'
       const duplicateNote =
         result.duplicate_events_skipped > 0
           ? ` (${result.duplicate_events_skipped.toLocaleString()} already ingested, skipped)`
           : ''
       const totalClassified = result.covered_events + result.uncovered_events
-      const description =
-        verdict.kind === 'detected'
-          ? `${result.alerts_created} alert(s), ${result.incident_ids.length} incident(s) from ${result.filename}${duplicateNote}`
-          : verdict.kind === 'inconclusive'
-            ? totalClassified > 0
-              ? `${result.covered_events}/${result.events_ingested} events had rule coverage — ${result.uncovered_events} not evaluated by any loaded rule${duplicateNote}`
-              : verdict.explanation
-            : `All ${result.events_ingested.toLocaleString()} events were evaluated against loaded rules — no matches${duplicateNote}`
+      const description = isDetected
+        ? `${result.alerts_created} alert(s), ${result.incident_ids.length} incident(s) from ${result.filename}${duplicateNote}` +
+          (verdict.kind === 'detected_with_uncovered'
+            ? ` — ${result.uncovered_events} other event(s) not evaluated by any loaded rule`
+            : '')
+        : verdict.kind === 'inconclusive'
+          ? totalClassified > 0
+            ? `${result.covered_events}/${result.events_ingested} events had rule coverage — ${result.uncovered_events} not evaluated by any loaded rule${duplicateNote}`
+            : verdict.explanation
+          : `All ${result.events_ingested.toLocaleString()} events were evaluated against loaded rules — no matches${duplicateNote}`
       push({
         tone,
         title: `${result.events_ingested.toLocaleString()} events ingested`,

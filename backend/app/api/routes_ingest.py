@@ -57,7 +57,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -136,7 +136,46 @@ class IngestResponse(BaseModel):
     event_id_breakdown: list[EventIdCoverageGroup]
 
 
-@router.post("/ingest", response_model=IngestResponse)
+async def check_upload_size_limit(request: Request):
+    """
+    Early rejection based on Content-Length, if provided.
+    This does NOT prevent an attacker from omitting or forging Content-Length
+    to force multipart spooling, which is a known Starlette limitation.
+    """
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            # We allow 1MB of overhead for multipart boundaries/headers
+            # over the actual EVTX file limit.
+            if int(content_length) > MAX_UPLOAD_BYTES + (1024 * 1024):
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Request body too large: content-length exceeds the limit",
+                )
+        except ValueError:
+            pass
+
+    # Post-spooling application-level limit enforcement on all parts.
+    # Starlette's multipart parser will have spooled the request by this point
+    # (or will spool it when we await request.form()). We must ensure the total
+    # received data doesn't exceed the limit, even if an attacker split it
+    # across multiple files/fields or used chunked transfer to bypass Content-Length.
+    form = await request.form()
+    total_size = 0
+    for key, value in form.multi_items():
+        if hasattr(value, "size") and value.size is not None:
+            total_size += value.size
+        elif isinstance(value, str):
+            total_size += len(value.encode("utf-8"))
+
+    if total_size > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Request body too large: total size of all parts exceeds the limit",
+        )
+
+
+@router.post("/ingest", response_model=IngestResponse, dependencies=[Depends(check_upload_size_limit)])
 def ingest_evtx(
     background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db)
 ) -> IngestResponse:
@@ -158,12 +197,23 @@ def ingest_evtx(
     # Note on what this route can and can't protect against: Starlette's
     # multipart parser (FastAPI's `File(...)` dependency) has already fully
     # received and spooled the entire upload to a SpooledTemporaryFile
-    # before this route function body even runs -- there is no hook in the
-    # installed FastAPI/Starlette version to cap size *during* multipart
-    # parsing without hand-rolling a custom parser (out of scope -- see
-    # MAX_UPLOAD_BYTES's own comment; this is a documented limitation, not
-    # an oversight). What this code *can* control is what happens after
-    # that: read_records_as_dicts() requires a real file on disk (python-
+    # before this route function body even runs.
+    #
+    # APPLICATION-LEVEL FILE LIMIT: What this code *can* control is what
+    # happens after spooling. We enforce MAX_UPLOAD_BYTES as chunks are
+    # read below.
+    #
+    # PRE-RECEIVE NETWORK REQUEST LIMIT: The `check_upload_size_limit`
+    # dependency provides early rejection based on Content-Length. However,
+    # if Content-Length is omitted or forged, Starlette will still spool
+    # the request. Because there is no hook in FastAPI/Starlette to cap
+    # size *during* multipart parsing without a custom parser, production
+    # deployments MUST enforce an upstream request-size limit (e.g., via
+    # a proxy, load balancer, or ingress) before the application receives
+    # an unbounded multipart request. Do not rely solely on route-level
+    # validation to prevent disk exhaustion.
+    #
+    # read_records_as_dicts() requires a real file on disk (python-
     # evtx needs random-access seeking, confirmed via evtx_reader.py --
     # in-memory bytes/a stream won't do), so the already-spooled upload
     # still has to become a second on-disk file for the parser to read.
@@ -237,25 +287,46 @@ def ingest_evtx(
         )
         ai_opinion_id: int | None = None
         # Advisory second opinion, from two independent triggers:
-        #   1. No rule fired AND some events had no rule that could even
-        #      evaluate them -- a file with real matches already has a real
-        #      detection to look at, and a file that's fully covered with no
-        #      matches is genuinely, verifiably clean. This is deliberately
-        #      the narrow slice where an LLM opinion adds something a
-        #      rule-based verdict can't.
+        #   1. Some events had no rule that could even evaluate them --
+        #      regardless of whether OTHER events in the same file matched a
+        #      real rule. A real detection explains only the events it
+        #      matched; it says nothing about the rest of the file. Proven
+        #      live against a real capture: 2 rule matches alongside 1,531
+        #      uncovered events used to suppress this opinion entirely,
+        #      leaving those 1,531 events with zero analysis. When
+        #      `matched_rule_titles` is non-empty, it's passed into the
+        #      prompt as known context (see fill_in_opinion) so the opinion
+        #      stays scoped to the *remaining* uncovered slice rather than
+        #      re-litigating what a rule already caught -- advisory,
+        #      additive, never a competing verdict.
         #   2. A narrow, verified advisory pattern was flagged (see
         #      advisory_patterns.py) -- independent of coverage/matches,
-        #      since the pattern (e.g. a \lsass/\srvsvc named-pipe connect)
-        #      isn't represented as an Alert anywhere else in the file and
-        #      still deserves a second look even if other, unrelated
-        #      activity in the same file already matched a real rule.
-        advisory_sample_ids = list(outcome.named_pipe_discovery_event_ids)
-        if outcome.rule_matches == 0 and outcome.uncovered_events > 0:
+        #      since the pattern (e.g. a \lsass/\srvsvc named-pipe connect,
+        #      or a Security 4697 service install whose ServiceType the one
+        #      loaded 4697 rule doesn't evaluate) isn't represented as an
+        #      Alert anywhere else in the file and still deserves a second
+        #      look even if other, unrelated activity in the same file
+        #      already matched a real rule -- "covered by a rule's
+        #      logsource" is not the same claim as "this event's content
+        #      was actually judged."
+        advisory_sample_ids = list(
+            dict.fromkeys(outcome.named_pipe_discovery_event_ids + outcome.service_installation_event_ids)
+        )
+        if outcome.uncovered_events > 0:
             advisory_sample_ids = list(dict.fromkeys(outcome.uncovered_event_ids + advisory_sample_ids))
         if advisory_sample_ids:
             opinion = create_pending_opinion(db, filename, advisory_sample_ids)
             ai_opinion_id = opinion.id
-            background_tasks.add_task(fill_in_opinion, opinion.id, filename, advisory_sample_ids)
+            background_tasks.add_task(
+                fill_in_opinion,
+                opinion.id,
+                filename,
+                advisory_sample_ids,
+                outcome.matched_rule_titles,
+                outcome.uncovered_breakdown,
+            )
+
+        db.commit()
 
         return IngestResponse(
             filename=filename,

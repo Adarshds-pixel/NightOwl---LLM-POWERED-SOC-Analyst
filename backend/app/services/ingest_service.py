@@ -32,7 +32,7 @@ from app.detection.engine import covered_event_ids, evaluate_event
 from app.detection.rule_loader import LoadedRule
 from app.detection.sequences import detect_sequences
 from app.ingestion.normalizer import EventNormalizationError, canonical_channel, normalize_event
-from app.services.advisory_patterns import is_named_pipe_discovery
+from app.services.advisory_patterns import is_named_pipe_discovery, is_non_kernel_driver_service_installation
 from app.services.detection_service import save_alerts
 from app.services.event_service import find_existing_event_keys, save_events
 from app.services.incident_service import find_or_create_incident
@@ -101,6 +101,14 @@ class IngestOutcome:
     # file and still deserve a second look (routes_ingest.py folds these
     # into the same AI-opinion mechanism used for uncovered events).
     named_pipe_discovery_event_ids: list[int] = field(default_factory=list)
+    # Same idea, second independent pattern (see
+    # advisory_patterns.is_non_kernel_driver_service_installation):
+    # Security Event ID 4697 whose ServiceType the one loaded 4697 rule
+    # doesn't evaluate -- "covered by a rule's logsource" is not the same
+    # claim as "this event's content was actually judged," and this list
+    # exists so the AI safety net still engages on the remainder instead of
+    # reading a covered-but-unmatched malicious service install as clean.
+    service_installation_event_ids: list[int] = field(default_factory=list)
     # Telemetry profiler (pending.md item 4): what's actually in this file,
     # computed from the same normalize pass rather than a second read of
     # the upload -- distinct raw Channel/Provider strings seen, and the
@@ -118,8 +126,22 @@ def ingest_records(
     rules: list[LoadedRule],
     matched_at: datetime | None = None,
 ) -> IngestOutcome:
-    """Normalizes `records`, persists them as events, evaluates each against
-    `rules`, and groups/persists any matches as alerts.
+    """Normalizes `records`, stages them as events, evaluates each against
+    `rules`, and groups/stages any matches as alerts and incidents.
+
+    Caller must commit. This function only `flush()`es (via `save_events`/
+    `save_alerts`/`find_or_create_incident`) -- it never calls `db.commit()`
+    itself, so nothing here is durable until the caller does. This is
+    deliberate: it lets `routes_ingest.py` extend one atomic transaction
+    across this call *and* whatever it does afterward (e.g. persisting an
+    AI-opinion row) with a single `db.commit()` of its own, rather than
+    ending the transaction here and forcing a second, separate one. A
+    caller that never commits will see its own flushed rows within the same
+    session (flush is enough for same-session visibility) but nothing will
+    survive past that session closing -- see
+    `tests/services/test_ingestion_transaction.py` for both cases exercised
+    directly, and `routes_ingest.py`'s own `db.commit()` for the real,
+    production call site.
 
     `matched_at=None` (the default, and what `POST /ingest` always passes)
     takes each match's own timestamp from its event, so an incident's
@@ -207,6 +229,7 @@ def ingest_records(
     uncovered_counter: Counter[tuple[str | None, int]] = Counter()
     uncovered_event_ids: list[int] = []
     named_pipe_discovery_event_ids: list[int] = []
+    service_installation_event_ids: list[int] = []
     # Telemetry profiler: every (channel, event_id) group, covered or not
     # (a superset of uncovered_counter above), plus the distinct raw
     # channel/provider strings actually present in the file.
@@ -229,13 +252,20 @@ def ingest_records(
             covered_count += 1
         else:
             uncovered_counter[(normalized_event.channel, normalized_event.event_id)] += 1
-            if len(uncovered_event_ids) < MAX_UNCOVERED_SAMPLE:
-                uncovered_event_ids.append(event_row.id)
+            # uncovered_event_ids itself is built in a second, cheap pass
+            # below (over these same already-in-memory lists, no re-read/
+            # re-evaluation) once uncovered_counter's final group count is
+            # known -- see the round-robin selection after this loop.
 
         if len(named_pipe_discovery_event_ids) < MAX_ADVISORY_SAMPLE and is_named_pipe_discovery(
             normalized_event.channel, normalized_event.event_id, normalized_event.event_data
         ):
             named_pipe_discovery_event_ids.append(event_row.id)
+
+        if len(service_installation_event_ids) < MAX_ADVISORY_SAMPLE and is_non_kernel_driver_service_installation(
+            normalized_event.channel, normalized_event.event_id, normalized_event.event_data
+        ):
+            service_installation_event_ids.append(event_row.id)
 
         matches = evaluate_event(normalized_event, rules)
         if not matches:
@@ -303,6 +333,56 @@ def ingest_records(
     named_pipe_discovery_event_ids = [
         event_id for event_id in named_pipe_discovery_event_ids if event_id not in alerted_event_ids
     ]
+    service_installation_event_ids = [
+        event_id for event_id in service_installation_event_ids if event_id not in alerted_event_ids
+    ]
+
+    # Round-robin sample selection: a second, cheap pass over the same
+    # already-in-memory `saved`/`normalized_events` lists (no DB I/O, no
+    # rule re-evaluation), now that uncovered_counter's final distinct-group
+    # count is known. First-N-chronological used to let 25 consecutive
+    # events of one uncovered type exhaust the whole sample budget before a
+    # second event type was ever seen (proven live against a real capture:
+    # 1,531 uncovered PowerShell-lifecycle events of the same 2-3 event IDs
+    # crowded out everything else).
+    #
+    # Capping each group's contribution alone isn't enough: a downstream
+    # consumer (ai_opinion_service.MAX_SAMPLE_EVENTS) takes a much smaller
+    # slice off the FRONT of uncovered_event_ids, so if this list held
+    # "all of group A's slots, then all of group B's", a small front-slice
+    # would still only ever see group A. The ids must be genuinely
+    # interleaved -- round 0 takes one id from every group (in first-seen
+    # order), round 1 takes a second id from every group that still has
+    # one, and so on -- so that for ANY N, the first N ids already cover
+    # up to N distinct groups before any group gets a second entry. This
+    # keeps the *pool* bounded at the unchanged MAX_UNCOVERED_SAMPLE total,
+    # and additionally keeps every smaller downstream slice of it diverse.
+    distinct_uncovered_groups = len(uncovered_counter)
+    per_group_cap = max(1, -(-MAX_UNCOVERED_SAMPLE // distinct_uncovered_groups)) if distinct_uncovered_groups else 0
+    if distinct_uncovered_groups:
+        uncovered_by_group: dict[tuple[str | None, int], list[int]] = {}
+        for event_row, normalized_event in zip(saved, normalized_events, strict=True):
+            group = (normalized_event.channel, normalized_event.event_id)
+            if group not in uncovered_counter:
+                continue  # covered event -- not part of this sample
+            bucket = uncovered_by_group.setdefault(group, [])
+            if len(bucket) < per_group_cap:
+                bucket.append(event_row.id)
+
+        group_order = list(uncovered_by_group.keys())  # insertion order == first-seen order
+        round_index = 0
+        while len(uncovered_event_ids) < MAX_UNCOVERED_SAMPLE:
+            added_any_this_round = False
+            for group in group_order:
+                if len(uncovered_event_ids) >= MAX_UNCOVERED_SAMPLE:
+                    break
+                bucket = uncovered_by_group[group]
+                if round_index < len(bucket):
+                    uncovered_event_ids.append(bucket[round_index])
+                    added_any_this_round = True
+            if not added_any_this_round:
+                break
+            round_index += 1
 
     uncovered_breakdown = [
         UncoveredEventGroup(channel=channel, event_id=event_id, count=count)
@@ -332,6 +412,7 @@ def ingest_records(
         uncovered_breakdown=uncovered_breakdown,
         uncovered_event_ids=uncovered_event_ids,
         named_pipe_discovery_event_ids=named_pipe_discovery_event_ids,
+        service_installation_event_ids=service_installation_event_ids,
         channels=sorted(channels_seen),
         providers=sorted(providers_seen),
         event_id_breakdown=event_id_breakdown,

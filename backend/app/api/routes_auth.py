@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.core.rate_limit import allow_login_attempt
+from app.core.rate_limit import allow_login_attempt, get_client_ip
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -35,7 +35,7 @@ def login(payload: LoginRequest, request: Request) -> SessionResponse:
     # Keyed the same way the global rate limiter keys its own bucket
     # (client host) -- see allow_login_attempt's docstring for why this is
     # a separate, much smaller budget than ordinary API traffic.
-    client_key = request.client.host if request.client else "unknown"
+    client_key = get_client_ip(request)
     if not allow_login_attempt(client_key):
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again shortly.")
 

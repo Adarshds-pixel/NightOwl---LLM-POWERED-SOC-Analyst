@@ -558,6 +558,34 @@ def test_sam_privileged_group_rule_rid_suffix_anchors_on_the_delimiter():
     assert not any(m.title == "SAM Privileged Group Object Access" for m in matches)
 
 
+def test_powershell_execution_policy_bypass_rule_does_not_fire_on_noprofile_alone():
+    """The bug this regression guards against: `-nop` (PowerShell's real
+    abbreviation for `-NoProfile`, unrelated to execution policy) used to
+    be in this rule's CommandLine selection. Since matching is
+    case-insensitive substring, `-NoProfile` alone -- standard practice in
+    virtually all scripted/automated PowerShell -- satisfied it, firing on
+    ordinary commands with no execution-policy flag anywhere. Confirmed
+    live against two independent real captures before the fix:
+    `nightowl_benign_powershell.evtx` and a real personal-PC Sysmon
+    export, both containing `-NoProfile -Command "Get-Date | Out-Null"`-
+    style invocations that matched. RULE_CASES' own benign look-alike for
+    this rule doesn't include `-NoProfile` at all, so it would not have
+    caught this -- this test exercises the exact real-world command line
+    that did."""
+    rules = rule_loader.load_rules()
+    event = _event(
+        1,
+        {
+            "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            "CommandLine": '"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -Command "Get-Date | Out-Null"',
+        },
+    )
+
+    matches = evaluate_event(event, rules)
+
+    assert not any(m.title == "PowerShell Execution Policy Bypass" for m in matches)
+
+
 def test_unmanaged_powershell_rule_also_excludes_pwsh_and_ise_hosts():
     """The RULE_CASES benign look-alike only exercises powershell.exe --
     confirm the other two legitimate PowerShell host binaries this rule's

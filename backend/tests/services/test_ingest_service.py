@@ -188,6 +188,79 @@ def test_uncovered_breakdown_groups_by_channel_and_event_id(api_client):
         assert outcome.uncovered_breakdown[0].count == 3
 
 
+# -- uncovered_event_ids sampling (round-robin, bounded) --------------------
+
+
+def _uncovered_record(system_time: str, event_id: int, channel: str = "Application") -> dict:
+    return {
+        "Event": {
+            "System": {
+                "EventID": event_id,
+                "TimeCreated": {"@SystemTime": system_time},
+                "Computer": "WORKSTATION01",
+                "Channel": channel,
+            },
+            "EventData": {"Data": []},
+        }
+    }
+
+
+def _timestamps(n: int):
+    t0 = datetime(2026, 8, 28, 9, 0, 0, tzinfo=timezone.utc)
+    return [(t0 + timedelta(seconds=i)).isoformat() for i in range(n)]
+
+
+def test_uncovered_event_ids_round_robins_across_distinct_groups(api_client):
+    """30 consecutive events of one uncovered type followed by 1 of another
+    -- first-N-chronological would sample only the first type; round-robin
+    must represent both, and both must land within the first few entries
+    (not just somewhere in the 25-slot pool) so a smaller downstream
+    truncation (ai_opinion_service.MAX_SAMPLE_EVENTS) still sees both."""
+    _client, SessionLocal = api_client
+    stamps = _timestamps(31)
+    records = [_uncovered_record(stamps[i], 9001) for i in range(30)] + [_uncovered_record(stamps[30], 9002)]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[], matched_at=None)
+
+        assert outcome.uncovered_events == 31
+        first_five_ids = outcome.uncovered_event_ids[:5]
+        events_by_id = {e.id: e.event_id for e in db.query(Event).filter(Event.id.in_(first_five_ids)).all()}
+        represented_event_ids = {events_by_id[i] for i in first_five_ids}
+        assert represented_event_ids == {9001, 9002}
+
+
+def test_uncovered_event_ids_stays_bounded_at_max_uncovered_sample(api_client):
+    from app.services import ingest_service
+
+    _client, SessionLocal = api_client
+    stamps = _timestamps(ingest_service.MAX_UNCOVERED_SAMPLE + 50)
+    records = [_uncovered_record(ts, 9001 + i % 10) for i, ts in enumerate(stamps)]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[], matched_at=None)
+
+        assert outcome.uncovered_events == len(records)
+        assert len(outcome.uncovered_event_ids) <= ingest_service.MAX_UNCOVERED_SAMPLE
+
+
+def test_uncovered_event_ids_every_distinct_group_represented_when_groups_fit_the_cap(api_client):
+    from app.services import ingest_service
+
+    _client, SessionLocal = api_client
+    # 10 distinct event types, well under MAX_UNCOVERED_SAMPLE -- every one
+    # must get at least one representative in the sample.
+    stamps = _timestamps(10)
+    records = [_uncovered_record(stamps[i], 9000 + i) for i in range(10)]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[], matched_at=None)
+
+        assert len(outcome.uncovered_event_ids) <= ingest_service.MAX_UNCOVERED_SAMPLE
+        events = db.query(Event).filter(Event.id.in_(outcome.uncovered_event_ids)).all()
+        assert {e.event_id for e in events} == {9000 + i for i in range(10)}
+
+
 # -- telemetry profiler (channels / providers / event_id_breakdown) --------
 
 
@@ -341,6 +414,157 @@ def test_named_pipe_discovery_does_not_flag_unrelated_pipes_or_processes(api_cli
         outcome = ingest_records(db, records, rules=[_PIPE_CONNECT_RULE], matched_at=None)
 
         assert outcome.named_pipe_discovery_event_ids == []
+
+
+# -- advisory patterns (service_installation_event_ids) --------------------
+#
+# Regression suite for the "covered but unmatched" AI-safety-net gap: Event
+# 4697 IS a covered category (kernel_driver_service_installed.yml), so
+# these are deliberately NOT the coverage-gap path above -- they exercise
+# the same independent advisory-pattern mechanism as named_pipe_discovery,
+# for a second, unrelated pattern.
+_KERNEL_DRIVER_RULE = LoadedRule(
+    rule_id="fake-kernel-driver-rule",
+    title="Fake Kernel Driver Service Rule",
+    level="high",
+    category="kernel_driver_service_installed",
+    detections={"selection": {"ServiceType": "0x00000001"}},
+    condition="selection",
+    yaml_path="<test>",
+    technique_id="T1543.003",
+    channel="security",
+)
+
+
+def _service_install_record(system_time, service_type, service_filename="C:\\Windows\\System32\\svc.exe"):
+    return {
+        "Event": {
+            "System": {
+                "EventID": 4697,
+                "TimeCreated": {"@SystemTime": system_time},
+                "Computer": "WORKSTATION01",
+                "Channel": "Security",
+            },
+            "EventData": {
+                "Data": [
+                    {"@Name": "ServiceName", "#text": "svc"},
+                    {"@Name": "ServiceFileName", "#text": service_filename},
+                    {"@Name": "ServiceType", "#text": service_type},
+                ]
+            },
+        }
+    }
+
+
+def test_regression_b_msf_service_type_0x10_is_covered_and_unmatched_but_still_flagged(api_client):
+    """Case B from the approved fix spec: `ID4697-MSF payload deployed via
+    service.evtx`'s real shape -- ServiceType 0x00000010 (ordinary
+    user-mode service). The rule evaluates it (covered_events == 1) and
+    does not match it (rule_matches == 0, alerts_created == 0) -- this must
+    now still surface via the advisory-pattern list rather than reading as
+    "fully covered and clean"."""
+    _client, SessionLocal = api_client
+    records = [_service_install_record("2026-08-28T09:00:00+00:00", "0x00000010")]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[_KERNEL_DRIVER_RULE], matched_at=None)
+
+        assert outcome.covered_events == 1
+        assert outcome.uncovered_events == 0
+        assert outcome.rule_matches == 0
+        assert outcome.alerts_created == 0
+        assert len(outcome.incident_ids) == 0
+        assert outcome.service_installation_event_ids == [
+            db.query(Event).filter(Event.event_id == 4697).one().id
+        ]
+
+
+def test_regression_c_kernel_driver_service_type_0x01_matches_the_rule_and_is_not_advisory_flagged(api_client):
+    """Case C: the one ServiceType the existing rule already covers creates
+    a real alert -- it must not ALSO show up in the advisory list, since
+    this pattern is the complement of the rule's scope, not an overlapping
+    second opinion on evidence the rule already turned into a confident
+    detection."""
+    _client, SessionLocal = api_client
+    records = [_service_install_record("2026-08-28T09:00:00+00:00", "0x00000001")]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[_KERNEL_DRIVER_RULE], matched_at=None)
+
+        assert outcome.rule_matches == 1
+        assert outcome.alerts_created == 1
+        assert outcome.service_installation_event_ids == []
+
+
+def test_regression_d_smbexec_service_plus_uncovered_7045_control_case(api_client):
+    """Case D: the ID7045-4697-SMBexec control case -- a covered-but-
+    unmatched 4697 (ServiceType 0x00000010) alongside an independently
+    uncovered System-channel 7045 in the same file. Both advisory sources
+    must be present and merged without duplication; this is a regression
+    guard that adding the new pattern doesn't disturb the pre-existing
+    uncovered-event trigger this file already relied on."""
+    _client, SessionLocal = api_client
+    seven045 = {
+        "Event": {
+            "System": {
+                "EventID": 7045,
+                "TimeCreated": {"@SystemTime": "2026-08-28T09:00:01+00:00"},
+                "Computer": "WORKSTATION01",
+                "Channel": "System",
+            },
+            "EventData": {"Data": [{"@Name": "ServiceName", "#text": "svc"}]},
+        }
+    }
+    records = [_service_install_record("2026-08-28T09:00:00+00:00", "0x00000010"), seven045]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[_KERNEL_DRIVER_RULE], matched_at=None)
+
+        assert outcome.covered_events == 1  # the 4697
+        assert outcome.uncovered_events == 1  # the 7045 (System channel, no loaded rule)
+        assert outcome.rule_matches == 0
+        assert outcome.alerts_created == 0
+        assert len(outcome.service_installation_event_ids) == 1
+        assert len(outcome.uncovered_event_ids) == 1
+        # Two independent, non-overlapping event ids -- both real signal.
+        assert set(outcome.service_installation_event_ids).isdisjoint(outcome.uncovered_event_ids)
+
+
+def test_regression_e_service_installation_advisory_never_creates_an_alert_or_incident(api_client):
+    """Case E: advisory-only guarantee. Flagging a covered-but-unmatched
+    service install must never itself create an Alert/Incident -- only a
+    real rule match does that. This is the same invariant
+    test_fill_in_opinion_never_creates_an_alert_or_incident (ai_opinion
+    service tests) protects downstream of the AI call; this protects the
+    upstream trigger side."""
+    _client, SessionLocal = api_client
+    records = [_service_install_record("2026-08-28T09:00:00+00:00", "0x00000010")]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[_KERNEL_DRIVER_RULE], matched_at=None)
+
+        assert len(outcome.service_installation_event_ids) == 1
+        assert outcome.alerts_created == 0
+        assert outcome.incident_ids == []
+        assert db.query(Alert).count() == 0
+        assert db.query(Incident).count() == 0
+
+
+def test_service_installation_advisory_capped_at_max_advisory_sample(api_client):
+    """Bounding check: many covered-but-unmatched service installs in one
+    file must not grow the advisory sample past MAX_ADVISORY_SAMPLE, same
+    cap already enforced for named_pipe_discovery_event_ids."""
+    from app.services.ingest_service import MAX_ADVISORY_SAMPLE
+
+    _client, SessionLocal = api_client
+    records = [
+        _service_install_record(f"2026-08-28T09:00:{i:02d}+00:00", "0x00000010") for i in range(MAX_ADVISORY_SAMPLE + 5)
+    ]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[_KERNEL_DRIVER_RULE], matched_at=None)
+
+        assert len(outcome.service_installation_event_ids) == MAX_ADVISORY_SAMPLE
 
 
 # -- duplicate-ingest detection ---------------------------------------------

@@ -243,6 +243,15 @@ export function ingestEvtxFileWithProgress(
 
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${API_BASE_URL}/ingest`)
+    // rawFetch sets `credentials: 'include'` for the same reason (see its
+    // own comment) -- XHR has no equivalent default-include behavior, so
+    // without this the session cookie is silently omitted and every
+    // upload 401s as "not authenticated" regardless of a real, valid
+    // session, even though every other request in the app (all fetch-based)
+    // works fine. Missed when session auth was added, since this upload
+    // path is a bespoke XHR implementation that never went through
+    // rawFetch/apiFetch.
+    xhr.withCredentials = true
     if (API_KEY) xhr.setRequestHeader('X-API-Key', API_KEY)
     xhr.timeout = timeoutMs
 
@@ -255,6 +264,10 @@ export function ingestEvtxFileWithProgress(
         reject(new ApiError(429, RATE_LIMIT_MESSAGE))
         return
       }
+      // Same as rawFetch: a session that expired or was invalidated mid-
+      // upload should flip the app to its logged-out state, not just fail
+      // this one upload while the rest of the UI still thinks it's signed in.
+      if (xhr.status === 401) onUnauthorized?.()
       let body: unknown = null
       try {
         body = JSON.parse(xhr.responseText)

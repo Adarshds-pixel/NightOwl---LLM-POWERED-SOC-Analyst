@@ -17,10 +17,20 @@ SAMPLE_CHUNKS = [
     {
         "chunk_id": "T1003-mitre-0",
         "document": "Adversaries may attempt to dump credentials.",
-        "metadata": {"technique_id": "T1003"},
+        "metadata": {"source_type": "mitre_technique", "technique_id": "T1003"},
         "score": 0.7,
     }
 ]
+
+# A playbook chunk can also carry a technique_id (ai/tools/build_kb.py), but
+# it is guidance text, not a MITRE technique document -- must never populate
+# attack_candidate_ids (see ai_opinion_service._attack_candidate_ids).
+SAMPLE_PLAYBOOK_CHUNK = {
+    "chunk_id": "T1003-playbook-0",
+    "document": "Response steps for credential dumping.",
+    "metadata": {"source_type": "playbook", "technique_id": "T1003"},
+    "score": 0.65,
+}
 
 
 def _make_event(db, *, channel="Security", event_id=4624, process=None) -> Event:
@@ -79,7 +89,13 @@ def test_fill_in_opinion_success_updates_status_and_label(api_client, monkeypatc
 
     monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: SAMPLE_CHUNKS)
     monkeypatch.setattr(
-        ai_opinion_service, "generate", lambda messages: "Nothing here looks unusual.\n\n## Assessment: Nothing unusual noted"
+        ai_opinion_service,
+        "generate",
+        lambda messages: (
+            "Nothing here looks unusual.\n\n"
+            "## Assessment: Nothing unusual noted\n\n"
+            "## Limitations\n- Only a small sample of this file's uncovered events was reviewed."
+        ),
     )
 
     ai_opinion_service.fill_in_opinion(opinion_id, "mystery.evtx", [event_id])
@@ -90,6 +106,13 @@ def test_fill_in_opinion_success_updates_status_and_label(api_client, monkeypatc
         assert opinion.assessment_label == "nothing_unusual"
         assert "Nothing here looks unusual" in opinion.summary
         assert opinion.error is None
+        # Limitations always populated alongside a successful summary,
+        # independent of the assessment (guardrail: assessment + limitations
+        # can coexist -- see prompts.py's UNCOVERED_LIMITATIONS_HEADING).
+        assert "small sample" in opinion.limitations
+        # attack_candidate_ids sourced only from a real mitre_technique
+        # chunk's metadata, never from the LLM's own text.
+        assert opinion.attack_candidate_ids == ["T1003"]
 
 
 def test_fill_in_opinion_llm_failure_marks_status_failed_with_error(api_client, monkeypatch):
@@ -115,11 +138,15 @@ def test_fill_in_opinion_llm_failure_marks_status_failed_with_error(api_client, 
         assert opinion.status == "failed"
         assert "quota exceeded" in opinion.error
         assert opinion.assessment_label is None
+        assert opinion.limitations is None
+        assert opinion.attack_candidate_ids is None
 
 
 def test_fill_in_opinion_never_creates_an_alert_or_incident(api_client, monkeypatch):
     """The hard constraint: an AI opinion must never manifest as a real
-    detection, however it resolves."""
+    detection, however it resolves -- including its structured fields
+    (limitations, attack_candidate_ids), which must never get merged into
+    Incident.mitre_technique_ids or influence severity_service in any way."""
     _client, SessionLocal = api_client
     monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
     with SessionLocal() as db:
@@ -128,12 +155,18 @@ def test_fill_in_opinion_never_creates_an_alert_or_incident(api_client, monkeypa
         opinion = ai_opinion_service.create_pending_opinion(db, "mystery.evtx", sample_event_ids=[event_id])
         opinion_id = opinion.id
 
-    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: [])
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: SAMPLE_CHUNKS)
     monkeypatch.setattr(
-        ai_opinion_service, "generate", lambda messages: "This looks concerning.\n\n## Assessment: Worth reviewing"
+        ai_opinion_service,
+        "generate",
+        lambda messages: (
+            "This looks concerning.\n\n## Assessment: Worth reviewing\n\n## Limitations\n- Small sample."
+        ),
     )
 
-    ai_opinion_service.fill_in_opinion(opinion_id, "mystery.evtx", [event_id])
+    ai_opinion_service.fill_in_opinion(
+        opinion_id, "mystery.evtx", [event_id], matched_rule_titles=["Some Unrelated Rule"]
+    )
 
     with SessionLocal() as db:
         from app.models.alert import Alert
@@ -143,9 +176,18 @@ def test_fill_in_opinion_never_creates_an_alert_or_incident(api_client, monkeypa
         assert db.query(Incident).count() == 0
         opinion = db.get(AiOpinion, opinion_id)
         assert opinion.assessment_label == "worth_reviewing"
+        # A real ATT&CK candidate was surfaced (T1003, from SAMPLE_CHUNKS)
+        # yet no Incident row exists at all to hold it -- confirming the
+        # structured fields have no path into detection/incident state.
+        assert opinion.attack_candidate_ids == ["T1003"]
+        assert db.query(Incident).count() == 0
 
 
 def test_event_summary_never_includes_raw_json_fields():
+    """`event_data` (the flattened, already-normalized field dict) is now
+    intentionally included -- see _event_summary's docstring -- but the
+    *raw* XML record and anything outside `raw_json["normalized"]["event_data"]`
+    must still never reach the LLM."""
     event = Event(
         id=1,
         host="DC1",
@@ -155,10 +197,356 @@ def test_event_summary_never_includes_raw_json_fields():
         process="cmd.exe",
         command_line="cmd.exe /c whoami",
         user="alice",
-        raw_json={"secret_internal_field": "should never appear"},
+        raw_json={
+            "raw": {"secret_raw_xml_field": "should never appear"},
+            "normalized": {
+                "event_data": {"TargetUserName": "alice"},
+                "secret_normalized_sibling_field": "should never appear either",
+            },
+        },
     )
 
-    summary = ai_opinion_service._event_summary(event)
+    summary = ai_opinion_service._event_summary(event, group_total=17)
 
-    assert set(summary.keys()) == {"channel", "event_id", "host", "timestamp", "process", "command_line", "user"}
-    assert "secret_internal_field" not in str(summary)
+    assert set(summary.keys()) == {
+        "channel",
+        "event_id",
+        "event_type",
+        "host",
+        "timestamp",
+        "process",
+        "command_line",
+        "user",
+        "event_data",
+        "group_total_occurrences",
+    }
+    assert summary["event_data"] == {"TargetUserName": "alice"}
+    assert summary["group_total_occurrences"] == 17
+    assert "secret_raw_xml_field" not in str(summary)
+    assert "secret_normalized_sibling_field" not in str(summary)
+
+
+def test_event_summary_handles_missing_raw_json_shape():
+    """A pre-migration or otherwise malformed raw_json (no "normalized"
+    key) must degrade to an empty event_data, never raise."""
+    event = Event(
+        id=1,
+        host="DC1",
+        timestamp=datetime(2026, 8, 30, 9, 0, 0, tzinfo=timezone.utc),
+        event_id=4624,
+        channel="Security",
+        raw_json={},
+    )
+
+    summary = ai_opinion_service._event_summary(event, group_total=None)
+
+    assert summary["event_data"] == {}
+    assert summary["group_total_occurrences"] is None
+
+
+# -- event_type labeling (regression: caught live -- the model, given only --
+# -- a bare numeric event_id, guessed Sysmon event 5 ("Process Terminated") -
+# -- meant "process creation" and said so in its own reasoning) -------------
+
+
+def test_event_summary_labels_known_sysmon_event_types():
+    event = Event(
+        id=1,
+        host="LAPTOP-5GVGMJ14",
+        timestamp=datetime(2026, 9, 10, 16, 30, 27, tzinfo=timezone.utc),
+        event_id=5,
+        channel="Microsoft-Windows-Sysmon/Operational",
+        raw_json={},
+    )
+    summary = ai_opinion_service._event_summary(event, group_total=None)
+    assert summary["event_type"] == "Process Terminated"
+
+
+def test_event_summary_omits_event_type_for_unmapped_sysmon_event_id():
+    """An id this project's own SYSMON_EVENT_TYPE_LABELS table doesn't
+    cover (e.g. 22, DNS query) must not get a fabricated label -- absent,
+    not a guess, so format_event_samples' None-filtering drops it cleanly."""
+    event = Event(
+        id=1,
+        host="H",
+        timestamp=datetime(2026, 9, 10, 16, 30, 27, tzinfo=timezone.utc),
+        event_id=22,
+        channel="Microsoft-Windows-Sysmon/Operational",
+        raw_json={},
+    )
+    summary = ai_opinion_service._event_summary(event, group_total=None)
+    assert summary["event_type"] is None
+
+
+def test_event_summary_never_labels_a_non_sysmon_channels_event_id():
+    """Raw Windows event ids are not unique across channels -- Security
+    event 5 means something entirely unrelated to Sysmon event 5 (Process
+    Terminated). Labeling it with the Sysmon table would just trade one
+    mislabeling for another."""
+    event = Event(
+        id=1,
+        host="H",
+        timestamp=datetime(2026, 9, 10, 16, 30, 27, tzinfo=timezone.utc),
+        event_id=5,
+        channel="Security",
+        raw_json={},
+    )
+    summary = ai_opinion_service._event_summary(event, group_total=None)
+    assert summary["event_type"] is None
+
+
+# -- Anti-hallucination: attack_candidate_ids sourced only from retrieved --
+# -- MITRE metadata, never from the LLM's own text (guardrail 2's ---------
+# -- enforcement point) ----------------------------------------------------
+
+
+def test_attack_candidate_ids_only_from_mitre_technique_chunks():
+    chunks = [SAMPLE_CHUNKS[0], SAMPLE_PLAYBOOK_CHUNK]  # mitre_technique + playbook, same technique_id
+    assert ai_opinion_service._attack_candidate_ids(chunks) == ["T1003"]
+
+
+def test_attack_candidate_ids_ignores_playbook_only_chunks():
+    assert ai_opinion_service._attack_candidate_ids([SAMPLE_PLAYBOOK_CHUNK]) == []
+
+
+def test_attack_candidate_ids_empty_when_no_chunks_retrieved():
+    assert ai_opinion_service._attack_candidate_ids([]) == []
+
+
+def test_attack_candidate_ids_deduplicates_and_skips_missing_ids():
+    chunks = [
+        SAMPLE_CHUNKS[0],
+        {**SAMPLE_CHUNKS[0], "chunk_id": "T1003-mitre-1"},  # same technique_id again
+        {"chunk_id": "no-id", "document": "...", "metadata": {"source_type": "mitre_technique"}, "score": 0.5},
+    ]
+    assert ai_opinion_service._attack_candidate_ids(chunks) == ["T1003"]
+
+
+def test_fill_in_opinion_attack_candidate_ids_is_never_a_superset_of_retrieved_metadata(api_client, monkeypatch):
+    """Structural anti-hallucination assertion: whatever the LLM's prose
+    says, the persisted attack_candidate_ids can only ever be a subset of
+    the technique_ids this run's retrieve() actually returned."""
+    _client, SessionLocal = api_client
+    monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
+    with SessionLocal() as db:
+        event = _make_event(db)
+        event_id = event.id
+        opinion = ai_opinion_service.create_pending_opinion(db, "mystery.evtx", sample_event_ids=[event_id])
+        opinion_id = opinion.id
+
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: SAMPLE_CHUNKS)  # only T1003 retrieved
+    monkeypatch.setattr(
+        ai_opinion_service,
+        "generate",
+        # The model's prose invents an unretrieved technique -- this must
+        # never leak into the structured field.
+        lambda messages: "This looks like T1055 process injection.\n\n## Assessment: Worth reviewing",
+    )
+
+    ai_opinion_service.fill_in_opinion(opinion_id, "mystery.evtx", [event_id])
+
+    with SessionLocal() as db:
+        opinion = db.get(AiOpinion, opinion_id)
+        assert "T1055" in opinion.summary  # the free-text prose is untouched
+        retrieved_ids = {c["metadata"]["technique_id"] for c in SAMPLE_CHUNKS}
+        assert set(opinion.attack_candidate_ids) <= retrieved_ids
+        assert "T1055" not in opinion.attack_candidate_ids
+
+
+# -- Matched-rule context (guardrail 1's scoping tie-in: the opinion must --
+# -- stay additive, never re-litigate what a rule already caught) ---------
+
+
+def test_fill_in_opinion_passes_matched_rule_titles_into_the_prompt(api_client, monkeypatch):
+    _client, SessionLocal = api_client
+    monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
+    with SessionLocal() as db:
+        event = _make_event(db)
+        event_id = event.id
+        opinion = ai_opinion_service.create_pending_opinion(db, "mystery.evtx", sample_event_ids=[event_id])
+        opinion_id = opinion.id
+
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: [])
+    captured = {}
+
+    def capture_generate(messages):
+        captured["messages"] = messages
+        return "Nothing else stands out.\n\n## Assessment: Nothing unusual noted"
+
+    monkeypatch.setattr(ai_opinion_service, "generate", capture_generate)
+
+    ai_opinion_service.fill_in_opinion(
+        opinion_id, "mystery.evtx", [event_id], matched_rule_titles=["PowerShell Execution Policy Bypass"]
+    )
+
+    rendered = "\n".join(m.content for m in captured["messages"])
+    assert "PowerShell Execution Policy Bypass" in rendered
+
+
+def test_fill_in_opinion_matched_rule_titles_defaults_to_no_rule_matched(api_client, monkeypatch):
+    """The zero-rule-match case (unchanged from before this feature) must
+    still render cleanly with no titles supplied."""
+    _client, SessionLocal = api_client
+    monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
+    with SessionLocal() as db:
+        event = _make_event(db)
+        event_id = event.id
+        opinion = ai_opinion_service.create_pending_opinion(db, "mystery.evtx", sample_event_ids=[event_id])
+        opinion_id = opinion.id
+
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: [])
+    captured = {}
+
+    def capture_generate(messages):
+        captured["messages"] = messages
+        return "Nothing stands out.\n\n## Assessment: Nothing unusual noted"
+
+    monkeypatch.setattr(ai_opinion_service, "generate", capture_generate)
+
+    ai_opinion_service.fill_in_opinion(opinion_id, "mystery.evtx", [event_id])  # no matched_rule_titles arg
+
+    rendered = "\n".join(m.content for m in captured["messages"])
+    assert "no rule matched anywhere in this file" in rendered
+
+
+# -- Malformed LLM output degrades safely (no crash, no fabricated fields) -
+
+
+def test_fill_in_opinion_malformed_output_leaves_structured_fields_none(api_client, monkeypatch):
+    _client, SessionLocal = api_client
+    monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
+    with SessionLocal() as db:
+        event = _make_event(db)
+        event_id = event.id
+        opinion = ai_opinion_service.create_pending_opinion(db, "mystery.evtx", sample_event_ids=[event_id])
+        opinion_id = opinion.id
+
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: [])
+    # No recognized "## Assessment: ..." heading and no "## Limitations"
+    # heading at all -- simulates the model not following the format.
+    monkeypatch.setattr(ai_opinion_service, "generate", lambda messages: "just some unstructured prose")
+
+    ai_opinion_service.fill_in_opinion(opinion_id, "mystery.evtx", [event_id])
+
+    with SessionLocal() as db:
+        opinion = db.get(AiOpinion, opinion_id)
+        assert opinion.status == "ready"  # generation succeeded, just unparseable
+        assert opinion.summary == "just some unstructured prose"
+        assert opinion.assessment_label == "uncertain"  # extract_assessment_label's documented safe default
+        assert opinion.limitations is None  # "" from the extractor, stored as None, not an empty string
+        assert opinion.attack_candidate_ids == []  # no chunks retrieved -- a real empty list, not fabricated
+
+
+# -- Sampling correctness: group totals and stable ordering ----------------
+
+
+# -- Retrieval query includes event_data (regression: this was silently ---
+# -- missed when event_data was added to _event_summary -- caught by a ----
+# -- real end-to-end run against a real BITS-abuse fixture, where the ------
+# -- query without it scored 0.42-0.47 and surfaced the wrong techniques --
+# -- (T1216.001, T1547.010) instead of the KB's real T1197 "BITS Jobs" -----
+# -- chunk, which scores 0.52-0.58 once the query actually contains any ---
+# -- BITS-related term.) ----------------------------------------------------
+
+
+def test_build_retrieval_query_includes_event_data_string_values():
+    samples = [
+        {
+            "channel": "Microsoft-Windows-Bits-Client/Operational",
+            "process": None,
+            "command_line": None,
+            "event_data": {"jobTitle": "Font Download", "url": "https://fs.microsoft.com/x"},
+        }
+    ]
+    query = ai_opinion_service._build_retrieval_query("bits_openvpn.evtx", samples)
+    assert "Font Download" in query
+    assert "https://fs.microsoft.com/x" in query
+
+
+def test_build_retrieval_query_skips_non_string_event_data_values():
+    """GUID-shaped strings are still fine to include (harmless noise for a
+    semantic search), but non-string values (ints, None, nested dicts) must
+    not crash str-joining or pollute the query with Python repr noise."""
+    samples = [
+        {
+            "channel": "Microsoft-Windows-Bits-Client/Operational",
+            "process": None,
+            "command_line": None,
+            "event_data": {
+                "fileCount": 1,
+                "bytesTransferred": None,
+                "nested": {"a": 1},
+                "jobTitle": "Font Download",
+            },
+        }
+    ]
+    query = ai_opinion_service._build_retrieval_query("bits_openvpn.evtx", samples)
+    assert "Font Download" in query
+    assert "{'a': 1}" not in query
+    assert "None" not in query.split("Font Download")[0].split()  # no stray "None" token
+
+
+def test_build_retrieval_query_handles_missing_or_empty_event_data():
+    samples_missing = [{"channel": "Security", "process": "cmd.exe", "command_line": "whoami"}]
+    samples_empty = [{"channel": "Security", "process": "cmd.exe", "command_line": "whoami", "event_data": {}}]
+    assert "cmd.exe" in ai_opinion_service._build_retrieval_query("a.evtx", samples_missing)
+    assert "cmd.exe" in ai_opinion_service._build_retrieval_query("a.evtx", samples_empty)
+
+
+def test_fill_in_opinion_includes_group_total_occurrences(api_client, monkeypatch):
+    from app.services.ingest_service import UncoveredEventGroup
+
+    _client, SessionLocal = api_client
+    monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
+    with SessionLocal() as db:
+        event = _make_event(db, channel="Microsoft-Windows-PowerShell/Operational", event_id=40961)
+        event_id = event.id
+        opinion = ai_opinion_service.create_pending_opinion(db, "mystery.evtx", sample_event_ids=[event_id])
+        opinion_id = opinion.id
+
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: [])
+    captured = {}
+
+    def capture_generate(messages):
+        captured["messages"] = messages
+        return "Nothing stands out.\n\n## Assessment: Nothing unusual noted"
+
+    monkeypatch.setattr(ai_opinion_service, "generate", capture_generate)
+
+    breakdown = [UncoveredEventGroup(channel="Microsoft-Windows-PowerShell/Operational", event_id=40961, count=769)]
+    ai_opinion_service.fill_in_opinion(opinion_id, "mystery.evtx", [event_id], uncovered_breakdown=breakdown)
+
+    rendered = "\n".join(m.content for m in captured["messages"])
+    assert "group_total_occurrences: 769" in rendered
+
+
+def test_fill_in_opinion_reorders_events_to_match_sample_event_ids(api_client, monkeypatch):
+    """Event.id.in_(...) gives no ordering guarantee -- the events summarized
+    must follow sample_event_ids's own order (the round-robin selection
+    order), not arbitrary DB return order."""
+    _client, SessionLocal = api_client
+    monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
+    with SessionLocal() as db:
+        event_a = _make_event(db, event_id=1)
+        event_b = _make_event(db, event_id=2)
+        # Request b before a -- opposite of insertion/id order.
+        opinion = ai_opinion_service.create_pending_opinion(
+            db, "mystery.evtx", sample_event_ids=[event_b.id, event_a.id]
+        )
+        opinion_id = opinion.id
+        ordered_ids = [event_b.id, event_a.id]
+
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: [])
+    captured = {}
+
+    def capture_generate(messages):
+        captured["messages"] = messages
+        return "Nothing stands out.\n\n## Assessment: Nothing unusual noted"
+
+    monkeypatch.setattr(ai_opinion_service, "generate", capture_generate)
+
+    ai_opinion_service.fill_in_opinion(opinion_id, "mystery.evtx", ordered_ids)
+
+    rendered = "\n".join(m.content for m in captured["messages"])
+    # event_id: 2 (event_b) must be rendered as sample [1], before event_id: 1.
+    assert rendered.index("event_id: 2") < rendered.index("event_id: 1")

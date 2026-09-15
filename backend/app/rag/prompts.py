@@ -266,26 +266,50 @@ This is fundamentally different from every other role you might play in this sys
 detector, you cannot create alerts or incidents, and your output must never be presented or treated as a \
 confirmed detection.
 
+Some or all of this file's OTHER events may already have matched a real detection rule -- if so, those \
+matches are listed below under "Already detected by a rule" and are NOT your concern. Your job is scoped \
+strictly to the sample events shown to you (all of which have no rule coverage), not a second verdict on \
+the whole file. Do not re-describe or re-assess anything already listed as detected.
+
 Rules you must follow:
 1. Base your opinion ONLY on the sample events and retrieved context below. Do not invent facts, hosts, \
-users, IPs, or techniques that are not present in the input.
-2. If nothing in the samples looks unusual, say that plainly -- do not manufacture concern just to seem \
+users, IPs, techniques, or event details that are not present in the input.
+2. The retrieved context chunks describe a technique in GENERAL (typical flags, tools, commands, file \
+paths a threat actor might use) -- this is background, not evidence about these specific events. Only \
+state that a specific flag, parameter, value, tool, or path was used IN THESE EVENTS if it literally \
+appears in the sample events above. If a chunk mentions a detail the samples don't confirm, phrase it as \
+what the technique commonly involves in general, never as something these events showed.
+3. If nothing in the samples looks unusual, say that plainly -- do not manufacture concern just to seem \
 useful. An honest "nothing stands out" is more valuable than false urgency.
-3. If you are genuinely unsure because the sample is too thin or ambiguous to judge, say so explicitly \
-rather than guessing either way.
-4. Keep your reasoning short and concrete: 2-4 sentences citing the specific process, command line, \
-channel, or event type that drove your judgment (or the lack of one).
-5. End your response with EXACTLY one of these three headings, on its own line, verbatim (needed so \
+4. If the retrieved context does not clearly support a claim, or the sample is too thin or ambiguous to \
+judge, say so explicitly instead of guessing either way.
+5. Keep your reasoning short and concrete: 2-4 sentences citing the specific process, command line, \
+channel, or event type that drove your judgment (or the lack of one). When a sample includes an \
+`event_type` field, use that name for what kind of event it is (e.g. "Process Terminated") -- never guess \
+a meaning for the raw numeric `event_id` on your own, and never describe an event as a different kind of \
+event than its own `event_type` states. If `event_type` is absent, refer to the event only by its channel \
+and numeric id, not by an assumed category. You may reference a MITRE ATT&CK technique ID when the \
+retrieved context supplies one relevant to what you observed, but never invent one.
+6. End your response with EXACTLY one of these three headings, on its own line, verbatim (needed so \
 callers can parse your verdict programmatically) -- choose the one that matches your judgment:
    - "## Assessment: Worth reviewing" -- something in the sample is unusual enough that a human analyst \
 should look at it.
    - "## Assessment: Nothing unusual noted" -- nothing in the sample stands out as suspicious.
    - "## Assessment: Uncertain -- insufficient information" -- the sample is too limited to judge either way.
-6. Never use the word "alert", "incident", or "detected" to describe your own output -- you are giving an \
+7. After the Assessment heading, add a second heading "## Limitations" on its own line, ALWAYS present \
+regardless of which assessment you chose -- 1-3 short bullets stating what this analysis does NOT \
+establish (e.g. how much of the file's uncovered telemetry this sample represents, what a full \
+investigation would need to confirm intent, anything the retrieved context didn't cover). "Worth \
+reviewing" and "the available telemetry is still insufficient to establish malicious intent" can both be \
+true at once -- this heading exists specifically so both can be said, not just one or the other.
+8. Never use the word "alert", "incident", or "detected" to describe your own output -- you are giving an \
 opinion for a human to weigh, not raising a detection."""
 
 UNCOVERED_OPINION_HUMAN_PROMPT = """## File
 {filename}
+
+## Already detected by a rule (not your concern -- see system instructions)
+{already_detected}
 
 ## Sample events (no loaded rule could evaluate these)
 {event_samples}
@@ -307,7 +331,8 @@ UNCOVERED_OPINION_PROMPT = ChatPromptTemplate.from_messages(
 def format_event_samples(samples: list[dict]) -> str:
     """Render the bounded list of uncovered-event summaries
     (ai_opinion_service._event_summary's shape: channel, event_id, host,
-    timestamp, process, command_line, user) as numbered blocks."""
+    timestamp, process, command_line, user, event_data,
+    group_total_occurrences) as numbered blocks."""
     if not samples:
         return "(no sample events available)"
     blocks = []
@@ -317,10 +342,22 @@ def format_event_samples(samples: list[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def build_uncovered_opinion_prompt(filename: str, samples: list[dict], chunks: list[dict]) -> list[BaseMessage]:
+def format_already_detected(matched_rule_titles: list[str]) -> str:
+    if not matched_rule_titles:
+        return "(no rule matched anywhere in this file)"
+    return "\n".join(f"- {title}" for title in matched_rule_titles)
+
+
+def build_uncovered_opinion_prompt(
+    filename: str,
+    samples: list[dict],
+    chunks: list[dict],
+    matched_rule_titles: list[str] | None = None,
+) -> list[BaseMessage]:
     """Render the full system+human message pair ready for llm_client.generate()."""
     return UNCOVERED_OPINION_PROMPT.format_messages(
         filename=filename,
+        already_detected=format_already_detected(matched_rule_titles or []),
         event_samples=format_event_samples(samples),
         retrieved_context=format_chunks(chunks),
     )
@@ -350,6 +387,7 @@ def extract_assessment_label(response: str) -> str:
 
 RECOMMENDED_STEPS_HEADING = "## Recommended next steps"
 CONFIDENCE_BREAKDOWN_HEADING = "## Confidence breakdown"
+UNCOVERED_LIMITATIONS_HEADING = "## Limitations"
 
 
 def _extract_section(text: str, heading: str) -> str:
@@ -394,6 +432,16 @@ def extract_confidence_breakdown(explanation: str) -> str:
     extract_recommended_response above.
     """
     return _extract_section(explanation, CONFIDENCE_BREAKDOWN_HEADING)
+
+
+def extract_uncovered_limitations(response: str) -> str:
+    """Pull the required "## Limitations" section out of a generated
+    uncovered-opinion response (rule 7 of UNCOVERED_OPINION_SYSTEM_PROMPT) --
+    same mechanical `_extract_section` used by the two extractors above, so
+    a malformed/missing heading degrades the same documented way: "" back,
+    never a raised exception. The caller (ai_opinion_service.fill_in_opinion)
+    falls back to storing only the raw `summary` text when this is empty."""
+    return _extract_section(response, UNCOVERED_LIMITATIONS_HEADING)
 
 
 if __name__ == "__main__":

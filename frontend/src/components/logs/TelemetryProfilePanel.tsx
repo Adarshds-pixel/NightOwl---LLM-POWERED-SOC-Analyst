@@ -6,6 +6,11 @@ import { Badge, Card, ListRow, MiniStat, type Accent } from '../ui'
 
 const VERDICT_META: Record<VerdictKind, { accent: Accent; icon: typeof AlertTriangle }> = {
   detected: { accent: 'red', icon: AlertTriangle },
+  // Same red/AlertTriangle as a plain detection -- a real match is still a
+  // real match -- but this kind exists specifically so the pointer below
+  // can tell the analyst other, unrelated events in the file weren't
+  // checked at all.
+  detected_with_uncovered: { accent: 'red', icon: AlertTriangle },
   inconclusive: { accent: 'amber', icon: HelpCircle },
   clean: { accent: 'green', icon: ShieldCheck },
 }
@@ -93,7 +98,7 @@ export function TelemetryProfilePanel({
                 {verdict.label}
               </Badge>
               <p className="mt-1.5 text-meta text-text-dim">{verdict.explanation}</p>
-              {verdict.kind === 'inconclusive' && hasAiOpinion && (
+              {(verdict.kind === 'inconclusive' || verdict.kind === 'detected_with_uncovered') && hasAiOpinion && (
                 <p className="mt-1 text-micro text-text-faint">
                   An AI second opinion on the uncovered events is below -- advisory context, not a verdict of its own.
                 </p>

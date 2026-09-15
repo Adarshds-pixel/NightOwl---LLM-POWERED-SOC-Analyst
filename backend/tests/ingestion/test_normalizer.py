@@ -138,6 +138,86 @@ def test_data_element_with_no_text_key_maps_to_none():
     assert data == {"CommandLine": None}
 
 
+# -- legacy classic-EVT unnamed <Data> (e.g. MsiInstaller 1040/1042) -------
+
+
+def test_data_as_single_unnamed_string_is_preserved_not_dropped():
+    """Real shape confirmed on rogue_msi_url_1040_1042.evtx: MsiInstaller's
+    single <Data> element has no @Name attribute, so xmltodict.parse()
+    collapses it to a plain string rather than the {"@Name": ..., "#text":
+    ...} dict shape the rest of this function reads. Before this fix, this
+    hit the same `else: return {}` branch as genuinely absent EventData --
+    silently dropping the MSI path/URL content, including a real
+    attacker-controlled install-source URL in the live fixture."""
+    data = _data_dict(
+        {
+            "Data": (
+                "<string>C:\\Program Files\\Google\\Update\\1.3.33.23\\GoogleUpdateHelper.msi</string>\n"
+                "<string>2128</string>\n"
+                "<string>(NULL)</string>\n"
+            )
+        }
+    )
+    assert data == {
+        "UnnamedEventData": (
+            "<string>C:\\Program Files\\Google\\Update\\1.3.33.23\\GoogleUpdateHelper.msi</string>\n"
+            "<string>2128</string>\n"
+            "<string>(NULL)</string>\n"
+        )
+    }
+
+
+def test_data_as_empty_unnamed_string_returns_empty_dict():
+    data = _data_dict({"Data": ""})
+    assert data == {}
+
+
+def test_data_as_list_of_unnamed_strings_is_joined_and_preserved():
+    """2+ sibling unnamed <Data> elements parse as a list of plain strings
+    (never dicts, since there's no @Name/#text structure) -- same
+    drop-to-{} bug as the single-string case, handled the same way."""
+    data = _data_dict({"Data": ["first value", "second value"]})
+    assert data == {"UnnamedEventData": "first value\nsecond value"}
+
+
+def test_data_as_list_of_unnamed_strings_skips_empty_entries():
+    data = _data_dict({"Data": ["first value", "", "third value"]})
+    assert data == {"UnnamedEventData": "first value\nthird value"}
+
+
+def test_unnamed_data_key_never_collides_with_a_real_named_field():
+    """A list mixing a named Sysmon-style item with unnamed strings (not
+    observed in real data, but defends the synthetic key's own contract)
+    keeps both: the named field under its real name, the unnamed values
+    under the synthetic key -- neither overwrites the other."""
+    data = _data_dict({"Data": [{"@Name": "Image", "#text": "cmd.exe"}, "stray unnamed value"]})
+    assert data == {"Image": "cmd.exe", "UnnamedEventData": "stray unnamed value"}
+
+
+def test_normalize_event_preserves_msiinstaller_style_unnamed_data_end_to_end():
+    """End-to-end regression for the rogue_msi_url_1040_1042.evtx finding:
+    a record shaped like a real MsiInstaller 1040 event must surface its
+    (here, deliberately suspicious-looking) content in event_data rather
+    than normalizing to an empty dict."""
+    record = {
+        "Event": {
+            "System": {
+                "Provider": {"@Name": "MsiInstaller"},
+                "EventID": {"@Qualifiers": "0", "#text": "1040"},
+                "TimeCreated": {"@SystemTime": "2019-03-19T13:05:42+00:00"},
+                "Computer": "User-PC",
+                "Channel": "Application",
+            },
+            "EventData": {
+                "Data": "<string>http://officemysuppbox.com/staterepository</string>\n<string>2128</string>\n"
+            },
+        }
+    }
+    normalized = normalize_event(record)
+    assert normalized.event_id == 1040
+    assert "officemysuppbox.com" in normalized.event_data["UnnamedEventData"]
+
+
 def test_unrecognized_event_id_leaves_type_specific_fields_none_but_populates_common_fields():
     record = _record("6013", {})
     normalized = normalize_event(record)

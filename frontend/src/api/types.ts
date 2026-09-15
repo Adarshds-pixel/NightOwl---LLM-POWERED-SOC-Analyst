@@ -191,9 +191,11 @@ export interface IngestResponse {
   covered_events: number
   uncovered_events: number
   uncovered_breakdown: UncoveredEventGroup[]
-  // Non-null only when this ingest had zero rule matches AND at least one
-  // uncovered event. Advisory only -- never a detection, never conflate
-  // with alerts_created/incident_ids. Poll GET /ai-opinions/{id}.
+  // Non-null whenever at least one uncovered event was in this ingest
+  // (regardless of rule_matches -- a real detection elsewhere in the file
+  // does not mean the rest of the file was checked) or a narrow advisory
+  // pattern fired. Advisory only -- never a detection, never conflate with
+  // alerts_created/incident_ids. Poll GET /ai-opinions/{id}.
   ai_opinion_id: number | null
   // Telemetry profiler: what's actually in this file, independent of
   // alert count -- distinct raw Channel/Provider strings seen, and every
@@ -216,6 +218,16 @@ export interface AiOpinionResponse {
   summary: string | null
   sample_event_ids: number[]
   error: string | null
+  // The parsed "## Limitations" section of `summary` -- always populated
+  // alongside a successful summary, independent of assessment_label, so
+  // "worth reviewing" and "the sample is too thin to establish intent" can
+  // both be shown rather than forcing one or the other.
+  limitations: string | null
+  // ATT&CK candidates sourced only from retrieved MITRE knowledge-base
+  // chunk metadata, never from the LLM's own prose -- see
+  // ai_opinion_service._attack_candidate_ids. null until the opinion
+  // resolves; a real (possibly empty) list once it does.
+  attack_candidate_ids: string[] | null
 }
 
 export interface EventLogRow {

@@ -153,19 +153,50 @@ def _extract_timestamp(system: dict) -> datetime:
         raise EventNormalizationError(f"unparseable TimeCreated: {raw_ts!r}") from e
 
 
+# Synthetic key for legacy classic-EVT EventData: a manifest-free provider
+# (verified real case: MsiInstaller's 1040/1042 "began/ended a transaction"
+# events) renders its EventData as one or more *unnamed* positional
+# `<Data>` values instead of Sysmon's `<Data Name="X">value</Data>` shape --
+# xmltodict collapses a single such element to a plain string, and 2+
+# unnamed siblings to a list of plain strings, never producing the
+# {"@Name": ..., "#text": ...} shape the loop below reads. Previously this
+# hit the same `else: return {}` branch as genuinely absent EventData,
+# silently discarding real telemetry -- confirmed live on
+# `rogue_msi_url_1040_1042.evtx`, where the dropped content included a live
+# attacker-controlled MSI install-source URL
+# (http://officemysuppbox.com/staterepository) that never reached detection
+# or the AI second-opinion pass as a result. Positional values carry no
+# reliable field semantics without the provider's message-format resource
+# (not available here), so they are preserved verbatim under this one
+# synthetic key rather than split into invented field names -- this is a
+# provenance/housekeeping key, not a claim about what the data means, same
+# spirit as the existing synthetic `TimestompSuspected` key below. Chosen to
+# be unmistakably synthetic (no real Sysmon/Security field is named this)
+# so it can never collide with or be confused for genuine EventData.
+_UNNAMED_DATA_KEY = "UnnamedEventData"
+
+
 def _data_dict(event_data: dict | None) -> dict[str, str | None]:
     """Flattens Sysmon's `EventData.Data[@Name=...]` elements into a plain
     {name: value} dict, tolerating xmltodict's shape quirks: a single
     `<Data>` element parses to a dict (not a list), 2+ parse to a list, and
-    an empty `<Data Name="X"/>` has no "#text" key at all (-> None). Non-
-    Sysmon-shaped EventData (e.g. a raw string, as seen on plain Windows
-    System-log events) has nothing to map and returns {}.
+    an empty `<Data Name="X"/>` has no "#text" key at all (-> None).
+
+    A third real shape, handled separately: legacy classic-EVT providers
+    with no `@Name` attribute at all render as a plain string (one `<Data>`
+    element) or a list of plain strings (2+ unnamed siblings) -- see
+    `_UNNAMED_DATA_KEY`'s comment for why these are preserved rather than
+    dropped, and under one synthetic key rather than invented field names.
+    Genuinely absent EventData (event_data is None/empty, or has no "Data"
+    key at all) still returns {} -- there is nothing to preserve.
     """
     if not event_data:
         return {}
     data = event_data.get("Data")
     if data is None:
         return {}
+    if isinstance(data, str):
+        return {_UNNAMED_DATA_KEY: data} if data else {}
     if isinstance(data, dict):
         items = [data]
     elif isinstance(data, list):
@@ -174,13 +205,20 @@ def _data_dict(event_data: dict | None) -> dict[str, str | None]:
         return {}
 
     result: dict[str, str | None] = {}
+    unnamed_values: list[str] = []
     for item in items:
+        if isinstance(item, str):
+            if item:
+                unnamed_values.append(item)
+            continue
         if not isinstance(item, dict):
             continue
         name = item.get("@Name")
         if name is None:
             continue
         result[name] = item.get("#text")
+    if unnamed_values:
+        result[_UNNAMED_DATA_KEY] = "\n".join(unnamed_values)
     return result
 
 

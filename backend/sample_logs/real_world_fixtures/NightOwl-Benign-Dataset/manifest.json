@@ -1,0 +1,282 @@
+[
+    {
+        "Scenario":  "01_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "01_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "01_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  5312512,
+        "SizeMB":  5.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "01_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "02_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "02_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "02_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  5312512,
+        "SizeMB":  5.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "02_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "03_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "03_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "03_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  5312512,
+        "SizeMB":  5.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "03_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "04_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "04_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "04_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  5312512,
+        "SizeMB":  5.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "04_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "05_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "05_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "05_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  5312512,
+        "SizeMB":  5.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "05_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "06_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "06_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "06_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  7409664,
+        "SizeMB":  7.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "06_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "07_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "07_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "07_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  5312512,
+        "SizeMB":  5.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "07_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "08_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "08_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "08_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  7409664,
+        "SizeMB":  7.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "08_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "09_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "09_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "09_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  5312512,
+        "SizeMB":  5.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "09_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "10_scenario",
+        "File":  "Application.evtx",
+        "SizeBytes":  3215360,
+        "SizeMB":  3.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "10_scenario",
+        "File":  "Security.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "10_scenario",
+        "File":  "Sysmon.evtx",
+        "SizeBytes":  6361088,
+        "SizeMB":  6.07,
+        "Under8MB":  true
+    },
+    {
+        "Scenario":  "10_scenario",
+        "File":  "System.evtx",
+        "SizeBytes":  4263936,
+        "SizeMB":  4.07,
+        "Under8MB":  true
+    }
+]

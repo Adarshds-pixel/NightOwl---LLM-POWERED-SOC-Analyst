@@ -40,3 +40,23 @@ class AiOpinion(Base):
     # trace "why did it say this" back to real ingested rows.
     sample_event_ids: Mapped[list[int]] = mapped_column(JSON)
     error: Mapped[str | None] = mapped_column(String)
+    # The parsed "## Limitations" section of `summary` (see
+    # rag/prompts.py's UNCOVERED_LIMITATIONS_HEADING) -- always populated
+    # alongside a successful `summary`, independent of assessment_label, so
+    # "worth reviewing" and "the sample is too thin to establish intent" can
+    # both be recorded rather than forcing one or the other. Nullable for
+    # the same reason summary is: pending/failed opinions, or a response
+    # that didn't follow the required format (extract_uncovered_limitations
+    # returns "" in that case, stored as None here rather than an empty
+    # string, so a caller can tell "no limitations text" apart from
+    # "opinion not ready yet").
+    limitations: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Structured ATT&CK candidates, sourced ONLY from retrieved MITRE KB
+    # chunk metadata (see ai_opinion_service._attack_candidate_ids) --
+    # mirrors Incident.mitre_technique_ids' shape and purpose (a flat,
+    # queryable id list) for the same reason. Deliberately never populated
+    # from the LLM's own prose: a technique can appear here only if this
+    # run's retrieve() call actually returned a chunk carrying that id, so
+    # this list is structurally incapable of holding a hallucinated
+    # technique. Empty list (not None) when no MITRE chunk was retrieved.
+    attack_candidate_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)

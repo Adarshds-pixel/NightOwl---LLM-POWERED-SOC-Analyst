@@ -18,7 +18,9 @@ fixed ("testclient", 50000) tuple, so without a reset, token consumption in
 one test would leak into later, unrelated tests as spurious 429s.
 """
 
+import ipaddress
 import time
+import threading
 from dataclasses import dataclass
 
 from fastapi import Request
@@ -45,27 +47,60 @@ _login_buckets: dict[str, _TokenBucket] = {}
 # than a prefix check so a future "/healthz/expensive-subcheck" cannot slip
 # through by accident.
 EXEMPT_PATHS = frozenset({"/health"})
+_rate_limit_lock = threading.Lock()
 
 
 def reset_rate_limiter() -> None:
-    _buckets.clear()
-    _login_buckets.clear()
+    with _rate_limit_lock:
+        _buckets.clear()
+        _login_buckets.clear()
 
+
+MAX_BUCKETS = 10000
+
+def _prune_buckets(buckets: dict[str, _TokenBucket]) -> None:
+    # Caller must hold _rate_limit_lock
+    if len(buckets) < MAX_BUCKETS:
+        return
+    now = time.monotonic()
+    # A bucket is fully refilled (inactive) if 60 seconds have passed since last refill
+    inactive = [k for k, b in buckets.items() if now - b.last_refill >= 60.0]
+    for k in inactive:
+        del buckets[k]
 
 def _consume(buckets: dict[str, _TokenBucket], key: str, capacity: int) -> bool:
     if capacity <= 0:
         return True
 
     refill_per_sec = capacity / 60.0
-    now = time.monotonic()
-    bucket = buckets.setdefault(key, _TokenBucket(tokens=capacity, last_refill=now))
-    bucket.tokens = min(capacity, bucket.tokens + (now - bucket.last_refill) * refill_per_sec)
-    bucket.last_refill = now
+    
+    with _rate_limit_lock:
+        now = time.monotonic()
+        bucket = buckets.get(key)
+        if bucket is None:
+            if len(buckets) >= MAX_BUCKETS:
+                _prune_buckets(buckets)
+            
+            if len(buckets) >= MAX_BUCKETS:
+                # Cache is saturated with active buckets. Cannot evict without resetting 
+                # their rate limits (fail open). Fail closed to prevent unbounded memory 
+                # and unlimited requests.
+                return False
+                
+            bucket = _TokenBucket(tokens=capacity, last_refill=now)
+            buckets[key] = bucket
+        else:
+            # LRU bump
+            del buckets[key]
+            buckets[key] = bucket
 
-    if bucket.tokens < 1:
-        return False
-    bucket.tokens -= 1
-    return True
+        bucket.tokens = min(capacity, bucket.tokens + (now - bucket.last_refill) * refill_per_sec)
+        bucket.last_refill = now
+
+        if bucket.tokens < 1:
+            return False
+        bucket.tokens -= 1
+        return True
 
 
 def _allow(key: str) -> bool:
@@ -80,11 +115,58 @@ def allow_login_attempt(key: str) -> bool:
     return _consume(_login_buckets, key, settings.login_rate_limit_per_minute)
 
 
+def get_client_ip(request: Request) -> str:
+    peer_ip = request.client.host if request.client else "unknown"
+
+    trusted_proxies_str = getattr(settings, "trusted_proxies", "")
+    if not trusted_proxies_str:
+        return peer_ip
+
+    trusted_networks = []
+    for p in trusted_proxies_str.split(","):
+        p = p.strip()
+        if not p:
+            continue
+        try:
+            trusted_networks.append(ipaddress.ip_network(p, strict=False))
+        except ValueError:
+            pass
+
+    if not trusted_networks:
+        return peer_ip
+
+    try:
+        peer_addr = ipaddress.ip_address(peer_ip)
+    except ValueError:
+        return peer_ip
+
+    if not any(peer_addr in net for net in trusted_networks):
+        return peer_ip
+
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if not forwarded_for:
+        return peer_ip
+
+    ips = [ip.strip() for ip in forwarded_for.split(",") if ip.strip()]
+    if not ips:
+        return peer_ip
+
+    for ip_str in reversed(ips):
+        try:
+            addr = ipaddress.ip_address(ip_str)
+            if not any(addr in net for net in trusted_networks):
+                return ip_str
+        except ValueError:
+            return peer_ip
+
+    return ips[0]
+
+
 async def rate_limit_middleware(request: Request, call_next):
     if request.url.path in EXEMPT_PATHS:
         return await call_next(request)
 
-    key = request.client.host if request.client else "unknown"
+    key = get_client_ip(request)
     if not _allow(key):
         return JSONResponse(status_code=429, content={"detail": "rate limit exceeded"})
     return await call_next(request)

@@ -28,7 +28,7 @@ Three layers, one directory each.
 ├── frontend/       React + Vite + Tailwind SOC console
 ├── ai/             AI layer: RAG knowledge base, ATT&CK dataset, vector
 │                   store, and the build/evaluation tooling
-├── docs/           DOCUMENTATION.md, interview-prep.md, Postman collection
+├── docs/           DOCUMENTATION.md, Postman collection, audits/
 └── docker-compose.yml
 ```
 

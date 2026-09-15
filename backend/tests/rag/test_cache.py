@@ -106,3 +106,34 @@ def test_clear_resets_both_caches():
 
     assert cache.get_explanation(1) is None
     assert cache.get_chat_reply(1, "message", []) is None
+
+def test_cache_bounded_size(monkeypatch):
+    monkeypatch.setattr(cache, "MAX_CACHE_SIZE", 3)
+    
+    cache.set_explanation(1, "res1")
+    cache.set_explanation(2, "res2")
+    cache.set_explanation(3, "res3")
+    cache.set_explanation(4, "res4")
+    
+    assert len(cache._explain_cache) == 3
+    assert cache.get_explanation(1) is None
+    assert cache.get_explanation(2) == "res2"
+    assert cache.get_explanation(3) == "res3"
+    assert cache.get_explanation(4) == "res4"
+
+def test_cache_lru_bump(monkeypatch):
+    monkeypatch.setattr(cache, "MAX_CACHE_SIZE", 3)
+    
+    cache.set_explanation(1, "res1")
+    cache.set_explanation(2, "res2")
+    cache.set_explanation(3, "res3")
+    
+    # Bump 1
+    cache.get_explanation(1)
+    
+    cache.set_explanation(4, "res4")
+    
+    assert cache.get_explanation(2) is None
+    assert cache.get_explanation(1) == "res1"
+    assert cache.get_explanation(3) == "res3"
+    assert cache.get_explanation(4) == "res4"

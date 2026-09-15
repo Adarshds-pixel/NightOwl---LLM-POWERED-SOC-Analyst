@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     # deployment, not a multi-tenant quota.
     rate_limit_per_minute: int = 300
 
+    # Trusted proxy configuration (Day 15). Comma-separated list of IP
+    # addresses or CIDR networks (e.g., "127.0.0.1, 10.0.0.0/8"). If empty
+    # (the default), no proxies are trusted and the direct peer IP is used,
+    # preventing X-Forwarded-For spoofing.
+    trusted_proxies: str = ""
+
     # Day 14 (Pair 1): origins the new frontend (Vite dev server) is allowed
     # to call the API from. Comma-separated; without this, every browser
     # fetch from localhost:5173 to this API is blocked by CORS even though

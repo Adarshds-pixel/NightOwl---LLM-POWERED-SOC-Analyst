@@ -2,9 +2,25 @@ title: PowerShell Execution Policy Bypass
 id: 1d9a4e7c-2f6b-4c8a-b3d1-7e9c5a2f4b16
 status: experimental
 description: >
-  Detects PowerShell process creation with flags that bypass or suppress
-  the configured execution policy/profile, commonly used to run
-  unsigned/malicious scripts without prompting.
+  Detects PowerShell process creation with flags that actually bypass or
+  suppress the configured execution policy, commonly used to run
+  unsigned/malicious scripts without prompting. Deliberately does NOT
+  include `-nop`/`-NoProfile`: that flag skips loading the user's
+  `$PROFILE` script, not the execution policy -- it is unrelated to this
+  technique despite superficially resembling "no policy." Confirmed as a
+  real false positive against two independent real captures (a benign
+  `nightowl_benign_powershell.evtx` fixture and a real personal-PC Sysmon
+  export): both fired on ordinary, automated PowerShell invocations like
+  `powershell.exe -NoProfile -Command "Get-Date | Out-Null"` and
+  `-NoProfile -NonInteractive -Command "..."` with no execution-policy
+  flag anywhere in the command line -- `-NoProfile` alone triggered the
+  match because the old selection's `-nop` entry is a case-insensitive
+  substring of `-NoProfile`. `-NoProfile` is standard practice in
+  virtually all scripted/automated PowerShell (scheduled tasks, CI,
+  installers, IDE integrated terminals) specifically because loading a
+  profile script is pointless overhead in a non-interactive context, so
+  keeping it in this selection made the rule fire on routine automation
+  far more often than on real execution-policy abuse.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-18
 references:
@@ -21,6 +37,5 @@ detection:
     CommandLine|contains:
       - '-ExecutionPolicy Bypass'
       - '-ep bypass'
-      - '-nop'
   condition: selection
 level: medium

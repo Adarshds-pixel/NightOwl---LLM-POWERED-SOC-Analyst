@@ -52,6 +52,6 @@ def save_alerts(db: Session, alert_data: list[tuple[int, RuleMatch, datetime, in
         create_alert(db, event_id, match, matched_at, incident_id)
         for event_id, match, matched_at, incident_id in alert_data
     ]
-    db.commit()
+    db.flush()
     logger.info("persisted %d alerts", len(rows))
     return rows

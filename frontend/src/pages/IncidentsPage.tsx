@@ -1,13 +1,15 @@
 import { Eye, ShieldAlert } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import type { IncidentSummary, Severity } from '../api'
+import type { IncidentSummary, IngestResponse, Severity } from '../api'
 import {
   DEFAULT_INCIDENT_FILTERS,
   IncidentFilters,
   type IncidentFilterState,
 } from '../components/incidents/IncidentFilters'
 import { LogUploadControl } from '../components/ingest/LogUploadControl'
+import { AiOpinionPanel } from '../components/logs/AiOpinionPanel'
+import { TelemetryProfilePanel } from '../components/logs/TelemetryProfilePanel'
 import {
   Button,
   Card,
@@ -54,6 +56,19 @@ function IncidentsPage() {
   const [sort, setSort] = useState<SortState | null>(null)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(prefs.pageSize)
+  // Coverage-honesty panels for an upload made from this page -- same
+  // pattern as LogsPage.tsx. Before this, IngestResponse was discarded
+  // here entirely (onSuccess={refresh}), so ai_opinion_id, uncovered_events
+  // and the coverage breakdown never reached the screen for an upload made
+  // from Incidents, only the toast.
+  const [aiOpinionId, setAiOpinionId] = useState<number | null>(null)
+  const [lastIngest, setLastIngest] = useState<IngestResponse | null>(null)
+
+  function handleUploadSuccess(res: IngestResponse) {
+    setAiOpinionId(res.ai_opinion_id)
+    setLastIngest(res)
+    refresh()
+  }
 
   const filtered = useMemo(() => filterIncidents(incidents, filters, byId), [incidents, filters, byId])
   const times = incidents.map((incident) => incident.created_at)
@@ -159,8 +174,11 @@ function IncidentsPage() {
         title="Incidents"
         icon={<ShieldAlert className="h-5 w-5 text-accent-primary" />}
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'Incidents' }]}
-        actions={<LogUploadControl onSuccess={refresh} />}
+        actions={<LogUploadControl onSuccess={handleUploadSuccess} />}
       />
+
+      <TelemetryProfilePanel ingest={lastIngest} hasAiOpinion={aiOpinionId !== null} />
+      <AiOpinionPanel opinionId={aiOpinionId} hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 xl:grid-cols-5">
         <StatCard

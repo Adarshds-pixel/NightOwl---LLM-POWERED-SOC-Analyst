@@ -26,6 +26,16 @@ class AiOpinionResponse(BaseModel):
     summary: str | None = None
     sample_event_ids: list[int]
     error: str | None = None
+    # The parsed "## Limitations" section of `summary` -- always populated
+    # alongside a successful summary, independent of assessment_label, so a
+    # caller can render both without re-parsing free text (see
+    # models/ai_opinion.py and rag/prompts.py's UNCOVERED_LIMITATIONS_HEADING).
+    limitations: str | None = None
+    # ATT&CK candidates sourced only from retrieved MITRE KB chunk metadata,
+    # never from the LLM's own prose -- see
+    # ai_opinion_service._attack_candidate_ids. None until the opinion
+    # resolves; a real (possibly empty) list once it does.
+    attack_candidate_ids: list[str] | None = None
 
 
 @router.get("/ai-opinions/{opinion_id}", response_model=AiOpinionResponse)
@@ -42,4 +52,6 @@ def get_ai_opinion(opinion_id: int, db: Session = Depends(get_db)) -> AiOpinionR
         summary=opinion.summary,
         sample_event_ids=opinion.sample_event_ids,
         error=opinion.error,
+        limitations=opinion.limitations,
+        attack_candidate_ids=opinion.attack_candidate_ids,
     )

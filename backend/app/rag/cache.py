@@ -58,6 +58,23 @@ def _is_expired(stored_at: float) -> bool:
     return time.monotonic() - stored_at > settings.response_cache_ttl_seconds
 
 
+MAX_CACHE_SIZE = 1000
+
+def _prune_cache(cache: dict) -> None:
+    if len(cache) <= MAX_CACHE_SIZE:
+        return
+    now = time.monotonic()
+    ttl = settings.response_cache_ttl_seconds
+    expired = [k for k, (stored_at, _) in cache.items() if now - stored_at > ttl]
+    for k in expired:
+        del cache[k]
+    while len(cache) > MAX_CACHE_SIZE:
+        try:
+            del cache[next(iter(cache))]
+        except StopIteration:
+            break
+
+
 def get_explanation(incident_id: int):
     with _lock:
         entry = _explain_cache.get(incident_id)
@@ -67,12 +84,18 @@ def get_explanation(incident_id: int):
         if _is_expired(stored_at):
             del _explain_cache[incident_id]
             return None
+        # LRU bump
+        del _explain_cache[incident_id]
+        _explain_cache[incident_id] = entry
         return result
 
 
 def set_explanation(incident_id: int, result) -> None:
     with _lock:
+        if incident_id in _explain_cache:
+            del _explain_cache[incident_id]
         _explain_cache[incident_id] = (time.monotonic(), result)
+        _prune_cache(_explain_cache)
 
 
 def get_chat_reply(incident_id: int, message: str, history: list[dict]):
@@ -89,13 +112,19 @@ def get_chat_reply(incident_id: int, message: str, history: list[dict]):
         if _is_expired(stored_at):
             del _chat_cache[key]
             return None
+        # LRU bump
+        del _chat_cache[key]
+        _chat_cache[key] = entry
         return result
 
 
 def set_chat_reply(incident_id: int, message: str, history: list[dict], result) -> None:
     key = (incident_id, message, _history_fingerprint(history))
     with _lock:
+        if key in _chat_cache:
+            del _chat_cache[key]
         _chat_cache[key] = (time.monotonic(), result)
+        _prune_cache(_chat_cache)
 
 
 def clear() -> None:
