@@ -63,6 +63,7 @@ PostgreSQL 16 (host port 5433), SQLAlchemy 2 declarative models, Alembic migrati
 | `incidents` | `id`, `title`, `status`, `severity`, `host`, `mitre_technique_ids` (JSON list), `created_at` |
 | `chat_messages` | `id`, `incident_id`, `role`, `content`, `created_at` |
 | `audit_log` | `id`, `entity_type`, `entity_id`, `action`, `actor`, `details`, `created_at` |
+| `ai_opinions` | `id`, `event_id` → events, `opinion_text`, `limitations`, `attack_candidate_ids`, `created_at` |
 | `rules` | Defined but unused — detection rules live as YAML files, not rows |
 
 `raw_json` stores both the original record and the normalized view, so fields the normalizer does not promote to columns (Hashes, the network 5-tuple) are never lost.
@@ -91,6 +92,7 @@ All routes are mounted at root. `/health` is always public. Every other route si
 | GET | `/incidents/{id}/audit` | Audit trail for one incident |
 | POST | `/incidents/{id}/explain` | RAG explanation + recommended response + source chunks |
 | POST/GET | `/incidents/{id}/chat` | Incident-scoped chat turn / history |
+| GET | `/ai-opinions/{id}` | Advisory LLM second-opinion on high-noise or uncovered events |
 | GET | `/events` | Raw timeline. Filters: `host`, `start_date`, `end_date`, `alert_only`, `q`, `limit`, `offset` |
 | GET | `/events/{id}` | One event including `raw_json` |
 | GET | `/rules`, `/rules/{rule_id}` | Loaded rule set + per-rule match counts and last-triggered |
@@ -118,7 +120,7 @@ Rules are Sigma-style YAML files in `backend/app/detection/rules/` (**45** as of
 - **Rules match real Sysmon field names** (Image, CommandLine, DestinationIp) rather than an invented vocabulary, so they stay portable from public SigmaHQ sources. `NormalizedEvent.event_data` carries the full flattened EventData dict, so the engine sees every field without re-parsing XML.
 - **Channels covered:** Sysmon, Windows Security, and PowerShell/Operational (4104/4103 script-block logging).
 
-**Severity scoring** (`services/severity_service.py`): base Sigma level rank (1–5) plus the highest MITRE tactic weight among the rule's own tags: 0 for reconnaissance and resource-development, +1 for initial-access, execution, persistence, privilege-escalation and defense-evasion, +2 for credential-access, discovery, lateral-movement and collection, +3 for command-and-control, exfiltration and impact; capped at critical.
+**Severity scoring** (`services/severity_service.py`): calibrated v1.1 algorithm combining base Sigma level rank (1–5) with a tactic weight of strictly +1 for high-leverage tactics (`credential_access`, `lateral_movement`, `collection`, `command_and_control`, `exfiltration`, `impact`) and 0 for all other tactics; capped at critical. (Recalibrated from the legacy v1 0-to-3 tier on 2026-09-06 to prevent disproportionate over-escalation to High/Critical).
 
 **Incident grouping** (`services/incident_service.py`): a match joins the most recent open incident for the same host within a 1-hour window, merging its technique id and raising severity to the higher of the two; otherwise a new incident is created.
 
@@ -332,7 +334,7 @@ Frontend variables live in `frontend/.env.local` (`VITE_API_BASE_URL`, `VITE_API
 ## 13. Testing
 
 ```bash
-cd backend && ./venv/Scripts/python.exe -m pytest -q     # 534 tests, 1 skipped
+cd backend && ./venv/Scripts/python.exe -m pytest -q     # 611 passed, 1 skipped (612 total tests)
 cd frontend && npx tsc -b && npm run build && npm run lint
 ```
 
@@ -359,9 +361,12 @@ Tests mirror the app package layout (`tests/api`, `tests/detection`, `tests/serv
 
 - **`detected/`** (50 files) — real attack captures the *current* rule set successfully detects.
 - **`undetected/`** (11 files) — real attack captures it does not yet detect, each with a real, documented reason (see `failure_matrix.md`).
-- **`benign/`** (3 files, gitignored — they carry a real owner's Windows username/hostname) — real captures from an ordinary PC, used for false-positive testing. A fresh clone just has fewer clean fixtures; nothing requires their presence.
-
-Plus 5 synthetic `demo_fixtures/noise_*.evtx` clean slices (Sysmon-only, verified clean at generation time).
+- **`NightOwl-Benign-Dataset/`** (26 files, 116.73 MB, cataloged in `manifest.json`) — real-workstation captures from `LAPTOP-5GVGMJ14`, deduplicated to remove 14 redundant byte-for-byte copies across System, Application, Security, and Sysmon channels:
+  - `system_baseline.evtx`, `system_final_session.evtx`
+  - `application_session_early.evtx`, `application_session_mid1.evtx`, `application_session_mid2.evtx`, `application_session_late.evtx`
+  - `security_window_01.evtx` through `security_window_10.evtx`
+  - `sysmon_window_01.evtx` through `sysmon_window_10.evtx`
+- Plus 5 synthetic `demo_fixtures/noise_*.evtx` clean slices (Sysmon-only, verified clean at generation time).
 
 The `detected`/`undetected` split is itself this script's own **output**, recorded as a filesystem location — both benchmark scripts below scan the full corpus (both directories together) every run and re-derive the split from scratch, they never treat the current layout as an input filter:
 
