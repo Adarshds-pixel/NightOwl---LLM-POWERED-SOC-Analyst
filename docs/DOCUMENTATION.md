@@ -130,6 +130,7 @@ Rules are Sigma-style YAML files in `backend/app/detection/rules/` (**45** as of
 
 - **The sequence engine** (`detection/sequences.py`) hand-codes 3 multi-event correlations no single-event rule can express: Process Herpaderping (FileCreate → ProcessAccess → ImageLoad, chained via Sysmon `ProcessGuid`, T1055), an SMB share-enumeration probe (a `\srvsvc` PipeConnect corroborated by an inbound port-445 connection, T1135), and a Kerberos password spray (≥4 distinct `TargetUserName` values from one source IP within 60s, T1110.003). It runs once per ingest batch after the per-event rule loop, feeding the same alert/incident creation path a normal rule match uses.
 - **Advisory patterns** (`services/advisory_patterns.py`) are narrow event shapes too false-positive-prone for a deterministic rule (e.g. `\lsass`/`\srvsvc` named-pipe connects from `System`) but still worth a human second look — routed to the LLM advisory second-opinion mechanism instead, never creating an Alert/Incident of their own.
+- **ML Anomaly Detection** (Isolation Forest) is being introduced to baseline normal behavior across 5-10 minute host windows. The `NightOwl-Benign-Dataset` corpus (31 files covering Server002 and LAPTOP-5GVGMJ14) provides the necessary normal activity for extracting behavioral feature vectors (e.g., process counts, parent-child ratios, encoded powershell execution rates) so the model can score unseen behavioral deviation without rigid signatures.
 
 **Verifying detection accuracy** — see §14.
 
@@ -361,7 +362,7 @@ Tests mirror the app package layout (`tests/api`, `tests/detection`, `tests/serv
 
 - **`detected/`** (50 files) — real attack captures the *current* rule set successfully detects.
 - **`undetected/`** (11 files) — real attack captures it does not yet detect, each with a real, documented reason (see `failure_matrix.md`).
-- **`NightOwl-Benign-Dataset/`** (26 files, 116.73 MB, cataloged in `manifest.json`) — real-workstation captures from `LAPTOP-5GVGMJ14`, deduplicated to remove 14 redundant byte-for-byte copies across System, Application, Security, and Sysmon channels:
+- **`NightOwl-Benign-Dataset/`** (31 files, cataloged in `manifest.json`) — real-workstation captures deduplicated to remove redundant byte-for-byte copies across System, Application, Security, and Sysmon channels. Contains baseline from `LAPTOP-5GVGMJ14` and 5 massive event logs from `Server002` to provide hundreds of 10-minute behavioral windows for ML extraction:
   - `system_baseline.evtx`, `system_final_session.evtx`
   - `application_session_early.evtx`, `application_session_mid1.evtx`, `application_session_mid2.evtx`, `application_session_late.evtx`
   - `security_window_01.evtx` through `security_window_10.evtx`
