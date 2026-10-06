@@ -658,17 +658,15 @@ def test_ingest_enforces_limit_even_with_misleading_small_content_length(api_cli
     assert "content-length" not in response.json()["detail"] # Caught by the chunked check, not early rejection
 
 
-def test_ingest_enforces_limit_with_missing_content_length(api_client, monkeypatch):
-    """If an attacker omits Content-Length (e.g. chunked transfer), the early check
-    is bypassed but the application-level chunking must catch it."""
+def test_ingest_requires_content_length(api_client):
+    """A chunked upload (no Content-Length) is refused by the upload guard
+    before any of the body is read -- chunked transfer used to bypass the
+    early size check entirely and force the whole body to be spooled."""
     client, _ = api_client
-    monkeypatch.setattr("app.api.routes_ingest.MAX_UPLOAD_BYTES", 10)
-    
-    # We can delete Content-Length from the request by intercepting it at the ASGI level
-    # but the easiest way is to use client.request and pass a generator.
+
     def chunked_payload():
         yield b"--boundary\r\n"
-        yield b"Content-Disposition: form-data; name=\"file\"; filename=\"test.evtx\"\r\n"
+        yield b'Content-Disposition: form-data; name="file"; filename="test.evtx"\r\n'
         yield b"Content-Type: application/octet-stream\r\n\r\n"
         yield b"x" * 100
         yield b"\r\n--boundary--\r\n"
@@ -678,31 +676,37 @@ def test_ingest_enforces_limit_with_missing_content_length(api_client, monkeypat
         content=chunked_payload(),
         headers={"Content-Type": "multipart/form-data; boundary=boundary"},
     )
+    assert response.status_code == 411
+
+
+def test_ingest_rejects_declared_oversize_before_reading_body(api_client, monkeypatch):
+    client, _ = api_client
+    monkeypatch.setattr("app.core.upload_guard.settings.max_upload_bytes", 10)
+    response = client.post(
+        "/ingest",
+        content=b"x" * (2 * 1024 * 1024),
+        headers={"Content-Type": "multipart/form-data; boundary=boundary"},
+    )
     assert response.status_code == 413
     assert "too large" in response.json()["detail"]
-    assert "content-length" not in response.json()["detail"]
 
 
 def test_ingest_rejects_multipart_with_multiple_files_exceeding_limit(api_client, monkeypatch):
-    """Multiple parts in a multipart request must still be caught if the overall request size
-    exceeds limits, even if Content-Length is omitted and the primary file is small."""
+    """Multiple parts in a multipart request must still be caught if their
+    combined size exceeds the limit, even when the primary file is small."""
     client, _ = api_client
     monkeypatch.setattr("app.api.routes_ingest.MAX_UPLOAD_BYTES", 10)
-    
-    def chunked_payload():
-        yield b"--boundary\r\n"
-        yield b"Content-Disposition: form-data; name=\"file\"; filename=\"test.evtx\"\r\n"
-        yield b"Content-Type: application/octet-stream\r\n\r\n"
-        yield b"x" * 5
-        yield b"\r\n--boundary\r\n"
-        yield b"Content-Disposition: form-data; name=\"other\"; filename=\"other.evtx\"\r\n"
-        yield b"Content-Type: application/octet-stream\r\n\r\n"
-        yield b"x" * 20
-        yield b"\r\n--boundary--\r\n"
 
+    body = (
+        b"--boundary\r\n"
+        b'Content-Disposition: form-data; name="file"; filename="test.evtx"\r\n'
+        b"Content-Type: application/octet-stream\r\n\r\n" + b"x" * 5 + b"\r\n--boundary\r\n"
+        b'Content-Disposition: form-data; name="other"; filename="other.evtx"\r\n'
+        b"Content-Type: application/octet-stream\r\n\r\n" + b"x" * 20 + b"\r\n--boundary--\r\n"
+    )
     response = client.post(
         "/ingest",
-        content=chunked_payload(),
+        content=body,
         headers={"Content-Type": "multipart/form-data; boundary=boundary"},
     )
     assert response.status_code == 413

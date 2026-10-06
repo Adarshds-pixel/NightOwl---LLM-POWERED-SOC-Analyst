@@ -110,8 +110,11 @@ export function reportToCsv(report: ReportSnapshot): string {
 }
 
 function csvCell(value: string): string {
-  const needsQuotes = /[",\n]/.test(value)
-  const escaped = value.replace(/"/g, '""')
+  // Host names and titles come from EVTX content an attacker controls; a cell
+  // starting with = + - @ (or tab/CR) would run as a formula in Excel/Sheets.
+  const neutralised = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
+  const needsQuotes = /[",\n]/.test(neutralised)
+  const escaped = neutralised.replace(/"/g, '""')
   return needsQuotes ? `"${escaped}"` : escaped
 }
 

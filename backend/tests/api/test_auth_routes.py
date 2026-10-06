@@ -19,6 +19,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db
+from app.core.auth import CSRF_HEADER
 from app.main import app
 
 TEST_USERNAME = "admin"
@@ -61,7 +62,7 @@ def auth_client(monkeypatch):
 
     app.dependency_overrides[get_db] = _override_get_db
     try:
-        yield TestClient(app)
+        yield TestClient(app, headers={CSRF_HEADER: "1"})
     finally:
         app.dependency_overrides.clear()
 
@@ -212,3 +213,65 @@ def test_health_stays_public_with_no_session(auth_client):
     response = auth_client.get("/health")
 
     assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Production-readiness hardening
+# ---------------------------------------------------------------------------
+
+
+def _login(client):
+    response = client.post("/auth/login", json={"username": TEST_USERNAME, "password": TEST_PASSWORD})
+    assert response.status_code == 200
+    return response
+
+
+def test_copied_cookie_stops_working_after_logout(auth_client):
+    """Logout revokes the server-side session row, so a cookie captured
+    before logout (and replayed afterwards) is rejected -- the signed cookie
+    alone is no longer sufficient."""
+    _login(auth_client)
+    stolen = auth_client.cookies.get("nightowl_session")
+    assert auth_client.post("/auth/logout").status_code == 200
+
+    auth_client.cookies.set("nightowl_session", stolen)
+    assert auth_client.get("/auth/me").status_code == 401
+    assert auth_client.get("/incidents").status_code == 401
+
+
+def test_successful_logins_do_not_spend_the_failed_login_budget(auth_client):
+    for _ in range(8):
+        _login(auth_client)
+        auth_client.post("/auth/logout")
+
+
+def test_overlong_password_is_a_401_not_a_500(auth_client):
+    response = auth_client.post("/auth/login", json={"username": TEST_USERNAME, "password": "x" * 500})
+    assert response.status_code == 401
+
+
+def test_malformed_password_hash_is_a_401_not_a_500(auth_client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_password_hash", "not-a-bcrypt-hash")
+    response = auth_client.post("/auth/login", json={"username": TEST_USERNAME, "password": TEST_PASSWORD})
+    assert response.status_code == 401
+
+
+def test_state_changing_request_without_csrf_header_is_rejected(auth_client):
+    _login(auth_client)
+    bare = TestClient(app)
+    bare.cookies = auth_client.cookies
+    response = bare.patch("/incidents/1/status", json={"status": "resolved"})
+    assert response.status_code == 403
+
+
+def test_unauthenticated_upload_is_rejected_before_the_body_is_read(auth_client):
+    response = auth_client.post(
+        "/ingest", files={"file": ("x.evtx", b"x" * 1000, "application/octet-stream")}
+    )
+    assert response.status_code == 401
+
+
+def test_api_key_grants_headless_access_when_configured(auth_client, monkeypatch):
+    monkeypatch.setattr(settings, "api_key", "k" * 40)
+    assert auth_client.get("/incidents").status_code == 401
+    assert auth_client.get("/incidents", headers={"X-API-Key": "k" * 40}).status_code == 200

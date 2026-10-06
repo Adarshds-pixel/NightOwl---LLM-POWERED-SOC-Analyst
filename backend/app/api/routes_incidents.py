@@ -27,10 +27,11 @@ Day 13 (Pair 2, production hardening) adds:
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.auth import session_actor
 from app.core.config import settings
 from app.core.errors import not_found
 from app.db.session import get_db
@@ -156,6 +157,9 @@ class IncidentDetailResponse(BaseModel):
 
 class IncidentStatusUpdateRequest(BaseModel):
     status: str
+    # Accepted for backward compatibility but ignored: the audit actor comes
+    # from the server-side session (core/auth.session_actor), never from a
+    # client-supplied field anyone could set to any name.
     actor: str | None = None
 
 
@@ -203,7 +207,7 @@ def explain_incident(incident_id: int, db: Session = Depends(get_db)) -> Explain
 
 @router.patch("/incidents/{incident_id}/status", response_model=IncidentStatusUpdateResponse)
 def update_incident_status(
-    incident_id: int, payload: IncidentStatusUpdateRequest, db: Session = Depends(get_db)
+    incident_id: int, payload: IncidentStatusUpdateRequest, request: Request, db: Session = Depends(get_db)
 ) -> IncidentStatusUpdateResponse:
     incident = db.get(Incident, incident_id)
     if incident is None:
@@ -225,7 +229,7 @@ def update_incident_status(
         entity_type="incident",
         entity_id=incident_id,
         action="status_change",
-        actor=payload.actor,
+        actor=session_actor(request),
         details={"from": old_status, "to": payload.status},
     )
 

@@ -28,43 +28,50 @@ from app.api.routes_incidents import router as incidents_router
 from app.api.routes_ingest import router as ingest_router
 from app.api.routes_rules import router as rules_router
 from app.api.routes_mitre import router as mitre_router
-from app.core.auth import require_api_key, require_session_auth
-from app.core.config import settings
+from app.core.auth import CSRF_HEADER, require_api_key, require_session_auth
+from app.core.config import resolve_session_secret, settings, validate_production_settings
 from app.core.errors import install_exception_handlers
 from app.core.logging import configure_logging
 from app.core.rate_limit import rate_limit_middleware
+from app.core.security_middleware import csrf_middleware, unhandled_error_middleware
+from app.core.upload_guard import UploadGuardMiddleware
 
 configure_logging()
+validate_production_settings(settings)
 
-app = FastAPI(title=settings.app_name)
+# Interactive API docs are a schema disclosure; keep them for local dev only.
+_docs = {} if settings.is_local else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+app = FastAPI(title=settings.app_name, **_docs)
 install_exception_handlers(app)
+
+# Starlette's add_middleware prepends, so the LAST one registered here is the
+# OUTERMOST. Final order, outermost first:
+#   CORS -> Session -> rate limit -> CSRF -> error-to-JSON -> upload guard -> app
+# * CORS outermost so 401/403/429/500 responses still carry CORS headers.
+# * Session before the upload guard and auth, which read scope["session"].
+# * Upload guard innermost of the middlewares, right before routing, so it
+#   rejects an unauthenticated or oversized POST /ingest before the body is
+#   read (see core/upload_guard.py).
+app.add_middleware(UploadGuardMiddleware)
+app.middleware("http")(unhandled_error_middleware)
+app.middleware("http")(csrf_middleware)
 app.middleware("http")(rate_limit_middleware)
-# SessionMiddleware must run for every request that might read/write
-# request.session (routes_auth.py's login/logout, and require_session_auth
-# below) -- registered between the rate limiter and CORS so it sits inside
-# CORS in the final stack (see the CORS comment just below for why CORS
-# itself has to stay outermost).
 app.add_middleware(
     SessionMiddleware,
-    secret_key=settings.session_secret_key,
+    secret_key=resolve_session_secret(settings),
     session_cookie="nightowl_session",
     max_age=settings.session_max_age_seconds,
     same_site="lax",
-    https_only=settings.env != "local",
+    https_only=not settings.is_local,
 )
-# Registered after the rate limiter -- Starlette's add_middleware prepends,
-# so this ends up outermost, meaning CORS headers still attach to a 429/401
-# response instead of the browser reporting those as an opaque CORS failure.
-# allow_credentials=True (flipped from the prior no-cookie-auth default) is
-# required for the browser to send/receive the session cookie at all --
-# paired with allow_origins staying an explicit list rather than "*", which
-# CORS requires whenever allow_credentials is on.
+# allow_credentials=True is required for the browser to send/receive the
+# session cookie; allow_origins therefore stays an explicit list, never "*".
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key", CSRF_HEADER],
 )
 app.include_router(auth_router)
 app.include_router(ingest_router, dependencies=[Depends(require_api_key), Depends(require_session_auth)])

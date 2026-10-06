@@ -108,11 +108,26 @@ def _allow(key: str) -> bool:
 
 
 def allow_login_attempt(key: str) -> bool:
-    """Brute-force throttle for POST /auth/login, called directly by the
-    route handler (not the global middleware) -- see
-    `login_rate_limit_per_minute`'s own docstring in config.py for why this
-    needs its own, much smaller budget."""
-    return _consume(_login_buckets, key, settings.login_rate_limit_per_minute)
+    """Whether this client may try to log in right now -- a peek, consuming
+    nothing. Only *failed* attempts spend the budget (record_failed_login),
+    so an admin logging in normally never throttles themselves."""
+    capacity = settings.login_rate_limit_per_minute
+    if capacity <= 0:
+        return True
+    with _rate_limit_lock:
+        bucket = _login_buckets.get(key)
+        if bucket is None:
+            return True
+        now = time.monotonic()
+        tokens = min(capacity, bucket.tokens + (now - bucket.last_refill) * capacity / 60.0)
+        return tokens >= 1
+
+
+def record_failed_login(key: str) -> None:
+    """Spend one token of the brute-force budget for POST /auth/login -- see
+    `login_rate_limit_per_minute`'s docstring in config.py for why this is a
+    separate, much smaller budget than ordinary API traffic."""
+    _consume(_login_buckets, key, settings.login_rate_limit_per_minute)
 
 
 def get_client_ip(request: Request) -> str:

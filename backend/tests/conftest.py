@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.auth import require_session_auth
+from app.core.auth import CSRF_HEADER, require_session_auth
 from app.core.rate_limit import reset_rate_limiter
 from app.ml.runtime import reset_detector_cache
 from app.db.base import Base
@@ -132,6 +132,6 @@ def api_client():
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[require_session_auth] = lambda: None
     try:
-        yield TestClient(app), TestingSessionLocal
+        yield TestClient(app, headers={CSRF_HEADER: "1"}), TestingSessionLocal
     finally:
         app.dependency_overrides.clear()

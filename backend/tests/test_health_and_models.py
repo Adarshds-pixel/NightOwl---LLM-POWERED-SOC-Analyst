@@ -9,10 +9,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 
 from app.db.base import Base
+from app.core.auth import CSRF_HEADER
 from app.main import app
 from app.models import Alert, ChatMessage, Event, Incident, Rule  # noqa: F401
 
-client = TestClient(app)
+client = TestClient(app, headers={CSRF_HEADER: "1"})
 
 
 def test_health_check():

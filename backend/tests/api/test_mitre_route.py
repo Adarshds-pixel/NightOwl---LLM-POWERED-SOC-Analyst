@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.auth import require_session_auth
+from app.core.auth import CSRF_HEADER
 from app.main import app
 
 
@@ -49,7 +50,7 @@ FAKE_LOOKUP = {
 
 def test_get_mitre_techniques_returns_catalog(monkeypatch):
     monkeypatch.setattr("app.api.routes_mitre.load_mitre_techniques", lambda: FAKE_LOOKUP)
-    client = TestClient(app)
+    client = TestClient(app, headers={CSRF_HEADER: "1"})
 
     response = client.get("/mitre/techniques")
 
@@ -61,7 +62,7 @@ def test_get_mitre_techniques_returns_catalog(monkeypatch):
 
 def test_get_mitre_techniques_includes_deprecation_and_revocation_flags(monkeypatch):
     monkeypatch.setattr("app.api.routes_mitre.load_mitre_techniques", lambda: FAKE_LOOKUP)
-    client = TestClient(app)
+    client = TestClient(app, headers={CSRF_HEADER: "1"})
 
     response = client.get("/mitre/techniques")
 
@@ -73,7 +74,7 @@ def test_get_mitre_techniques_includes_deprecation_and_revocation_flags(monkeypa
 
 def test_get_mitre_techniques_empty_catalog(monkeypatch):
     monkeypatch.setattr("app.api.routes_mitre.load_mitre_techniques", lambda: {})
-    client = TestClient(app)
+    client = TestClient(app, headers={CSRF_HEADER: "1"})
 
     response = client.get("/mitre/techniques")
 

@@ -20,7 +20,35 @@ import type {
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
-const API_KEY = import.meta.env.VITE_API_KEY ?? ''
+/** Custom header the backend requires on every state-changing request
+ *  (backend/app/core/auth.py CSRF_HEADER). A cross-origin page cannot send a
+ *  custom header without a CORS preflight the backend refuses, so this is
+ *  what stops another site from forging uploads or resets with our cookie. */
+const CSRF_HEADER = 'X-NightOwl-Request'
+
+/** FastAPI returns `detail` as a string for HTTPException but as an array of
+ *  {loc, msg} objects for 422 validation errors; render both readably
+ *  instead of "[object Object]". */
+export function formatErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail) return detail
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((d) => {
+        if (d && typeof d === 'object' && 'msg' in d) {
+          const rawLoc = (d as { loc?: unknown }).loc
+          const loc = Array.isArray(rawLoc)
+            ? rawLoc.filter((x) => x !== 'body' && x !== 'query' && x !== 'path').join('.')
+            : ''
+          const msg = String((d as { msg: unknown }).msg)
+          return loc ? `${loc}: ${msg}` : msg
+        }
+        return typeof d === 'string' ? d : ''
+      })
+      .filter(Boolean)
+    if (parts.length) return parts.join('; ')
+  }
+  return fallback
+}
 
 export class ApiError extends Error {
   status: number
@@ -108,8 +136,7 @@ async function rawFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   const headers = new Headers(options.headers)
   const isFormData = options.body instanceof FormData
   if (!isFormData && options.body) headers.set('Content-Type', 'application/json')
-  // Empty API_KEY = disabled, matching backend/app/core/auth.py's convention.
-  if (API_KEY) headers.set('X-API-Key', API_KEY)
+  headers.set(CSRF_HEADER, '1')
 
   // Required for the browser to send/receive the signed session cookie
   // (Starlette SessionMiddleware, see backend/app/main.py) -- without this,
@@ -126,7 +153,7 @@ async function rawFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     if (res.status === 429) throw new ApiError(429, RATE_LIMIT_MESSAGE)
     if (res.status === 401 && !UNAUTHORIZED_EXEMPT_PATHS.has(path)) onUnauthorized?.()
     const body = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new ApiError(res.status, body.detail ?? res.statusText)
+    throw new ApiError(res.status, formatErrorDetail(body?.detail, res.statusText || `request failed (${res.status})`))
   }
 
   return res.json() as Promise<T>
@@ -252,7 +279,7 @@ export function ingestEvtxFileWithProgress(
     // path is a bespoke XHR implementation that never went through
     // rawFetch/apiFetch.
     xhr.withCredentials = true
-    if (API_KEY) xhr.setRequestHeader('X-API-Key', API_KEY)
+    xhr.setRequestHeader(CSRF_HEADER, '1')
     xhr.timeout = timeoutMs
 
     xhr.upload.onprogress = (event) => {
@@ -280,7 +307,7 @@ export function ingestEvtxFileWithProgress(
       }
       const detail =
         body && typeof body === 'object' && 'detail' in body
-          ? String((body as { detail: unknown }).detail)
+          ? formatErrorDetail((body as { detail: unknown }).detail, `upload failed with status ${xhr.status}`)
           : xhr.statusText || `upload failed with status ${xhr.status}`
       reject(new ApiError(xhr.status, detail))
     }
@@ -410,7 +437,7 @@ export function getDemoFixtures() {
  *  mirrors their auth headers and credentials handling by hand. */
 export async function fetchDemoFixtureBytes(filename: string): Promise<Blob> {
   const headers = new Headers()
-  if (API_KEY) headers.set('X-API-Key', API_KEY)
+  headers.set(CSRF_HEADER, '1')
   const res = await fetch(`${API_BASE_URL}/demo/fixtures/${encodeURIComponent(filename)}`, {
     headers,
     credentials: 'include',
@@ -418,7 +445,7 @@ export async function fetchDemoFixtureBytes(filename: string): Promise<Blob> {
   if (!res.ok) {
     if (res.status === 401) onUnauthorized?.()
     const body = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new ApiError(res.status, body.detail ?? res.statusText)
+    throw new ApiError(res.status, formatErrorDetail(body?.detail, res.statusText || `request failed (${res.status})`))
   }
   return res.blob()
 }

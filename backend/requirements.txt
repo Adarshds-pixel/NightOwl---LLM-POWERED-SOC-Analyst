@@ -1,46 +1,42 @@
-# AI/RAG deps (Pair 2). Pair 1 will append backend/API deps (fastapi, sqlalchemy, etc.) below.
-chromadb>=0.5.0
-sentence-transformers>=3.0.0
-requests>=2.31.0
-pytest>=7.4.0
+# Runtime dependencies, pinned to the exact versions the test suite passes
+# against. Unpinned ranges let `pip install` pull a new major on a fresh
+# build (that is how bcrypt 5 -- which raises on >72-byte passwords -- arrived
+# unannounced). Bump deliberately, run the suite, then update the pin.
+# Test-only tools live in requirements-dev.txt.
 
-# LLM wiring (Pair 2, Day 7+) — Groq, exclusively (see app/rag/llm_client.py's
-# module docstring; this project previously also depended on
-# langchain-google-genai for an alternate Gemini provider, removed
-# 2026-09-06 once Gemini's free tier proved structurally unreliable).
-langchain-core>=0.3.0
-langchain-groq>=0.2.0
+# AI / RAG
+chromadb==1.5.9
+sentence-transformers==5.7.0
+requests==2.34.2
+langchain-core==1.5.5
+langchain-groq==1.1.3
 
-# Backend/API deps (Pair 1, Day 3+)
-fastapi>=0.111.0
-uvicorn[standard]>=0.30.0
-sqlalchemy>=2.0.30
-alembic>=1.13.0
-psycopg2-binary>=2.9.9
-pydantic-settings>=2.3.0
-httpx>=0.27.0
-python-evtx>=0.7.4
-xmltodict>=0.13.0
-python-multipart>=0.0.9
+# API / persistence
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+sqlalchemy==2.0.52
+alembic==1.19.1
+psycopg2-binary==2.9.12
+pydantic==2.13.4
+pydantic-settings==2.15.0
+httpx==0.28.1
+python-evtx==0.8.1
+xmltodict==1.0.4
+python-multipart==0.0.32
 
-# Detection engine (Pair 1, Day 7+) — pySigma validates rule YAML structure;
-# NightOwl's own engine.py does the actual per-event matching (see docs/decisions.md)
-pysigma>=0.11.0
-PyYAML>=6.0
+# Detection engine -- pySigma validates rule YAML structure; NightOwl's own
+# detection/engine.py does the per-event matching.
+pysigma==1.5.0
+PyYAML==6.0.3
 
-# Admin authentication (single admin, signed-cookie session -- see
-# app/api/routes_auth.py). itsdangerous is Starlette's own SessionMiddleware
-# dependency (not previously a direct requirement); bcrypt was already an
-# installed transitive dependency but never pinned directly.
-itsdangerous>=2.2.0
-bcrypt>=4.0.0
+# Admin authentication (signed-cookie session + bcrypt password hash)
+itsdangerous==2.2.0
+bcrypt==5.0.0
 
-# ML Anomaly Detection (Pair 3)
-# scikit-learn is pinned exactly, unlike everything else in this file: a
-# pickled LedoitWolf estimator ships in app/ml/models/, and unpickling an
-# sklearn estimator across a minor version is not guaranteed to work. The
-# pin is the version that produced the committed model -- bump it and the
-# model together, by retraining (scripts/train_ml_model.py).
-scikit-learn==1.7.2
-joblib>=1.3.0
-numpy>=1.26.0
+# ML anomaly layer. scikit-learn must match the version that produced the
+# committed model bundles in app/ml/models/ (the bundle records it and the
+# loader refuses a mismatch -- see app/ml/detector.py). Bump it only together
+# with a retrain (scripts/train_ml_model.py).
+scikit-learn==1.9.0
+joblib==1.5.3
+numpy==2.5.2

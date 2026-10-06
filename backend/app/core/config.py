@@ -8,6 +8,7 @@ os.environ calls around the codebase.
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Repo root .env, resolved from this file's location rather than the
@@ -21,7 +22,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     app_name: str = "NightOwl"
-    env: str = "local"
+    # Read from APP_ENV (what .env.example has always documented) or ENV.
+    # This used to be a bare `env` field, which pydantic-settings maps to
+    # ENV only -- so APP_ENV was silently ignored, `env` was always "local",
+    # and the session cookie's Secure flag could never turn on.
+    env: str = Field(default="local", validation_alias=AliasChoices("APP_ENV", "ENV"))
     # Port 5433, not Postgres's default 5432 — see docker-compose.yml comment
     # (another, unrelated Postgres process already owns 5432 on dev machines).
     database_url: str = "postgresql+psycopg2://nightowl:nightowl@localhost:5433/nightowl"
@@ -96,9 +101,10 @@ class Settings(BaseSettings):
     # repo with no .env correctly has login disabled rather than accepting
     # some baked-in default credential. `session_secret_key` signs the
     # session cookie (Starlette's SessionMiddleware, itsdangerous under the
-    # hood) -- also empty by default; app startup rejects an empty secret
-    # once real routes are gated on it, rather than silently signing
-    # sessions with a guessable key.
+    # hood) -- also empty by default. See `is_local` / `resolve_session_secret`
+    # below: outside local, startup refuses an empty or short secret; in
+    # local, an empty one is replaced by a random per-process secret, so a
+    # cookie can never be signed with a guessable (empty) key.
     admin_username: str = "admin"
     admin_password_hash: str = ""
     session_secret_key: str = ""
@@ -113,6 +119,58 @@ class Settings(BaseSettings):
     # would make brute-forcing a password trivial if login attempts drew
     # from the same budget. This one is scoped to POST /auth/login only.
     login_rate_limit_per_minute: int = 5
+
+
+    # Upload cap for POST /ingest, enforced on Content-Length before the body
+    # is read (see core/upload_guard.py) and again while copying to disk.
+    max_upload_bytes: int = 100 * 1024 * 1024
+
+    @property
+    def is_local(self) -> bool:
+        return (self.env or "local").strip().lower() in {"local", "dev", "development", "test"}
+
+
+MIN_SESSION_SECRET_LENGTH = 32
+
+
+class InsecureConfigurationError(RuntimeError):
+    """Raised at startup when a non-local deployment is missing a secret."""
+
+
+def resolve_session_secret(s: "Settings") -> str:
+    """The key SessionMiddleware signs cookies with.
+
+    An empty key makes itsdangerous sign with "" -- anyone can then forge an
+    authenticated cookie. Outside local that is a hard startup failure; in
+    local (tests, a fresh clone) a random per-process key is used instead,
+    which is safe (unforgeable) at the cost of sessions not surviving a
+    restart.
+    """
+    secret = (s.session_secret_key or "").strip()
+    if len(secret) >= MIN_SESSION_SECRET_LENGTH:
+        return secret
+    if not s.is_local:
+        raise InsecureConfigurationError(
+            f"SESSION_SECRET_KEY must be set to at least {MIN_SESSION_SECRET_LENGTH} characters "
+            f"when APP_ENV={s.env!r}; generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    import logging
+    import secrets
+
+    logging.getLogger(__name__).warning(
+        "SESSION_SECRET_KEY is empty or shorter than %d chars; using a random per-process key "
+        "(local only -- sessions will not survive a restart)",
+        MIN_SESSION_SECRET_LENGTH,
+    )
+    return secrets.token_hex(32)
+
+
+def validate_production_settings(s: "Settings") -> None:
+    """Fail fast on configurations that are only acceptable on a dev box."""
+    if s.is_local:
+        return
+    if not s.admin_password_hash.startswith(("$2a$", "$2b$", "$2y$")):
+        raise InsecureConfigurationError("ADMIN_PASSWORD_HASH must be a bcrypt hash when APP_ENV is not local")
 
 
 @lru_cache

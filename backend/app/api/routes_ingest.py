@@ -61,6 +61,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Re
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts
@@ -78,7 +79,10 @@ ALLOWED_EXTENSION = ".evtx"
 # parsing time scales with file size, so this is a backstop against a
 # pathologically large upload hanging a live demo for many minutes with no
 # feedback, not a realistic ceiling on a genuine single-host EVTX export).
-MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+#
+# The value lives in settings.max_upload_bytes so the pre-body upload guard
+# (core/upload_guard.py) and this route enforce the same number.
+MAX_UPLOAD_BYTES = settings.max_upload_bytes
 
 
 class UncoveredEventGroup(BaseModel):

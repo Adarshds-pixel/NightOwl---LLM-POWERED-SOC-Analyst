@@ -1,7 +1,6 @@
 import { Bot, Info, Monitor, Plug, RotateCcw, Settings as SettingsIcon, Database } from 'lucide-react'
 import { useState } from 'react'
 import {
-  Badge,
   Button,
   Card,
   KeyValue,
@@ -54,7 +53,6 @@ function SettingsPage() {
   const [section, setSection] = useState<Section>('appearance')
 
   const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
-  const apiKeyConfigured = Boolean(import.meta.env.VITE_API_KEY)
 
   return (
     <div className="flex flex-col gap-4 p-5">
@@ -228,17 +226,11 @@ function SettingsPage() {
                 <KeyValue label="Samples this session" value={samples.length} mono />
                 <KeyValue label="Signed in as" value={username ?? '—'} mono />
                 <KeyValue label="Auth model" value="Single-admin session login (signed, HttpOnly cookie)" />
-                <KeyValue
-                  label="Shared API key"
-                  value={apiKeyConfigured ? <Badge accent="green">Configured</Badge> : <Badge accent="neutral">Not set</Badge>}
-                />
               </dl>
               <p className="mt-4 text-meta text-text-muted">
                 Sign-in is a real admin login (POST /auth/login sets the session cookie); use the account menu in
-                the top bar to sign out. The API base URL and shared key below are separate, build-time environment
-                variables (VITE_API_BASE_URL, VITE_API_KEY in frontend/.env.local) -- an additional, optional header
-                check the backend can require alongside the session cookie, not a substitute for it. Changing them
-                means editing that file and restarting the dev server, not typing into this page.
+                the top bar to sign out; signing out revokes the session on the server. The API base URL is a build-time
+                setting (VITE_API_BASE_URL), so changing it means rebuilding the frontend, not typing into this page.
               </p>
             </Card>
           )}

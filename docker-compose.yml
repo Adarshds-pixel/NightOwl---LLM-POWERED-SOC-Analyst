@@ -1,15 +1,20 @@
+# One-command deployment: `docker compose up --build`.
+# Required in .env first: ADMIN_PASSWORD_HASH, SESSION_SECRET_KEY,
+# POSTGRES_PASSWORD (and GROQ_API_KEY for explanations/chat). The backend
+# refuses to start with an empty or short SESSION_SECRET_KEY outside APP_ENV=local.
 services:
   db:
     image: postgres:16
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-nightowl}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nightowl}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-nightowl}
     ports:
-      # Host port 5433 (not 5432) — this machine already has another,
-      # unrelated Postgres process bound to 5432; avoid colliding with it.
-      - "5433:5432"
+      # Bound to loopback only: the database is for the backend container and
+      # local tooling, never the network. Host port 5433 avoids colliding with
+      # a Postgres already on 5432.
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,15 +34,18 @@ services:
     env_file:
       - .env
     environment:
-      # Overrides .env's host-relative DATABASE_URL (localhost:5433) --
-      # inside the compose network, Postgres is reachable at the service
-      # name "db" on its container-internal port 5432, not localhost:5433
-      # (host-machine-only).
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-nightowl}:${POSTGRES_PASSWORD:-nightowl}@db:5432/${POSTGRES_DB:-nightowl}
+      # Inside the compose network Postgres is "db:5432", not localhost:5433.
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-nightowl}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-nightowl}
+      APP_ENV: ${APP_ENV:-production}
+      # The browser origin the frontend is served from (port mapping below).
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     volumes:
-      # Mirrors app/mitre/loader.py + app/rag/chroma_client.py's expected
-      # `<repo root>/ai` path (resolved via Path(__file__).parents[3]).
-      - ./ai:/app/ai
+      # Named volumes (owned by the image's non-root user) so the knowledge
+      # base, the ATT&CK dataset and the embedding-model download persist
+      # across restarts and rebuilds instead of being re-fetched.
+      - kb_store:/app/ai/vector_store
+      - mitre_data:/app/ai/mitre
+      - model_cache:/home/appuser/.cache
     ports:
       - "8000:8000"
 
@@ -46,17 +54,18 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        # Baked into the static bundle at build time (see frontend/Dockerfile's
-        # own comment) -- "backend" is this compose network's service name,
-        # reachable from the browser via the port mapping below, not from
-        # inside the frontend container itself.
+        # Baked into the static bundle at build time: the URL the *browser*
+        # uses to reach the backend.
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
-        VITE_API_KEY: ${VITE_API_KEY:-}
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "5173:80"
 
 volumes:
   postgres_data:
+  kb_store:
+  mitre_data:
+  model_cache:

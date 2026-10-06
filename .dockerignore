@@ -1,11 +1,21 @@
 .git
-backend/venv
-backend/.pytest_cache
+.github
+.vscode
+.env
 **/__pycache__
 **/*.pyc
+**/node_modules
+frontend/dist
+backend/venv
+backend/.pytest_cache
 backend/tests
-backend/scripts
+backend/scripts/cache
+backend/scripts/eval
 ai/vector_store
 ai/mitre/*.json
-backend/sample_logs
-.env
+# Only the detected attack captures are copied into the image (Demo Mode);
+# everything else under sample_logs stays out of the build context.
+backend/sample_logs/real_world_fixtures/benign
+backend/sample_logs/real_world_fixtures/undetected
+backend/sample_logs/real_world_fixtures/NightOwl-Benign-Dataset
+backend/sample_logs/demo_fixtures

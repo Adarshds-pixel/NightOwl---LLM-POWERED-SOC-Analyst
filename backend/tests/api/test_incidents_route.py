@@ -301,7 +301,9 @@ def test_update_incident_status_happy_path(api_client):
     assert events[0].details == {"from": "open", "to": "resolved"}
 
 
-def test_update_incident_status_with_explicit_actor(api_client):
+def test_update_incident_status_ignores_client_supplied_actor(api_client):
+    """The audit actor comes from the server-side session; a request body
+    claiming to be someone else must not be able to rewrite the audit log."""
     client, SessionLocal = api_client
     incident_id = _insert_incident(SessionLocal)
 
@@ -314,7 +316,7 @@ def test_update_incident_status_with_explicit_actor(api_client):
     with SessionLocal() as db:
         events = db.query(AuditLog).filter_by(entity_id=incident_id, entity_type="incident").all()
 
-    assert events[0].actor == "analyst.jane"
+    assert events[0].actor == "system"
 
 
 def test_update_incident_status_rejects_invalid_status(api_client):
