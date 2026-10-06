@@ -9,6 +9,7 @@ is reporting what actually loaded, so a test double would defeat it.
 
 from datetime import datetime, timedelta, timezone
 
+from app.detection.sequences import SEQUENCE_PATTERNS
 from app.detection.rule_loader import get_loaded_rules
 from app.ml.rule import ML_RULE_ID
 from app.models.alert import Alert
@@ -45,7 +46,9 @@ def test_lists_every_loaded_rule(api_client):
     # anomaly layer (app/ml/). It files alerts under its own rule_id, so
     # omitting it here would leave a live detector missing from the list its
     # own alerts point at.
-    assert body["count"] == body["total"] == len(get_loaded_rules()) + 1
+    # the YAML rules + the sequence detectors + the ML built-in
+    assert body["count"] == body["total"] == len(get_loaded_rules()) + len(SEQUENCE_PATTERNS) + 1
+    assert {r["kind"] for r in body["rules"]} == {"sigma", "sequence", "ml"}
     assert body["total"] > 0
 
 
@@ -150,7 +153,7 @@ def test_filters_by_technique_level_and_category(api_client):
     by_technique = client.get("/rules", params={"technique_id": "t1059.001"}).json()
     assert by_technique["count"] >= 1
     assert {r["technique_id"] for r in by_technique["rules"]} == {"T1059.001"}
-    assert by_technique["total"] == len(get_loaded_rules()) + 1  # + the ML built-in
+    assert by_technique["total"] == len(get_loaded_rules()) + len(SEQUENCE_PATTERNS) + 1
 
     by_level = client.get("/rules", params={"level": "high"}).json()
     assert {r["level"] for r in by_level["rules"]} == {"high"}
@@ -175,3 +178,20 @@ def test_unknown_rule_id_is_404(api_client):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "rule not-a-real-rule not found"
+
+
+def test_sequence_detector_ids_resolve(api_client):
+    """Sequence alerts used to point at a rule_id GET /rules/{id} 404'd on."""
+    client, _ = api_client
+    for rule_id in SEQUENCE_PATTERNS:
+        response = client.get(f"/rules/{rule_id}")
+        assert response.status_code == 200
+        assert response.json()["kind"] == "sequence"
+
+
+def test_system_status_reports_components_without_secrets(api_client):
+    client, _ = api_client
+    body = client.get("/system/status").json()
+    assert set(body) >= {"llm", "knowledge_base", "detection_rules", "ml_anomaly_layer", "attack_dataset"}
+    assert body["detection_rules"]["ready"] is True
+    assert "gsk_" not in str(body)

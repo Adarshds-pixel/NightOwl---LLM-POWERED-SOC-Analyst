@@ -20,7 +20,7 @@ SAMPLE_CHUNKS = [
 
 
 def test_generate_chat_reply_returns_reply_and_chunks(monkeypatch):
-    monkeypatch.setattr(chat_service, "retrieve", lambda query, k, technique_id: SAMPLE_CHUNKS)
+    monkeypatch.setattr(chat_service, "retrieve", lambda query, k, **_kw: SAMPLE_CHUNKS)
     monkeypatch.setattr(chat_service, "generate", lambda messages: "Here's the answer.")
 
     result = chat_service.generate_chat_reply(
@@ -36,7 +36,7 @@ def test_generate_chat_reply_returns_reply_and_chunks(monkeypatch):
 def test_generate_chat_reply_includes_message_in_retrieval_query(monkeypatch):
     captured = {}
 
-    def fake_retrieve(query, k, technique_id):
+    def fake_retrieve(query, k, technique_ids=None, **_kw):
         captured["query"] = query
         return []
 
@@ -49,7 +49,7 @@ def test_generate_chat_reply_includes_message_in_retrieval_query(monkeypatch):
 
 
 def test_generate_chat_reply_passes_history_and_message_into_prompt(monkeypatch):
-    monkeypatch.setattr(chat_service, "retrieve", lambda query, k, technique_id: [])
+    monkeypatch.setattr(chat_service, "retrieve", lambda query, k, **_kw: [])
 
     captured = {}
 
@@ -69,7 +69,7 @@ def test_generate_chat_reply_passes_history_and_message_into_prompt(monkeypatch)
 
 
 def test_generate_chat_reply_propagates_llm_provider_error(monkeypatch):
-    monkeypatch.setattr(chat_service, "retrieve", lambda query, k, technique_id: [])
+    monkeypatch.setattr(chat_service, "retrieve", lambda query, k, **_kw: [])
 
     def raise_error(messages):
         raise LLMProviderError("boom")

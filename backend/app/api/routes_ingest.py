@@ -66,7 +66,13 @@ from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts
 from app.ingestion.normalizer import EventNormalizationError, normalize_event
-from app.services.ai_opinion_service import create_pending_opinion, fill_in_opinion
+from app.services.ai_opinion_service import (
+    REASON_NAMED_PIPE,
+    REASON_SERVICE_INSTALL,
+    REASON_UNCOVERED,
+    create_pending_opinion,
+    fill_in_opinion,
+)
 from app.services.ingest_service import ingest_records
 
 logger = logging.getLogger(__name__)
@@ -313,11 +319,20 @@ def ingest_evtx(
         #      already matched a real rule -- "covered by a rule's
         #      logsource" is not the same claim as "this event's content
         #      was actually judged."
-        advisory_sample_ids = list(
-            dict.fromkeys(outcome.named_pipe_discovery_event_ids + outcome.service_installation_event_ids)
-        )
+        # Advisory-pattern events go FIRST: the opinion only ever sees the
+        # first MAX_SAMPLE_EVENTS ids, and with uncovered ids first any file
+        # with 5+ uncovered events silently dropped the very 4697 / named-pipe
+        # event that triggered the advisory.
+        sample_reasons: dict[int, str] = {}
+        for event_id in outcome.named_pipe_discovery_event_ids:
+            sample_reasons.setdefault(event_id, REASON_NAMED_PIPE)
+        for event_id in outcome.service_installation_event_ids:
+            sample_reasons.setdefault(event_id, REASON_SERVICE_INSTALL)
+        advisory_sample_ids = list(sample_reasons)
         if outcome.uncovered_events > 0:
-            advisory_sample_ids = list(dict.fromkeys(outcome.uncovered_event_ids + advisory_sample_ids))
+            for event_id in outcome.uncovered_event_ids:
+                sample_reasons.setdefault(event_id, REASON_UNCOVERED)
+            advisory_sample_ids = list(dict.fromkeys(advisory_sample_ids + outcome.uncovered_event_ids))
         if advisory_sample_ids:
             opinion = create_pending_opinion(db, filename, advisory_sample_ids)
             ai_opinion_id = opinion.id
@@ -328,6 +343,8 @@ def ingest_evtx(
                 advisory_sample_ids,
                 outcome.matched_rule_titles,
                 outcome.uncovered_breakdown,
+                sample_reasons,
+                outcome.ml_anomaly_titles,
             )
 
         db.commit()

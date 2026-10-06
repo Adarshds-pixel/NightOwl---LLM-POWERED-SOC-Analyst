@@ -81,3 +81,11 @@ def reset_detector_cache() -> None:
     with _lock:
         _detector = None
         _loaded = False
+
+
+def get_detector_status() -> tuple[bool, str]:
+    """(ready, human-readable detail) for GET /system/status."""
+    detector = get_detector()
+    if detector is None:
+        return False, "no usable model loaded -- see the backend log"
+    return True, f"model loaded ({len(detector.feature_names)} features)"

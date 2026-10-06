@@ -46,7 +46,7 @@ def test_build_retrieval_query_falls_back_when_incident_is_sparse():
 
 
 def test_generate_explanation_no_issues_found_returns_draft_unchanged(monkeypatch):
-    monkeypatch.setattr(explain_service, "retrieve", lambda query, k, technique_id: SAMPLE_CHUNKS)
+    monkeypatch.setattr(explain_service, "retrieve", lambda query, k, **_kw: SAMPLE_CHUNKS)
     responses = iter(["draft explanation text", "No issues found."])
     monkeypatch.setattr(explain_service, "generate", lambda messages: next(responses))
 
@@ -60,7 +60,7 @@ def test_generate_explanation_no_issues_found_returns_draft_unchanged(monkeypatc
 
 
 def test_generate_explanation_appends_critique_when_issues_found(monkeypatch):
-    monkeypatch.setattr(explain_service, "retrieve", lambda query, k, technique_id: SAMPLE_CHUNKS)
+    monkeypatch.setattr(explain_service, "retrieve", lambda query, k, **_kw: SAMPLE_CHUNKS)
     responses = iter(
         [
             "draft explanation text",
@@ -82,10 +82,10 @@ def test_generate_explanation_appends_critique_when_issues_found(monkeypatch):
 def test_generate_explanation_passes_technique_id_and_k_to_retrieve(monkeypatch):
     captured = {}
 
-    def fake_retrieve(query, k, technique_id):
+    def fake_retrieve(query, k, technique_ids=None, **_kw):
         captured["query"] = query
         captured["k"] = k
-        captured["technique_id"] = technique_id
+        captured["technique_ids"] = technique_ids
         return SAMPLE_CHUNKS
 
     monkeypatch.setattr(explain_service, "retrieve", fake_retrieve)
@@ -94,12 +94,13 @@ def test_generate_explanation_passes_technique_id_and_k_to_retrieve(monkeypatch)
 
     generate_explanation(SAMPLE_INCIDENT, k=3)
 
-    assert captured["technique_id"] == "T1059.001"
+    # the incident technique plus its parent (playbooks are tagged with parents)
+    assert captured["technique_ids"] == ["T1059.001", "T1059"]
     assert captured["k"] == 3
 
 
 def test_generate_explanation_passes_incident_into_critique_prompt(monkeypatch):
-    monkeypatch.setattr(explain_service, "retrieve", lambda query, k, technique_id: SAMPLE_CHUNKS)
+    monkeypatch.setattr(explain_service, "retrieve", lambda query, k, **_kw: SAMPLE_CHUNKS)
     responses = iter(["draft explanation text", "No issues found."])
     monkeypatch.setattr(explain_service, "generate", lambda messages: next(responses))
 
@@ -124,7 +125,7 @@ def test_generate_explanation_passes_incident_into_critique_prompt(monkeypatch):
 def test_generate_explanation_propagates_llm_provider_error(monkeypatch):
     from app.rag.llm_client import LLMProviderError
 
-    monkeypatch.setattr(explain_service, "retrieve", lambda query, k, technique_id: SAMPLE_CHUNKS)
+    monkeypatch.setattr(explain_service, "retrieve", lambda query, k, **_kw: SAMPLE_CHUNKS)
 
     def raise_error(messages):
         raise LLMProviderError("LLM call failed after 2 attempts: boom")

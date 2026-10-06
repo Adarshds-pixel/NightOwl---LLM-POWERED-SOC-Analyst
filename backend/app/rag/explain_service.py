@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from app.rag.llm_client import generate
 from app.rag.prompts import build_critique_prompt, build_explanation_prompt
 from app.rag.retriever import retrieve
+from app.rag.safety import annotate_unknown_technique_ids, technique_filter_ids
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,8 @@ def _self_critique(draft: str, chunks: list[dict], incident: dict) -> str | None
     """
     critique = generate(build_critique_prompt(draft, chunks, incident)).strip()
 
-    if critique.lower().startswith(_NO_ISSUES):
+    # Tolerate markdown decoration around the sentinel ("**No issues found.**").
+    if critique.strip("*_` \n").lower().startswith(_NO_ISSUES):
         return None
     return critique
 
@@ -75,12 +77,18 @@ def generate_explanation(incident: dict, k: int = DEFAULT_K) -> ExplanationResul
     """Retrieve context for `incident`, draft an explanation, then self-check
     the draft against the retrieved chunks before returning."""
     query = _build_retrieval_query(incident)
-    technique_id = incident.get("technique_id")
+    # Every technique on the incident plus each one's parent: playbooks are
+    # written against parent techniques (T1003) while rules emit
+    # sub-techniques (T1003.001), so an exact first-technique filter never
+    # retrieved them.
+    filter_ids = technique_filter_ids(incident.get("technique_ids") or [incident.get("technique_id")])
 
-    chunks = retrieve(query, k=k, technique_id=technique_id)
+    chunks = retrieve(query, k=k, technique_ids=filter_ids or None)
     logger.info("retrieved %d chunks for incident explanation (query=%r)", len(chunks), query)
 
-    draft = generate(build_explanation_prompt(incident, chunks))
+    draft, unknown_ids = annotate_unknown_technique_ids(generate(build_explanation_prompt(incident, chunks)))
+    if unknown_ids:
+        logger.warning("explanation cited unknown technique id(s): %s", unknown_ids)
 
     critique = _self_critique(draft, chunks, incident)
     if critique:

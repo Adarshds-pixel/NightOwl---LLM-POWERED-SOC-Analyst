@@ -110,9 +110,57 @@ def test_fill_in_opinion_success_updates_status_and_label(api_client, monkeypatc
         # independent of the assessment (guardrail: assessment + limitations
         # can coexist -- see prompts.py's UNCOVERED_LIMITATIONS_HEADING).
         assert "small sample" in opinion.limitations
-        # attack_candidate_ids sourced only from a real mitre_technique
-        # chunk's metadata, never from the LLM's own text.
-        assert opinion.attack_candidate_ids == ["T1003"]
+        # A "nothing unusual" verdict offers no technique candidates --
+        # listing techniques beside "nothing stands out" reads as an
+        # accusation the opinion itself does not make.
+        assert opinion.attack_candidate_ids == []
+
+
+def test_fill_in_opinion_worth_reviewing_offers_only_well_matched_candidates(api_client, monkeypatch):
+    _client, SessionLocal = api_client
+    monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
+    with SessionLocal() as db:
+        event_id = _make_event(db).id
+        opinion_id = ai_opinion_service.create_pending_opinion(db, "m.evtx", sample_event_ids=[event_id]).id
+
+    chunks = [
+        {**SAMPLE_CHUNKS[0], "score": 0.56},
+        {"chunk_id": "x", "document": "d", "score": 0.43,
+         "metadata": {"source_type": "mitre_technique", "technique_id": "T1547.010"}},
+    ]
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: chunks)
+    monkeypatch.setattr(
+        ai_opinion_service,
+        "generate",
+        lambda messages: "Odd.\n\n## Assessment: Worth reviewing\n\n## Limitations\n- small sample",
+    )
+
+    ai_opinion_service.fill_in_opinion(opinion_id, "m.evtx", [event_id])
+
+    with SessionLocal() as db:
+        opinion = db.get(AiOpinion, opinion_id)
+        assert opinion.assessment_label == "worth_reviewing"
+        # sourced only from retrieved MITRE chunk metadata, and only above
+        # the relevance floor -- the 0.43 neighbour is not offered
+        assert opinion.attack_candidate_ids == [SAMPLE_CHUNKS[0]["metadata"]["technique_id"]]
+
+
+def test_fill_in_opinion_marks_invented_technique_ids(api_client, monkeypatch):
+    _client, SessionLocal = api_client
+    monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
+    with SessionLocal() as db:
+        event_id = _make_event(db).id
+        opinion_id = ai_opinion_service.create_pending_opinion(db, "m.evtx", sample_event_ids=[event_id]).id
+
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: [])
+    monkeypatch.setattr(
+        ai_opinion_service,
+        "generate",
+        lambda messages: "Looks like T9999.123.\n\n## Assessment: Worth reviewing\n\n## Limitations\n- x",
+    )
+    ai_opinion_service.fill_in_opinion(opinion_id, "m.evtx", [event_id])
+    with SessionLocal() as db:
+        assert "T9999.123 [unverified" in db.get(AiOpinion, opinion_id).summary
 
 
 def test_fill_in_opinion_llm_failure_marks_status_failed_with_error(api_client, monkeypatch):
@@ -209,6 +257,7 @@ def test_event_summary_never_includes_raw_json_fields():
     summary = ai_opinion_service._event_summary(event, group_total=17)
 
     assert set(summary.keys()) == {
+        "why_sampled",
         "channel",
         "event_id",
         "event_type",

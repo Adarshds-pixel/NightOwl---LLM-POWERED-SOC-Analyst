@@ -12,9 +12,11 @@ code, not rows a UI can toggle at runtime, so there is deliberately no
 POST/PATCH/DELETE here and `enabled` reflects "this rule loaded and is in
 the running set", not a user-flippable switch.
 
-The ML anomaly layer (`app/ml/`) is appended as a built-in entry: it files
-alerts under a rule_id with no YAML file behind it, so it would otherwise
-be a live detector missing from the list its own alerts point at.
+Two kinds of detector have no YAML file but still file alerts under their own
+rule_id, so they are listed too, each tagged with `kind` so a client never
+mistakes them for Sigma rules: the multi-event sequence detectors
+(`kind="sequence"`, detection/sequences.py) and the ML anomaly layer
+(`kind="ml"`, app/ml/). Every alert's rule_id therefore resolves here.
 """
 
 from datetime import datetime
@@ -27,13 +29,35 @@ from app.db.session import get_db
 from app.ml.rule import ML_ANOMALY_RULE
 from app.ml.runtime import get_detector
 from app.detection.rule_loader import get_loaded_rules
+from app.detection.sequences import SEQUENCE_PATTERNS
 from app.services.rule_service import get_rule_activity
 
 router = APIRouter()
 
 
+# Plain-language summaries of the sequence detectors (they have no YAML
+# description field to read one from).
+_SEQUENCE_DESCRIPTIONS = {
+    "sequence-process-herpaderping": (
+        "Correlates, within one upload, a process writing an executable, opening the process it spawned "
+        "from it, and that child loading its own image -- the observable shape of Process Herpaderping."
+    ),
+    "sequence-smb-share-enum-probe": (
+        "Correlates an inbound SMB (445) connection with a connect to the Server service (srvsvc) named "
+        "pipe from the same source shortly after -- remote share enumeration."
+    ),
+    "sequence-kerberos-password-spray": (
+        "Several distinct accounts failing Kerberos pre-authentication from one source address within a "
+        "short window -- password spraying."
+    ),
+}
+
+
 class RuleInfo(BaseModel):
     rule_id: str
+    # "sigma" (a YAML rule), "sequence" (a multi-event correlation in
+    # detection/sequences.py) or "ml" (the anomaly model).
+    kind: str = "sigma"
     title: str
     description: str
     level: str
@@ -90,7 +114,40 @@ def _build_rules(db: Session) -> list[RuleInfo]:
             last_triggered=activity[rule.rule_id].last_triggered if rule.rule_id in activity else None,
         )
         for rule in get_loaded_rules()
-    ] + [_ml_rule_info(activity)]
+    ] + [_sequence_rule_info(pattern, activity) for pattern in SEQUENCE_PATTERNS.values()] + [
+        _ml_rule_info(activity)
+    ]
+
+
+def _activity_fields(rule_id: str, activity) -> dict:
+    entry = activity.get(rule_id)
+    return {
+        "match_count": entry.match_count if entry else 0,
+        "matches_24h": entry.matches_24h if entry else 0,
+        "last_triggered": entry.last_triggered if entry else None,
+    }
+
+
+def _sequence_rule_info(pattern, activity) -> RuleInfo:
+    return RuleInfo(
+        rule_id=pattern.rule_id,
+        kind="sequence",
+        title=pattern.title,
+        description=_SEQUENCE_DESCRIPTIONS.get(pattern.rule_id, ""),
+        level=pattern.level,
+        category=None,
+        technique_id=pattern.technique_id,
+        tactics=list(pattern.tactics),
+        condition="",
+        selections=[],
+        author="NightOwl",
+        date="",
+        status="experimental",
+        references=[],
+        filename="app/detection/sequences.py",
+        enabled=True,
+        **_activity_fields(pattern.rule_id, activity),
+    )
 
 
 def _ml_rule_info(activity) -> RuleInfo:
@@ -110,6 +167,7 @@ def _ml_rule_info(activity) -> RuleInfo:
     detector = get_detector()
     return RuleInfo(
         rule_id=ML_ANOMALY_RULE.rule_id,
+        kind="ml",
         title=ML_ANOMALY_RULE.title,
         description=ML_ANOMALY_RULE.description,
         level=ML_ANOMALY_RULE.level,
@@ -124,12 +182,7 @@ def _ml_rule_info(activity) -> RuleInfo:
         references=["ML.md"],
         filename="app/ml/detector.py",
         enabled=detector is not None,
-        match_count=activity[ML_ANOMALY_RULE.rule_id].match_count
-        if ML_ANOMALY_RULE.rule_id in activity else 0,
-        matches_24h=activity[ML_ANOMALY_RULE.rule_id].matches_24h
-        if ML_ANOMALY_RULE.rule_id in activity else 0,
-        last_triggered=activity[ML_ANOMALY_RULE.rule_id].last_triggered
-        if ML_ANOMALY_RULE.rule_id in activity else None,
+        **_activity_fields(ML_ANOMALY_RULE.rule_id, activity),
     )
 
 

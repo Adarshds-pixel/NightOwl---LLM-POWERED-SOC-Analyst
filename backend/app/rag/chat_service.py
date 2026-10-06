@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from app.rag.llm_client import generate
 from app.rag.prompts import build_chat_prompt
 from app.rag.retriever import retrieve
+from app.rag.safety import annotate_unknown_technique_ids, technique_filter_ids
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +52,14 @@ def generate_chat_reply(incident: dict, history: list[dict], message: str, k: in
     generate a grounded reply, given prior turns in `history` (each a dict
     with `role`/`content`, oldest first)."""
     query = _build_retrieval_query(incident, message)
-    technique_id = incident.get("technique_id")
+    filter_ids = technique_filter_ids(incident.get("technique_ids") or [incident.get("technique_id")])
 
-    chunks = retrieve(query, k=k, technique_id=technique_id)
+    chunks = retrieve(query, k=k, technique_ids=filter_ids or None)
     logger.info("retrieved %d chunks for incident chat (query=%r)", len(chunks), query)
 
-    reply = generate(build_chat_prompt(incident, chunks, history, message))
+    reply, unknown_ids = annotate_unknown_technique_ids(generate(build_chat_prompt(incident, chunks, history, message)))
+    if unknown_ids:
+        logger.warning("chat reply cited unknown technique id(s): %s", unknown_ids)
 
     return ChatReplyResult(reply=reply, chunks=chunks)
 

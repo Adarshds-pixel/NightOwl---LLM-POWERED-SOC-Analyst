@@ -6,10 +6,14 @@ same model used to embed the chunks in build_kb.py -- relying on Chroma's
 implicit default embedding function here would risk a mismatched model.
 """
 
+import logging
+
 from app.rag.chroma_client import get_or_create_collection
 from app.rag.embeddings import embed_text
 
 KB_COLLECTION_NAME = "knowledge_base"
+
+logger = logging.getLogger(__name__)
 
 
 def retrieve(
@@ -17,6 +21,7 @@ def retrieve(
     k: int = 5,
     source_type: str | None = None,
     technique_id: str | None = None,
+    technique_ids: list[str] | None = None,
 ) -> list[dict]:
     """Return the top-k chunks most relevant to `query`, each as a dict with
     chunk_id, document, metadata, and score (higher score = more relevant).
@@ -26,14 +31,22 @@ def retrieve(
     instead of having to know the underlying distance metric.
     """
     collection = get_or_create_collection(KB_COLLECTION_NAME)
-
-    where = None
-    if source_type and technique_id:
-        where = {"$and": [{"source_type": source_type}, {"technique_id": technique_id}]}
-    elif source_type:
-        where = {"source_type": source_type}
-    elif technique_id:
-        where = {"technique_id": technique_id}
+    if collection.count() == 0:
+        logger.warning(
+            "knowledge base is empty -- run `python ai/tools/build_kb.py`; answers will have no retrieval grounding"
+        )
+        return []
+    ids_filter = [t for t in (technique_ids or []) if t]
+    if technique_id and technique_id not in ids_filter:
+        ids_filter.insert(0, technique_id)
+    clauses = []
+    if source_type:
+        clauses.append({"source_type": source_type})
+    if len(ids_filter) == 1:
+        clauses.append({"technique_id": ids_filter[0]})
+    elif ids_filter:
+        clauses.append({"technique_id": {"$in": ids_filter}})
+    where = None if not clauses else clauses[0] if len(clauses) == 1 else {"$and": clauses}
 
     results = collection.query(
         query_embeddings=[embed_text(query)],

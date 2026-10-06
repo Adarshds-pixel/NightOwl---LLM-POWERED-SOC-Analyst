@@ -27,6 +27,14 @@ without the self-critique pass catching it (finding #2, spot-check #2's
 from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 
+from app.rag.safety import (
+    LARGE_FIELD_LIMIT,
+    UNTRUSTED_EVIDENCE_RULE,
+    extract_strict_heading_label,
+    fence,
+    untrusted,
+)
+
 SYSTEM_PROMPT = """You are NightOwl, an experienced SOC (Security Operations Center) analyst \
 explaining a detected security incident to a junior analyst who is still learning. Your job is \
 to translate raw telemetry and MITRE ATT&CK context into a clear, plain-English explanation of \
@@ -63,7 +71,8 @@ applied to this incident, not directly confirmed by the incident context itself.
      - "- Uncertainty:" anything the incident context and retrieved chunks together don't clearly \
 establish, including cases where the evidence is thin (e.g. an incident with no related events, or \
 a technique with only general background retrieved).
-7. Keep the whole response under ~350 words. Do not repeat the raw input back verbatim."""
+7. Keep the whole response under ~350 words. Do not repeat the raw input back verbatim.
+8. """ + UNTRUSTED_EVIDENCE_RULE
 
 HUMAN_PROMPT = """## Incident context
 {incident_context}
@@ -83,12 +92,29 @@ EXPLANATION_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
+_LARGE_FIELDS = {"command_line", "event_data", "related_events", "ScriptBlockText"}
+
+
+def _render_value(key: str, value) -> str:
+    limit = LARGE_FIELD_LIMIT if key in _LARGE_FIELDS else 1000
+    if isinstance(value, list):
+        return "\n".join(f"    - {untrusted(item, limit)}" for item in value)
+    return untrusted(value, limit)
+
+
 def format_incident_context(incident: dict) -> str:
-    """Render an incident dict as a readable bullet list for the prompt."""
+    """Render an incident dict as a bullet list, fenced as untrusted evidence
+    (host names, command lines, users and related events all come from logs
+    an attacker can write to -- see rag/safety.py)."""
     if not incident:
         return "(no incident context provided)"
-    lines = [f"- {key}: {value}" for key, value in incident.items() if value not in (None, "", [])]
-    return "\n".join(lines) if lines else "(no incident context provided)"
+    lines = []
+    for key, value in incident.items():
+        if value in (None, "", []):
+            continue
+        rendered = _render_value(key, value)
+        lines.append(f"- {key}:\n{rendered}" if isinstance(value, list) else f"- {key}: {rendered}")
+    return fence("\n".join(lines)) if lines else "(no incident context provided)"
 
 
 def format_chunks(chunks: list[dict]) -> str:
@@ -135,7 +161,8 @@ them.
 one?" refers back to something mentioned earlier in the chat).
 7. Answer conversationally -- a few sentences is usually enough. Only use a list or headings if \
 the question specifically calls for step-by-step instructions. Keep the response under ~200 words \
-unless the question specifically asks for more detail."""
+unless the question specifically asks for more detail.
+8. """ + UNTRUSTED_EVIDENCE_RULE
 
 CHAT_HUMAN_PROMPT = """## Incident context
 {incident_context}
@@ -224,6 +251,8 @@ it as an observed fact about this incident -- if the draft presents general tech
 if it were specific to this incident, flag it as NOT SUPPORTED and say the sources describe it as \
 general technique behavior, not something confirmed for this incident.
 
+""" + UNTRUSTED_EVIDENCE_RULE + """
+
 If every claim is supported, respond with exactly: No issues found.
 Otherwise, respond with one line per unsupported or low-confidence claim, each starting with \
 "- ", briefly stating the claim and why it isn't supported. Do not repeat claims that are fine. \
@@ -260,16 +289,19 @@ def build_critique_prompt(draft: str, chunks: list[dict], incident: dict) -> lis
 
 
 UNCOVERED_OPINION_SYSTEM_PROMPT = """You are NightOwl's advisory second-opinion assistant. You are being \
-shown raw Windows telemetry that NO detection rule was able to evaluate -- either because it came from a \
-channel/event type this deployment has no rule for, or because it fell outside every loaded rule's scope. \
+shown raw Windows telemetry that no detection rule explains -- either because it came from a \
+channel/event type this deployment has no rule for, or because a rule could evaluate it but did not \
+match while a narrow advisory pattern still marked it for a second look (each sample's `why_sampled` \
+field says which). \
 This is fundamentally different from every other role you might play in this system: you are NOT a \
 detector, you cannot create alerts or incidents, and your output must never be presented or treated as a \
 confirmed detection.
 
 Some or all of this file's OTHER events may already have matched a real detection rule -- if so, those \
-matches are listed below under "Already detected by a rule" and are NOT your concern. Your job is scoped \
-strictly to the sample events shown to you (all of which have no rule coverage), not a second verdict on \
-the whole file. Do not re-describe or re-assess anything already listed as detected.
+matches are listed below under "Already detected by a rule" and are NOT your concern; statistical \
+anomaly flags (which are not rule detections) are listed separately. Your job is scoped strictly to the \
+sample events shown to you, not a second verdict on the whole file. Do not re-describe or re-assess \
+anything already listed as detected.
 
 Rules you must follow:
 1. Base your opinion ONLY on the sample events and retrieved context below. Do not invent facts, hosts, \
@@ -303,7 +335,8 @@ investigation would need to confirm intent, anything the retrieved context didn'
 reviewing" and "the available telemetry is still insufficient to establish malicious intent" can both be \
 true at once -- this heading exists specifically so both can be said, not just one or the other.
 8. Never use the word "alert", "incident", or "detected" to describe your own output -- you are giving an \
-opinion for a human to weigh, not raising a detection."""
+opinion for a human to weigh, not raising a detection.
+9. """ + UNTRUSTED_EVIDENCE_RULE
 
 UNCOVERED_OPINION_HUMAN_PROMPT = """## File
 {filename}
@@ -311,7 +344,10 @@ UNCOVERED_OPINION_HUMAN_PROMPT = """## File
 ## Already detected by a rule (not your concern -- see system instructions)
 {already_detected}
 
-## Sample events (no loaded rule could evaluate these)
+## Statistical anomaly flags (not rule detections)
+{anomaly_flags}
+
+## Sample events (not explained by any detection rule -- see each `why_sampled`)
 {event_samples}
 
 ## Retrieved knowledge base context
@@ -337,9 +373,11 @@ def format_event_samples(samples: list[dict]) -> str:
         return "(no sample events available)"
     blocks = []
     for i, sample in enumerate(samples, start=1):
-        lines = [f"- {key}: {value}" for key, value in sample.items() if value not in (None, "", [])]
+        lines = [
+            f"- {key}: {_render_value(key, value)}" for key, value in sample.items() if value not in (None, "", [])
+        ]
         blocks.append(f"[{i}]\n" + "\n".join(lines))
-    return "\n\n".join(blocks)
+    return fence("\n\n".join(blocks))
 
 
 def format_already_detected(matched_rule_titles: list[str]) -> str:
@@ -348,16 +386,24 @@ def format_already_detected(matched_rule_titles: list[str]) -> str:
     return "\n".join(f"- {title}" for title in matched_rule_titles)
 
 
+def format_anomaly_flags(anomaly_titles: list[str]) -> str:
+    if not anomaly_titles:
+        return "(none)"
+    return "\n".join(f"- {title}" for title in anomaly_titles)
+
+
 def build_uncovered_opinion_prompt(
     filename: str,
     samples: list[dict],
     chunks: list[dict],
     matched_rule_titles: list[str] | None = None,
+    anomaly_titles: list[str] | None = None,
 ) -> list[BaseMessage]:
     """Render the full system+human message pair ready for llm_client.generate()."""
     return UNCOVERED_OPINION_PROMPT.format_messages(
-        filename=filename,
+        filename=fence(untrusted(filename, 255)),
         already_detected=format_already_detected(matched_rule_titles or []),
+        anomaly_flags=format_anomaly_flags(anomaly_titles or []),
         event_samples=format_event_samples(samples),
         retrieved_context=format_chunks(chunks),
     )
@@ -379,10 +425,7 @@ def extract_assessment_label(response: str) -> str:
     silently treating an unparseable response as "nothing_unusual" could
     hide something the model actually flagged.
     """
-    for heading, label in ASSESSMENT_HEADINGS.items():
-        if heading in response:
-            return label
-    return "uncertain"
+    return extract_strict_heading_label(response, ASSESSMENT_HEADINGS, default="uncertain")
 
 
 RECOMMENDED_STEPS_HEADING = "## Recommended next steps"

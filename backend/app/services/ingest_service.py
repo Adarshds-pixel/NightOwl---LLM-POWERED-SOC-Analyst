@@ -158,6 +158,12 @@ class IngestOutcome:
     channels: list[str] = field(default_factory=list)
     providers: list[str] = field(default_factory=list)
     event_id_breakdown: list[EventIdCoverageGroup] = field(default_factory=list)
+    # ML anomaly layer (app/ml/), kept apart from rule detections on purpose:
+    # an anomaly score is not a rule match, so it never counts toward
+    # rule_matches / matched_rule_titles (which the AI-opinion prompt reads as
+    # "already detected by a rule") -- it has its own count and titles.
+    ml_anomalies: int = 0
+    ml_anomaly_titles: list[str] = field(default_factory=list)
 
 
 def ingest_records(

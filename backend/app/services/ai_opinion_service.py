@@ -27,6 +27,7 @@ from app.models.event import Event
 from app.rag.llm_client import LLMProviderError, generate
 from app.rag.prompts import build_uncovered_opinion_prompt, extract_assessment_label, extract_uncovered_limitations
 from app.rag.retriever import retrieve
+from app.rag.safety import annotate_unknown_technique_ids
 from app.services.ingest_service import UncoveredEventGroup
 
 logger = logging.getLogger(__name__)
@@ -71,13 +72,33 @@ MAX_SAMPLE_EVENTS = 5
 # corresponding instruction not to invent technique IDs in prose either).
 _MITRE_TECHNIQUE_SOURCE_TYPE = "mitre_technique"
 
+# Retrieval score (1 / (1 + L2 distance)) a MITRE chunk must reach before its
+# technique is offered as a structured candidate. Measured on the corpus:
+# genuinely related techniques scored 0.52-0.58, unrelated nearest
+# neighbours 0.42-0.47. Without a floor, the top-3 nearest chunks were
+# returned as "candidates" even when the opinion found nothing unusual.
+MIN_CANDIDATE_SCORE = 0.5
+
+# Why each sampled event is in front of the model -- passed through as the
+# sample's `why_sampled` field so the prompt never mislabels a covered
+# (evaluated but unmatched) event as one "no rule could evaluate".
+REASON_UNCOVERED = "no loaded detection rule covers this channel/event type"
+REASON_NAMED_PIPE = (
+    "a rule covers this event type and did not match, but it fits the named-pipe discovery advisory pattern"
+)
+REASON_SERVICE_INSTALL = (
+    "a rule covers this event type and did not match, but it is a service installation the rule does not judge"
+)
+
+FILENAME_MAX = 500
+
 
 def create_pending_opinion(db: Session, filename: str, sample_event_ids: list[int]) -> AiOpinion:
     """Synchronous insert (fast -- just a row write, not the LLM call) so
     `POST /ingest` can return `ai_opinion_id` immediately; the slow part
     happens in fill_in_opinion(), scheduled as a background task."""
     opinion = AiOpinion(
-        filename=filename,
+        filename=filename if len(filename) <= FILENAME_MAX else filename[: FILENAME_MAX - 1] + "\u2026",
         created_at=datetime.now(timezone.utc),
         status="pending",
         sample_event_ids=sample_event_ids[:MAX_SAMPLE_EVENTS],
@@ -88,7 +109,7 @@ def create_pending_opinion(db: Session, filename: str, sample_event_ids: list[in
     return opinion
 
 
-def _event_summary(event: Event, group_total: int | None) -> dict:
+def _event_summary(event: Event, group_total: int | None, why_sampled: str | None = None) -> dict:
     """The promoted columns (unchanged -- already public via GET /events),
     plus `event_data`: the same flattened Sysmon/Security field dict
     already computed by normalize_event() and already visible to an
@@ -112,6 +133,7 @@ def _event_summary(event: Event, group_total: int | None) -> dict:
         _SYSMON_EVENT_TYPE_LABELS.get(event.event_id) if canonical_channel(event.channel) == "sysmon" else None
     )
     return {
+        "why_sampled": why_sampled,
         "channel": event.channel,
         "event_id": event.event_id,
         # Omitted (not None) for anything outside the known Sysmon set
@@ -133,7 +155,7 @@ def _group_totals(uncovered_breakdown: list[UncoveredEventGroup]) -> dict[tuple[
     return {(g.channel, g.event_id): g.count for g in uncovered_breakdown}
 
 
-def _attack_candidate_ids(chunks: list[dict]) -> list[str]:
+def _attack_candidate_ids(chunks: list[dict], min_score: float = MIN_CANDIDATE_SCORE) -> list[str]:
     """Structured ATT&CK candidates, sourced ONLY from retrieved MITRE KB
     chunk metadata (ai/tools/build_kb.py already attaches a real
     technique_id to every mitre_technique chunk) -- never from the LLM's
@@ -145,6 +167,8 @@ def _attack_candidate_ids(chunks: list[dict]) -> list[str]:
     for chunk in chunks:
         metadata = chunk.get("metadata") or {}
         if metadata.get("source_type") != _MITRE_TECHNIQUE_SOURCE_TYPE:
+            continue
+        if float(chunk.get("score") or 0.0) < min_score:
             continue
         technique_id = metadata.get("technique_id")
         if technique_id and technique_id not in ids:
@@ -196,6 +220,8 @@ def fill_in_opinion(
     sample_event_ids: list[int],
     matched_rule_titles: list[str] | None = None,
     uncovered_breakdown: list[UncoveredEventGroup] | None = None,
+    sample_reasons: dict[int, str] | None = None,
+    anomaly_titles: list[str] | None = None,
 ) -> None:
     db = SessionLocal()
     try:
@@ -209,16 +235,22 @@ def fill_in_opinion(
         ordered_events = [events_by_id[eid] for eid in sample_event_ids if eid in events_by_id]
 
         group_totals = _group_totals(uncovered_breakdown or [])
+        reasons = sample_reasons or {}
         samples = [
-            _event_summary(e, group_totals.get((e.channel, e.event_id)))
+            _event_summary(e, group_totals.get((e.channel, e.event_id)), reasons.get(e.id, REASON_UNCOVERED))
             for e in ordered_events[:MAX_SAMPLE_EVENTS]
         ]
 
         query = _build_retrieval_query(filename, samples)
         chunks = retrieve(query, k=DEFAULT_K)
 
-        reply = generate(build_uncovered_opinion_prompt(filename, samples, chunks, matched_rule_titles))
+        reply = generate(
+            build_uncovered_opinion_prompt(filename, samples, chunks, matched_rule_titles, anomaly_titles)
+        )
         label = extract_assessment_label(reply)
+        reply, unknown_ids = annotate_unknown_technique_ids(reply)
+        if unknown_ids:
+            logger.warning("ai_opinion %d: model cited unknown technique id(s) %s", opinion_id, unknown_ids)
         limitations = extract_uncovered_limitations(reply)
 
         opinion = db.get(AiOpinion, opinion_id)
@@ -229,13 +261,16 @@ def fill_in_opinion(
         opinion.assessment_label = label
         opinion.summary = reply
         opinion.limitations = limitations or None
-        opinion.attack_candidate_ids = _attack_candidate_ids(chunks)
+        # No candidates for a "nothing unusual" verdict: offering techniques
+        # next to "nothing stands out" reads as an accusation the opinion
+        # itself does not make.
+        opinion.attack_candidate_ids = [] if label == "nothing_unusual" else _attack_candidate_ids(chunks)
         db.commit()
     except LLMProviderError as e:
         logger.warning("ai_opinion %d: LLM call failed: %s", opinion_id, e)
         _mark_failed(db, opinion_id, str(e))
     except Exception as e:  # noqa: BLE001 -- a background task must never raise into the void unlogged
         logger.exception("ai_opinion %d: unexpected failure", opinion_id)
-        _mark_failed(db, opinion_id, str(e))
+        _mark_failed(db, opinion_id, f"internal error while generating the opinion ({type(e).__name__})")
     finally:
         db.close()
