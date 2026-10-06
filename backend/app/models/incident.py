@@ -30,6 +30,12 @@ class Incident(Base):
     # (Day 9) -- stored directly here rather than derived by joining
     # through alerts->events on every grouping lookup.
     host: Mapped[str] = mapped_column(String(255))
+    # Timestamp of the newest alert merged in. The grouping window slides
+    # with it (incident_service.find_or_create_incident), so one long attack
+    # stays one incident instead of splitting 60 minutes after its first
+    # alert. Nullable only for rows created before the column existed;
+    # readers fall back to created_at.
+    last_activity_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # incident_service.find_or_create_incident() runs one SELECT per rule/
     # sequence match during ingest, filtered on exactly these 3 columns

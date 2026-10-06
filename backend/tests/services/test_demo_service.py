@@ -50,6 +50,7 @@ def test_reset_empties_every_operational_table(api_client):
         deleted = reset_demo_data(db)
 
         assert deleted == {
+            "ai_opinions": 0,
             "chat_messages": 1,
             "audit_log": 1,
             "alerts": 1,

@@ -41,10 +41,10 @@ services:
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     volumes:
       # Named volumes (owned by the image's non-root user) so the knowledge
-      # base, the ATT&CK dataset and the embedding-model download persist
-      # across restarts and rebuilds instead of being re-fetched.
+      # base and the embedding-model download persist across restarts and
+      # rebuilds instead of being re-fetched. The ATT&CK index ships inside
+      # the image (backend/app/mitre/data).
       - kb_store:/app/ai/vector_store
-      - mitre_data:/app/ai/mitre
       - model_cache:/home/appuser/.cache
     ports:
       - "8000:8000"
@@ -67,5 +67,4 @@ services:
 volumes:
   postgres_data:
   kb_store:
-  mitre_data:
   model_cache:

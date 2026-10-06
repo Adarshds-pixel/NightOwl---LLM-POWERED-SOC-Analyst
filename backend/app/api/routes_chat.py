@@ -18,8 +18,8 @@ question skips retrieval + the LLM call, and records an audit log event
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -30,7 +30,7 @@ from app.rag import cache
 from app.rag.chat_service import generate_chat_reply
 from app.services import audit_service
 from app.services.chat_service import add_message, list_messages
-from app.services.incident_service import build_incident_evidence
+from app.services.incident_service import build_incident_evidence, incident_cache_key
 
 router = APIRouter()
 
@@ -42,8 +42,13 @@ class SourceChunk(BaseModel):
     score: float
 
 
+# Bounds prompt size (and therefore cost/latency) per turn; generous for a
+# real analyst question, far below anything that would blow the model context.
+MAX_CHAT_MESSAGE_CHARS = 4000
+
+
 class ChatMessageRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=MAX_CHAT_MESSAGE_CHARS)
 
 
 class ChatMessageResponse(BaseModel):
@@ -74,18 +79,23 @@ def chat_with_incident(
     if incident is None:
         raise not_found("incident", incident_id)
 
-    # Snapshot prior turns before persisting the new one, so it doesn't leak
-    # into its own conversation-history context.
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="message must not be blank")
+
     history = [{"role": m.role, "content": m.content} for m in list_messages(db, incident_id)]
 
-    add_message(db, incident_id, role="user", content=payload.message)
-
-    result = cache.get_chat_reply(incident_id, payload.message, history) if settings.response_cache_enabled else None
+    # The reply is generated BEFORE either turn is stored. Storing the
+    # question first meant an LLM failure (503) left an unanswered user turn
+    # in the history, which was then fed into every later prompt.
+    cache_key = incident_cache_key(db, incident)
+    result = cache.get_chat_reply(cache_key, message, history) if settings.response_cache_enabled else None
     if result is None:
-        result = generate_chat_reply(build_incident_evidence(db, incident), history, payload.message)
+        result = generate_chat_reply(build_incident_evidence(db, incident), history, message)
         if settings.response_cache_enabled:
-            cache.set_chat_reply(incident_id, payload.message, history, result)
+            cache.set_chat_reply(cache_key, message, history, result)
 
+    add_message(db, incident_id, role="user", content=message)
     reply = add_message(db, incident_id, role="assistant", content=result.reply)
 
     audit_service.record_event(db, entity_type="incident", entity_id=incident_id, action="chat")

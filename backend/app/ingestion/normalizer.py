@@ -14,8 +14,9 @@ can't be built (missing/malformed System block, EventID, or TimeCreated) --
 never for an unrecognized-but-well-formed event ID.
 """
 
+import json
 from collections.abc import Callable, Iterable, Iterator
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.schemas.event import NormalizedEvent
 
@@ -43,7 +44,9 @@ def _extract_host(system: dict) -> str:
     # channels: the benign corpus contains 876 windows under `Server002`
     # and 1 under `SERVER002`, which split one machine into two hosts for
     # incident grouping, per-host filtering, and ML windowing alike.
-    return host.strip().upper()
+    # Clipped to the events.host column width here, not at insert time, so
+    # the dedup key and incident grouping see the same value that is stored.
+    return host.strip().upper()[:255]
 
 
 def _extract_channel(system: dict) -> str | None:
@@ -51,7 +54,7 @@ def _extract_channel(system: dict) -> str | None:
     scoping/coverage honesty, not required to build a valid Event row, so
     its absence must never fail an otherwise-good record."""
     channel = system.get("Channel")
-    return channel if isinstance(channel, str) and channel else None
+    return channel.strip()[:255] if isinstance(channel, str) and channel.strip() else None
 
 
 def _extract_event_record_id(system: dict) -> int | None:
@@ -113,22 +116,32 @@ def _extract_event_record_id(system: dict) -> int | None:
 # engine.py, this module's own per-channel dispatch, event_service.py's
 # SQL-level coverage filter) must derive from this one table rather than
 # re-hardcoding a channel string comparison independently.
-CHANNEL_TOKEN_SUBSTRINGS: dict[str, str] = {
-    "sysmon": "sysmon",
-    "security": "security",
-    "powershell": "powershell",
-    "system": "system",
-    "bits": "bits",
-    "application": "application",
+#
+# Matching is by exact name or exact log-path prefix, never by substring:
+# substring matching classified e.g. "Microsoft-Windows-Security-Mitigations/
+# KernelMode" and "Microsoft-Windows-Windows Firewall With Advanced Security/
+# Firewall" as the Security log, so Security-only rules evaluated their
+# unrelated event ids. Bare tokens ("sysmon", "security", ...) are accepted as
+# exact names because rule `logsource.service` values use them.
+CHANNEL_PATTERNS: dict[str, tuple[frozenset[str], tuple[str, ...]]] = {
+    "sysmon": (frozenset({"sysmon"}), ("microsoft-windows-sysmon/",)),
+    "security": (frozenset({"security"}), ()),
+    "powershell": (
+        frozenset({"powershell", "windows powershell"}),
+        ("microsoft-windows-powershell/",),
+    ),
+    "system": (frozenset({"system"}), ()),
+    "bits": (frozenset({"bits"}), ("microsoft-windows-bits-client/",)),
+    "application": (frozenset({"application"}), ()),
 }
 
 
 def canonical_channel(raw_channel: str | None) -> str | None:
     if not raw_channel:
         return None
-    lowered = raw_channel.lower()
-    for token, substring in CHANNEL_TOKEN_SUBSTRINGS.items():
-        if substring in lowered:
+    lowered = raw_channel.strip().lower()
+    for token, (exact_names, prefixes) in CHANNEL_PATTERNS.items():
+        if lowered in exact_names or lowered.startswith(prefixes):
             return token
     return None
 
@@ -153,9 +166,21 @@ def _extract_timestamp(system: dict) -> datetime:
     if not isinstance(raw_ts, str) or not raw_ts:
         raise EventNormalizationError("record missing 'System.TimeCreated.@SystemTime'")
     try:
-        return datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw_ts.strip().replace("Z", "+00:00"))
     except ValueError as e:
         raise EventNormalizationError(f"unparseable TimeCreated: {raw_ts!r}") from e
+    # Windows' SystemTime is UTC. A value without an offset is still UTC --
+    # leaving it naive made the ingest sort compare naive against aware
+    # datetimes (TypeError -> the whole upload 500'd) and let Postgres read
+    # it as server-local time.
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    # A zeroed or corrupt FILETIME renders as 1601-01-01 (or year 1); no real
+    # Windows event predates 1990, and keeping one would anchor incident
+    # grouping and every "dataset time" chart to the year 1601.
+    if parsed.year < 1990:
+        raise EventNormalizationError(f"implausible TimeCreated (zeroed/corrupt FILETIME): {raw_ts!r}")
+    return parsed
 
 
 # Synthetic key for legacy classic-EVT EventData: a manifest-free provider
@@ -221,10 +246,28 @@ def _data_dict(event_data: dict | None) -> dict[str, str | None]:
         name = item.get("@Name")
         if name is None:
             continue
-        result[name] = item.get("#text")
+        result[str(name)] = _as_text(item.get("#text", _nested_value(item)))
     if unnamed_values:
         result[_UNNAMED_DATA_KEY] = "\n".join(unnamed_values)
     return result
+
+
+def _nested_value(item: dict):
+    """A `<Data>` element with child elements parses to a dict whose payload
+    is not under "#text"; keep the children rather than losing them."""
+    children = {k: v for k, v in item.items() if k not in ("@Name", "#text")}
+    return children or None
+
+
+def _as_text(value) -> str | None:
+    """EventData values must be strings for NormalizedEvent; a nested element
+    used to surface as a dict and fail pydantic validation -- an error the
+    ingest path did not catch, so one odd record 500'd the whole upload."""
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
 
 
 def _to_int(value: str | None) -> int | None:
@@ -243,6 +286,13 @@ def _normalize_process_creation(data: dict[str, str | None]) -> dict:
         "command_line": data.get("CommandLine"),
         "user": data.get("User"),
     }
+
+
+def _normalize_security_process_creation(data: dict[str, str | None]) -> dict:
+    """4688 v2 (Windows 10 / Server 2016+) carries ParentProcessName, already
+    aliased to ParentImage; older captures have only the creator PID, so
+    parent_process stays None there rather than being guessed."""
+    return _normalize_process_creation(data)
 
 
 def _normalize_network_connection(data: dict[str, str | None]) -> dict:
@@ -310,12 +360,10 @@ _SYSMON_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]] = 
 #     confirmed. Harmless either way: if the premise is simply wrong, nothing
 #     fires; if some other real 4688 capture genuinely does use that name,
 #     this is ready for it.
-#   - "ParentProcessName" -> "ParentImage": NOT PRESENT in the sample at
-#     all, and not part of the standard 4688 field set Microsoft documents
-#     -- a bare 4688 only carries the *creator's* `ProcessId` (a PID, not a
-#     resolved name), never a parent process name/path. Kept rather than
-#     removed since it's harmless dead weight (same reasoning as above),
-#     but do not treat this as a validated mapping.
+#   - "ParentProcessName" -> "ParentImage": not present in that (older,
+#     version 0/1) sample, but part of the 4688 version 2 schema shipped
+#     since Windows 10 / Server 2016, where it carries the parent's full
+#     path. Older captures simply lack it and parent_process stays None.
 _SECURITY_FIELD_ALIASES: dict[str, str] = {
     "NewProcessName": "Image",
     "ParentProcessName": "ParentImage",
@@ -336,7 +384,7 @@ _SECURITY_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]] 
     # 4688 (process creation): reuses the Sysmon extractor verbatim -- the
     # aliasing above has already renamed the Security fields onto the
     # Image/CommandLine/User vocabulary it reads.
-    4688: _normalize_process_creation,
+    4688: _normalize_security_process_creation,
 }
 
 # PowerShell/Operational channel -- Event ID 4104 ("Execute a Remote
@@ -358,8 +406,15 @@ _POWERSHELL_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]
 # awareness existed at all, so it's the correct default for anything not
 # explicitly Security/PowerShell, matching every existing real fixture.
 _CHANNEL_DISPATCH_TABLES: dict[str | None, dict[int, Callable[[dict[str, str | None]], dict]]] = {
+    "sysmon": _SYSMON_EVENT_ID_DISPATCH,
     "security": _SECURITY_EVENT_ID_DISPATCH,
     "powershell": _POWERSHELL_EVENT_ID_DISPATCH,
+    # System / Bits / Application share event ids with Sysmon (e.g. System
+    # EID 1 is a kernel time change) but none of Sysmon's field semantics, so
+    # they get no extractor -- their EventData still reaches event_data.
+    "system": {},
+    "bits": {},
+    "application": {},
 }
 
 
@@ -378,10 +433,12 @@ def normalize_event(record: dict) -> NormalizedEvent:
     event_record_id = _extract_event_record_id(system)
 
     data = _data_dict(event.get("EventData"))
-    if event_id == 2:
+    token = canonical_channel(channel)
+    # Sysmon EID 2 is "file creation time changed"; the same number on any
+    # other channel means something else entirely.
+    if event_id == 2 and token in ("sysmon", None):
         data = _flag_timestomp(data)
 
-    token = canonical_channel(channel)
     if token == "security":
         data = _apply_security_aliases(data)
     dispatch = _CHANNEL_DISPATCH_TABLES.get(token, _SYSMON_EVENT_ID_DISPATCH)

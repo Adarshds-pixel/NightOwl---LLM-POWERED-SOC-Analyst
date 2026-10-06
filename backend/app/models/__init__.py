@@ -8,6 +8,5 @@ from app.models.audit_log import AuditLog
 from app.models.chat_message import ChatMessage
 from app.models.event import Event
 from app.models.incident import Incident
-from app.models.rule import Rule
 
-__all__ = ["AdminSession", "AiOpinion", "Alert", "AuditLog", "ChatMessage", "Event", "Incident", "Rule"]
+__all__ = ["AdminSession", "AiOpinion", "Alert", "AuditLog", "ChatMessage", "Event", "Incident"]

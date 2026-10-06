@@ -93,11 +93,9 @@ def _cache_key(messages: list[BaseMessage]) -> str:
 def _extract_text(content) -> str:
     """Normalize an AIMessage's `content` into plain text.
 
-    Current langchain-google-genai returns `content` as a list of content
-    blocks (e.g. [{"type": "text", "text": ..., "extras": {...}}]) rather
-    than a plain string -- confirmed via a real Gemini call during manual
-    verification. Concatenate just the text blocks; a plain string response
-    passes through unchanged.
+    LangChain chat models may return `content` either as a plain string or as
+    a list of content blocks ([{"type": "text", "text": ...}, ...]);
+    concatenate just the text blocks.
     """
     if isinstance(content, str):
         return content
@@ -140,6 +138,41 @@ def get_llm_client() -> ChatGroq:
     return _client
 
 
+def _status_code(exc: Exception) -> int | None:
+    for attr in ("status_code", "status"):
+        value = getattr(exc, attr, None)
+        if isinstance(value, int):
+            return value
+    response = getattr(exc, "response", None)
+    value = getattr(response, "status_code", None)
+    return value if isinstance(value, int) else None
+
+
+def _public_reason(exc: Exception) -> str:
+    """What the API tells the client. The provider's raw exception text (which
+    can include request ids, account details or upstream URLs) is logged, not
+    returned."""
+    status = _status_code(exc)
+    name = type(exc).__name__.lower()
+    if status == 429 or "ratelimit" in name:
+        return "the AI provider's rate limit was reached -- try again in a minute"
+    if status in (401, 403) or "authentication" in name or "permission" in name:
+        return "the AI provider rejected the configured API key"
+    if "timeout" in name:
+        return "the AI provider did not respond in time"
+    if isinstance(exc, LLMProviderError):
+        return str(exc)
+    return "the AI provider is unavailable right now"
+
+
+def _is_retryable(exc: Exception) -> bool:
+    # A 4xx (bad key, quota exhausted, bad request) will fail identically on
+    # retry and a retry spends more of a free-tier quota; only transient
+    # failures (timeouts, 5xx, connection errors, empty replies) are retried.
+    status = _status_code(exc)
+    return status is None or status >= 500
+
+
 def _generate_raw(messages: list[BaseMessage]) -> tuple[object, str]:
     """Send `messages` to the LLM, retrying once on transient failure.
     Returns the raw provider response alongside the extracted text, so
@@ -157,11 +190,13 @@ def _generate_raw(messages: list[BaseMessage]) -> tuple[object, str]:
             return response, text
         except Exception as exc:  # noqa: BLE001 -- deliberately broad: SDK can raise many types
             last_error = exc
-            logger.warning("LLM call failed (attempt %d/%d): %s", attempt, _MAX_ATTEMPTS, exc)
-            if attempt < _MAX_ATTEMPTS:
+            logger.warning("LLM call failed (attempt %d/%d): %r", attempt, _MAX_ATTEMPTS, exc)
+            if attempt < _MAX_ATTEMPTS and _is_retryable(exc):
                 time.sleep(_RETRY_DELAY_SECONDS)
+                continue
+            break
 
-    raise LLMProviderError(f"LLM call failed after {_MAX_ATTEMPTS} attempts: {last_error}") from last_error
+    raise LLMProviderError(f"AI request failed: {_public_reason(last_error)}") from last_error
 
 
 def generate(messages: list[BaseMessage]) -> str:

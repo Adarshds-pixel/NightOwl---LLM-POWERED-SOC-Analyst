@@ -52,6 +52,6 @@ def list_events(db: Session, entity_type: str, entity_id: int) -> list[AuditLog]
         select(AuditLog)
         .where(AuditLog.entity_type == entity_type)
         .where(AuditLog.entity_id == entity_id)
-        .order_by(AuditLog.created_at)
+        .order_by(AuditLog.created_at, AuditLog.id)
     )
     return list(db.scalars(stmt))

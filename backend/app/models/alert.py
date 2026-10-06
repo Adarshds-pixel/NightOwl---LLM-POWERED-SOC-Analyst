@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -31,4 +31,13 @@ class Alert(Base):
     # Nullable: grouping into an incident happens right after the alert is
     # created (Day 9), but the FK is optional at the schema level so an
     # alert is never blocked from being persisted by grouping failing.
-    incident_id: Mapped[int | None] = mapped_column(ForeignKey("incidents.id"), nullable=True)
+    incident_id: Mapped[int | None] = mapped_column(ForeignKey("incidents.id"), nullable=True, index=True)
+    # Identical repeat matches (same rule + host + process + command line
+    # within ALERT_DEDUP_WINDOW, see ingest_service) fold into this one row:
+    # how many times it fired, and when it last did.
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    last_matched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Structured evidence that is not a rule match on one event -- the ML
+    # anomaly layer stores its score, window bounds and top contributing
+    # features here (app/ml/). None for ordinary rule alerts.
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)

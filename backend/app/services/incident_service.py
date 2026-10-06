@@ -14,7 +14,7 @@ joined to their originating event, for the detail view).
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -33,6 +33,13 @@ logger = logging.getLogger(__name__)
 
 GROUPING_WINDOW = timedelta(hours=1)
 
+# An analyst moving an incident to "investigating" must not make the next
+# related alert spawn a parallel incident; only resolved/closed incidents
+# stop absorbing new activity.
+ACTIVE_STATUSES = ("open", "investigating")
+
+INCIDENT_TITLE_MAX = 500
+
 # Evidence-first alerts (pending.md item 5): a narrow window around an
 # alert's own event, not the full 1h GROUPING_WINDOW incidents are grouped
 # on -- "what else happened right around this" is investigative context,
@@ -41,43 +48,99 @@ RELATED_EVENTS_WINDOW = timedelta(minutes=5)
 RELATED_EVENTS_LIMIT = 5
 
 
-def find_or_create_incident(db: Session, host: str, matched_at: datetime, match: RuleMatch) -> Incident:
-    """Finds the most recent open incident for `host` whose `created_at` is
-    within GROUPING_WINDOW of `matched_at` and merges this match into it
-    (technique id added to `mitre_technique_ids` if new, severity bumped to
-    whichever is higher); otherwise creates a new incident. Does not commit
-    -- caller controls the transaction boundary (same pattern as
-    event_service.create_event/detection_service.create_alert).
+def _incident_title(match: RuleMatch, host: str) -> str:
+    title = f"{match.title} on {host}"
+    return title if len(title) <= INCIDENT_TITLE_MAX else title[: INCIDENT_TITLE_MAX - 1] + "\u2026"
+
+
+def _as_aware(value: datetime) -> datetime:
+    # SQLite (tests) hands timezone-aware columns back naive; stored values are UTC.
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def find_or_create_incident(
+    db: Session, host: str, matched_at: datetime, match: RuleMatch, *, advisory: bool = False
+) -> Incident:
+    """Merges this match into the active incident for `host` whose activity
+    span [created_at, last_activity_at] lies within GROUPING_WINDOW of
+    `matched_at`, or creates a new incident. Does not commit -- the caller
+    controls the transaction boundary.
+
+    The window slides with the incident's latest alert (last_activity_at), so
+    one attack lasting longer than an hour stays one incident, and an
+    earlier-timestamped match (an older file uploaded later) extends
+    created_at backwards instead of landing in a different incident.
+
+    On merge: technique id added if new; severity raised to the higher of the
+    two; and when the new match is the most severe so far, the title follows
+    it, so an incident never stays titled after a low-severity first alert
+    while holding a critical one.
+
+    `advisory=True` (the ML anomaly layer) attaches to an existing incident
+    without changing its title, severity or techniques, and only creates a
+    new incident when nothing else covers that host and time.
     """
+    last_activity = func.coalesce(Incident.last_activity_at, Incident.created_at)
     existing = db.scalars(
         select(Incident)
         .where(Incident.host == host)
-        .where(Incident.status == "open")
-        .where(Incident.created_at >= matched_at - GROUPING_WINDOW)
+        .where(Incident.status.in_(ACTIVE_STATUSES))
         .where(Incident.created_at <= matched_at + GROUPING_WINDOW)
-        .order_by(Incident.created_at.desc())
+        .where(last_activity >= matched_at - GROUPING_WINDOW)
+        .order_by(last_activity.desc(), Incident.id.desc())
     ).first()
 
     if existing is not None:
+        created = _as_aware(existing.created_at)
+        last = _as_aware(existing.last_activity_at or existing.created_at)
+        stamp = _as_aware(matched_at)
+        if stamp < created:
+            existing.created_at = matched_at
+        if stamp > last:
+            existing.last_activity_at = matched_at
+        elif existing.last_activity_at is None:
+            existing.last_activity_at = existing.created_at
+        if advisory:
+            return existing
         if match.technique_id and match.technique_id not in existing.mitre_technique_ids:
             existing.mitre_technique_ids = [*existing.mitre_technique_ids, match.technique_id]
+        if match.score > existing.severity_score:
+            existing.title = _incident_title(match, host)
         existing.severity = severity_service.higher_severity(existing.severity, match.level)
         existing.severity_score = max(existing.severity_score, match.score)
         return existing
 
     incident = Incident(
-        title=f"{match.title} on {host}",
+        title=_incident_title(match, host),
         status="open",
         severity=match.level,
         severity_score=match.score,
         mitre_technique_ids=[match.technique_id] if match.technique_id else [],
         created_at=matched_at,
+        last_activity_at=matched_at,
         host=host,
     )
     db.add(incident)
     db.flush()  # assign incident.id without committing the whole transaction yet
     logger.info("created incident %d for host %s", incident.id, host)
     return incident
+
+
+def incident_cache_key(db: Session, incident: Incident) -> tuple[int, str]:
+    """Key for cached explain/chat results: the incident id PLUS a
+    fingerprint of the evidence they were generated from.
+
+    Keyed on the id alone, a cached explanation survived new alerts merging
+    into the incident (it described evidence that was no longer complete),
+    and after a demo reset -- which restarts id sequences -- a brand-new
+    incident #1 was served the previous run's incident #1 text.
+    """
+    alert_count, last_alert_id = db.execute(
+        select(func.count(Alert.id), func.max(Alert.id)).where(Alert.incident_id == incident.id)
+    ).one()
+    created = incident.created_at.isoformat() if incident.created_at else ""
+    fingerprint = f"{incident.host}|{created}|{incident.title}|{incident.severity}|{alert_count}|{last_alert_id}"
+    return incident.id, fingerprint
 
 
 def _filtered_incidents_stmt(
@@ -124,7 +187,11 @@ def list_incidents(
     callers) returns every match, unpaginated; the route always passes an
     explicit limit.
     """
-    stmt = _filtered_incidents_stmt(severity, status, start_date, end_date, q).order_by(Incident.created_at.desc())
+    # id as the tiebreaker: incidents can share created_at, and without a
+    # total order Postgres may return different rows per page.
+    stmt = _filtered_incidents_stmt(severity, status, start_date, end_date, q).order_by(
+        Incident.created_at.desc(), Incident.id.desc()
+    )
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
     return list(db.scalars(stmt))
@@ -155,7 +222,7 @@ def get_incident_alerts_with_events(db: Session, incident_id: int) -> list[tuple
         select(Alert, Event)
         .join(Event, Alert.event_id == Event.id)
         .where(Alert.incident_id == incident_id)
-        .order_by(Alert.matched_at)
+        .order_by(Alert.matched_at, Alert.id)
     )
     return [(alert, event) for alert, event in db.execute(stmt)]
 
@@ -168,14 +235,35 @@ def get_related_events(db: Session, host: str, around: datetime, exclude_event_i
     event_service.list_events() (the same query GET /events runs) rather
     than a new query shape, per this item's "no new subsystem" scope.
     """
-    window_start = around - RELATED_EVENTS_WINDOW
-    window_end = around + RELATED_EVENTS_WINDOW
-    # +1 so excluding the alert's own event (almost always inside the
-    # window) still leaves up to RELATED_EVENTS_LIMIT real neighbors.
-    candidates = event_service.list_events(
-        db, host=host, start_date=window_start, end_date=window_end, limit=RELATED_EVENTS_LIMIT + 1
+    # The nearest neighbours on BOTH sides of the alert. Taking the newest N
+    # in the +/-5 min window (the previous behaviour) systematically dropped
+    # the events just before the alert -- usually the ones that caused it.
+    before = list(
+        db.scalars(
+            select(Event)
+            .where(Event.host == host, Event.id != exclude_event_id)
+            .where(Event.timestamp >= around - RELATED_EVENTS_WINDOW, Event.timestamp <= around)
+            .order_by(Event.timestamp.desc(), Event.id.desc())
+            .limit(RELATED_EVENTS_LIMIT)
+        )
     )
-    return [event for event in candidates if event.id != exclude_event_id][:RELATED_EVENTS_LIMIT]
+    after = list(
+        db.scalars(
+            select(Event)
+            .where(Event.host == host, Event.id != exclude_event_id)
+            .where(Event.timestamp > around, Event.timestamp <= around + RELATED_EVENTS_WINDOW)
+            .order_by(Event.timestamp.asc(), Event.id.asc())
+            .limit(RELATED_EVENTS_LIMIT)
+        )
+    )
+
+    def _distance(event: Event) -> float:
+        stamp = event.timestamp if event.timestamp.tzinfo else event.timestamp.replace(tzinfo=timezone.utc)
+        anchor = around if around.tzinfo else around.replace(tzinfo=timezone.utc)
+        return abs((stamp - anchor).total_seconds())
+
+    nearest = sorted(before + after, key=lambda e: (_distance(e), e.id))[:RELATED_EVENTS_LIMIT]
+    return sorted(nearest, key=lambda e: (e.timestamp, e.id))
 
 
 def build_incident_evidence(db: Session, incident: Incident) -> dict:

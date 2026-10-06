@@ -41,17 +41,24 @@ def create_alert(
     return alert
 
 
-def save_alerts(db: Session, alert_data: list[tuple[int, RuleMatch, datetime, int | None]]) -> list[Alert]:
-    """Builds and persists a batch of alerts in a single commit. Each item
-    is (event_id, match, matched_at, incident_id) -- mirrors save_events'
-    shape of taking raw inputs and building the rows internally.
+def save_alerts(db: Session, alert_data: list[tuple]) -> list[Alert]:
+    """Builds and persists a batch of alerts (flush, no commit). Each item is
+    (event_id, match, matched_at, incident_id) or, with extra columns,
+    (event_id, match, matched_at, incident_id, extras) where `extras` sets any
+    of occurrence_count / last_matched_at / details on the row.
     """
     if not alert_data:
         return []
-    rows = [
-        create_alert(db, event_id, match, matched_at, incident_id)
-        for event_id, match, matched_at, incident_id in alert_data
-    ]
+    rows = []
+    for item in alert_data:
+        event_id, match, matched_at, incident_id = item[:4]
+        alert = create_alert(db, event_id, match, matched_at, incident_id)
+        extras = item[4] if len(item) > 4 else None
+        if extras:
+            for key in ("occurrence_count", "last_matched_at", "details"):
+                if key in extras:
+                    setattr(alert, key, extras[key])
+        rows.append(alert)
     db.flush()
     logger.info("persisted %d alerts", len(rows))
     return rows

@@ -11,7 +11,7 @@ def test_reset_when_idle_returns_deleted_counts(api_client):
     response = client.post("/demo/reset")
     assert response.status_code == 200
     body = response.json()
-    assert set(body["deleted"]) == {"chat_messages", "audit_log", "alerts", "incidents", "events"}
+    assert set(body["deleted"]) == {"ai_opinions", "chat_messages", "audit_log", "alerts", "incidents", "events"}
     assert all(count == 0 for count in body["deleted"].values())
 
 

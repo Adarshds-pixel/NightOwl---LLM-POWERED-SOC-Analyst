@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from app.db.base import Base
 from app.core.auth import CSRF_HEADER
 from app.main import app
-from app.models import Alert, ChatMessage, Event, Incident, Rule  # noqa: F401
+from app.models import Alert, ChatMessage, Event, Incident  # noqa: F401
 
 client = TestClient(app, headers={CSRF_HEADER: "1"})
 
@@ -23,7 +23,7 @@ def test_health_check():
 
 
 def test_models_register_expected_tables():
-    expected = {"events", "alerts", "incidents", "rules", "chat_messages"}
+    expected = {"events", "alerts", "incidents", "chat_messages", "admin_sessions", "ai_opinions", "audit_log"}
     assert expected.issubset(Base.metadata.tables.keys())
 
 
@@ -37,4 +37,4 @@ def test_models_create_all_against_sqlite():
                 "SELECT name FROM sqlite_master WHERE type='table'"
             )
         }
-    assert {"events", "alerts", "incidents", "rules", "chat_messages"}.issubset(table_names)
+    assert {"events", "alerts", "incidents", "chat_messages", "admin_sessions", "ai_opinions", "audit_log"}.issubset(table_names)

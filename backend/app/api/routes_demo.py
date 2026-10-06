@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
+from app.rag import cache as response_cache
 from app.services import audit_service, demo_service
 
 router = APIRouter()
@@ -53,6 +54,9 @@ class DemoResetResponse(BaseModel):
 @router.post("/demo/reset", response_model=DemoResetResponse)
 def reset_demo(db: Session = Depends(get_db)) -> DemoResetResponse:
     deleted = demo_service.reset_demo_data(db)
+    # Ids restart at 1 after a reset; cached explanations for the previous
+    # run's incident #1 must not be served for the new one.
+    response_cache.clear()
     # Recorded after the delete commits, not before -- audit_log is one of
     # the tables being wiped, so a pre-reset entry would just be erased by
     # its own reset.

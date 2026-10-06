@@ -4,7 +4,11 @@ Day 4. Network-dependent (loads the sentence-transformers model) and
 requires data/chroma to already be populated by scripts/build_kb.py.
 """
 
+import pytest
+
 from app.rag.retriever import retrieve
+
+pytestmark = pytest.mark.integration
 
 
 def test_retrieve_returns_k_results_ranked_by_score():

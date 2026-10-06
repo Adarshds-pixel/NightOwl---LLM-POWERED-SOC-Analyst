@@ -48,6 +48,7 @@ from app.services.incident_service import (
     count_incidents,
     get_incident_alerts_with_events,
     get_related_events,
+    incident_cache_key,
     list_incidents,
 )
 
@@ -188,11 +189,12 @@ def explain_incident(incident_id: int, db: Session = Depends(get_db)) -> Explain
     if incident is None:
         raise not_found("incident", incident_id)
 
-    result = cache.get_explanation(incident_id) if settings.response_cache_enabled else None
+    cache_key = incident_cache_key(db, incident)
+    result = cache.get_explanation(cache_key) if settings.response_cache_enabled else None
     if result is None:
         result = generate_explanation(build_incident_evidence(db, incident))
         if settings.response_cache_enabled:
-            cache.set_explanation(incident_id, result)
+            cache.set_explanation(cache_key, result)
 
     audit_service.record_event(db, entity_type="incident", entity_id=incident_id, action="explain")
 
@@ -312,6 +314,9 @@ def _resolve_techniques(technique_ids: list[str]) -> list[TechniqueInfo]:
     return techniques
 
 
+RELATED_CONTEXT_ALERT_LIMIT = 25
+
+
 @router.get("/incidents/{incident_id}", response_model=IncidentDetailResponse)
 def get_incident_detail(incident_id: int, db: Session = Depends(get_db)) -> IncidentDetailResponse:
     incident = db.get(Incident, incident_id)
@@ -323,9 +328,15 @@ def get_incident_detail(incident_id: int, db: Session = Depends(get_db)) -> Inci
     # ids too, or every such alert would show as "Unknown rule".
     rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | NON_YAML_RULES
     alerts = []
-    for alert, event in get_incident_alerts_with_events(db, incident_id):
+    for index, (alert, event) in enumerate(get_incident_alerts_with_events(db, incident_id)):
         rule = rules_by_id.get(alert.rule_id)
-        related = get_related_events(db, host=event.host, around=event.timestamp, exclude_event_id=event.id)
+        # Related-event context is one query per alert; bounded so a
+        # 200-alert incident does not cost 200+ queries per page view.
+        related = (
+            get_related_events(db, host=event.host, around=event.timestamp, exclude_event_id=event.id)
+            if index < RELATED_CONTEXT_ALERT_LIMIT
+            else []
+        )
         alerts.append(
             AlertInfo(
                 id=alert.id,

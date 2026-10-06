@@ -24,9 +24,10 @@ means those tests still patch the thing that actually runs.
 import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Iterable
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.detection.engine import RuleMatch, covered_event_ids, evaluate_event
@@ -55,6 +56,41 @@ MAX_UNCOVERED_SAMPLE = 25
 # of named-pipe connects per file), so this is a safety bound, not a limit
 # expected to bind on real data.
 MAX_ADVISORY_SAMPLE = 10
+
+# Identical repeat matches -- same rule, host, acting process and target --
+# within this window of the previous one fold into one alert with an
+# occurrence count. One capture used to produce 83 identical "Remote Thread
+# Creation" alerts, which buries everything else in the queue.
+ALERT_DEDUP_WINDOW = timedelta(seconds=60)
+
+
+def _alert_dedup_key(rule_id: str, event) -> tuple:
+    data = event.event_data or {}
+    actor = event.process or data.get("SourceImage") or data.get("Image")
+    target = (
+        data.get("TargetImage")
+        or data.get("TargetFilename")
+        or data.get("TargetObject")
+        or data.get("TargetUserName")
+        or event.command_line
+    )
+    return (rule_id, event.host, (actor or "").lower(), (target or "").lower())
+
+
+def _lock_hosts(db: Session, hosts: set[str]) -> None:
+    """Serialise concurrent ingests that touch the same host (Postgres only).
+
+    Without this, two uploads of the same file running at once both pass the
+    duplicate-event check before either commits, storing every event twice,
+    and both can create a new incident for the same host and hour. The lock
+    is transaction-scoped: released by the caller's commit/rollback. Taken in
+    sorted order so two multi-host uploads cannot deadlock.
+    """
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return
+    for host in sorted(hosts):
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:host))"), {"host": host})
 
 
 @dataclass(frozen=True)
@@ -195,6 +231,8 @@ def ingest_records(
 
         normalized_events.append(normalized)
 
+    _lock_hosts(db, {e.host for e in normalized_events})
+
     # Duplicate detection (the same EVTX file, or a re-export overlapping
     # an earlier one, uploaded twice): skip re-inserting any event whose
     # (host, channel, event_record_id) already exists, so a repeat upload
@@ -224,7 +262,9 @@ def ingest_records(
 
     matched_titles: list[str] = []
     rule_matches = 0
-    alert_data = []
+    alert_data: list[tuple] = []
+    # dedup key -> (index into alert_data, timestamp of the latest fold-in)
+    open_alerts: dict[tuple, tuple[int, datetime]] = {}
     incident_ids: list[int] = []
     covered_pairs = covered_event_ids(rules)
     covered_count = 0
@@ -280,6 +320,15 @@ def ingest_records(
             rule_matches += 1
             if match.title not in matched_titles:
                 matched_titles.append(match.title)
+            key = _alert_dedup_key(match.rule_id, normalized_event)
+            previous = open_alerts.get(key)
+            if previous is not None and normalized_event.timestamp - previous[1] <= ALERT_DEDUP_WINDOW:
+                index, _ = previous
+                event_id_, match_, stamp_, incident_id_, extras = alert_data[index]
+                extras["occurrence_count"] += 1
+                extras["last_matched_at"] = stamp
+                open_alerts[key] = (index, normalized_event.timestamp)
+                continue
             # find_or_create_incident() runs one SELECT (+ a flush on
             # create) per call, i.e. once per (event, matching rule) pair --
             # no in-call cache short-circuits repeat lookups for the same
@@ -304,7 +353,10 @@ def ingest_records(
             incident = find_or_create_incident(db, normalized_event.host, stamp, match)
             if incident.id not in incident_ids:
                 incident_ids.append(incident.id)
-            alert_data.append((event_row.id, match, stamp, incident.id))
+            open_alerts[key] = (len(alert_data), normalized_event.timestamp)
+            alert_data.append(
+                (event_row.id, match, stamp, incident.id, {"occurrence_count": 1, "last_matched_at": None})
+            )
 
     # The 3-pattern sequence engine (pending.md item 5): needs the whole
     # batch at once (a multi-event correlation, not a per-event rule), so
@@ -395,7 +447,7 @@ def ingest_records(
     # ingest showed a confident "SUSPICIOUS ACTIVITY DETECTED" verdict next
     # to an AI opinion saying "insufficient information" about the identical
     # evidence.
-    alerted_event_ids = {event_id for event_id, _match, _stamp, _incident_id in alert_data}
+    alerted_event_ids = {item[0] for item in alert_data}
     named_pipe_discovery_event_ids = [
         event_id for event_id in named_pipe_discovery_event_ids if event_id not in alerted_event_ids
     ]

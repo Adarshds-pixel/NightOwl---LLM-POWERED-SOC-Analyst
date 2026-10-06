@@ -119,7 +119,7 @@ def test_generate_retries_once_then_raises_after_repeated_failure(monkeypatch):
 
     FakeChatGroq.invoke_side_effect = always_fail
 
-    with pytest.raises(LLMProviderError, match="failed after 2 attempts"):
+    with pytest.raises(LLMProviderError, match="AI request failed"):
         generate([])
 
     assert len(calls) == 2
@@ -149,7 +149,7 @@ def test_generate_raises_on_empty_response(monkeypatch):
     monkeypatch.setattr(llm_client, "_RETRY_DELAY_SECONDS", 0)
     FakeChatGroq.invoke_side_effect = ""
 
-    with pytest.raises(LLMProviderError, match="failed after 2 attempts"):
+    with pytest.raises(LLMProviderError, match="AI request failed"):
         generate([])
 
 
@@ -290,3 +290,15 @@ def test_generate_with_metrics_does_not_use_cache(monkeypatch):
     generate_with_metrics([])
 
     assert len(calls) == 2
+
+
+def test_provider_error_text_is_not_echoed_to_clients():
+    from app.rag.llm_client import _public_reason
+
+    class RateLimitError(Exception):
+        status_code = 429
+
+    secret = "org_12345 request req_abc https://internal.example"
+    assert secret not in _public_reason(RateLimitError(secret))
+    assert "rate limit" in _public_reason(RateLimitError(secret))
+    assert secret not in _public_reason(RuntimeError(secret))

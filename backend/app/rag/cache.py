@@ -31,7 +31,11 @@ from threading import Lock
 from app.core.config import settings
 from app.rag.prompts import bound_chat_history
 
-_explain_cache: dict[int, tuple[float, object]] = {}
+# Keys are whatever the caller passes as `incident_key`: in production the
+# (incident_id, evidence fingerprint) tuple from
+# incident_service.incident_cache_key, so new evidence or a demo reset (which
+# recycles ids) can never be answered from a stale entry.
+_explain_cache: dict[object, tuple[float, object]] = {}
 # Keyed on (incident_id, message, history_fingerprint) -- the fingerprint
 # is a hash of the *bounded* prior conversation (bound_chat_history(),
 # shared with prompts.py's own history bound so the cache and the prompt
@@ -40,7 +44,7 @@ _explain_cache: dict[int, tuple[float, object]] = {}
 # (e.g. "why was this flagged?" as a sanity re-check after several more
 # turns) would incorrectly hit the same cache entry and return the first
 # call's answer regardless of what was said in between.
-_chat_cache: dict[tuple[int, str, str], tuple[float, object]] = {}
+_chat_cache: dict[tuple[object, str, str], tuple[float, object]] = {}
 _lock = Lock()
 
 
@@ -75,7 +79,7 @@ def _prune_cache(cache: dict) -> None:
             break
 
 
-def get_explanation(incident_id: int):
+def get_explanation(incident_id):
     with _lock:
         entry = _explain_cache.get(incident_id)
         if entry is None:
@@ -90,7 +94,7 @@ def get_explanation(incident_id: int):
         return result
 
 
-def set_explanation(incident_id: int, result) -> None:
+def set_explanation(incident_id, result) -> None:
     with _lock:
         if incident_id in _explain_cache:
             del _explain_cache[incident_id]
@@ -98,7 +102,7 @@ def set_explanation(incident_id: int, result) -> None:
         _prune_cache(_explain_cache)
 
 
-def get_chat_reply(incident_id: int, message: str, history: list[dict]):
+def get_chat_reply(incident_id, message: str, history: list[dict]):
     """`history` should be the same prior-turns list the caller is about to
     pass to generate_chat_reply() -- only the bounded tail of it actually
     affects the key (see _history_fingerprint), matching what the LLM
@@ -118,7 +122,7 @@ def get_chat_reply(incident_id: int, message: str, history: list[dict]):
         return result
 
 
-def set_chat_reply(incident_id: int, message: str, history: list[dict], result) -> None:
+def set_chat_reply(incident_id, message: str, history: list[dict], result) -> None:
     key = (incident_id, message, _history_fingerprint(history))
     with _lock:
         if key in _chat_cache:
@@ -128,9 +132,8 @@ def set_chat_reply(incident_id: int, message: str, history: list[dict], result) 
 
 
 def clear() -> None:
-    """Test-only: reset both caches (also used by conftest.py's autouse
-    fixture, since autoincrement incident ids collide across test files
-    against these process-lifetime dicts)."""
+    """Drop every cached explanation and chat reply. Called by the demo reset
+    (api/routes_demo.py) and by conftest.py's autouse fixture."""
     with _lock:
         _explain_cache.clear()
         _chat_cache.clear()

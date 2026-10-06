@@ -18,13 +18,24 @@ from sqlalchemy.orm import Session
 
 from app.detection.engine import covered_event_ids
 from app.detection.rule_loader import get_loaded_rules
-from app.ingestion.normalizer import CHANNEL_TOKEN_SUBSTRINGS
+from app.ingestion.normalizer import CHANNEL_PATTERNS
 from app.models.alert import Alert
 from app.models.event import Event
 from app.schemas.event import NormalizedEvent
 from app.services import severity_service
 
 logger = logging.getLogger(__name__)
+
+
+def fit(value: str | None, limit: int) -> str | None:
+    """Clip a value to its column width. Postgres rejects an over-long VARCHAR
+    with a DataError that rolls back the *whole* upload, so one event with a
+    600-character image path (which an attacker can plant on purpose) used to
+    keep an entire log out of NightOwl. The full value is still kept in
+    raw_json; only the flat, searchable column is clipped."""
+    if value is None or len(value) <= limit:
+        return value
+    return value[: limit - 1] + "\u2026"
 
 
 def create_event(db: Session, normalized: NormalizedEvent) -> Event:
@@ -40,10 +51,10 @@ def create_event(db: Session, normalized: NormalizedEvent) -> Event:
         event_id=normalized.event_id,
         channel=normalized.channel,
         event_record_id=normalized.event_record_id,
-        process=normalized.process,
-        parent_process=normalized.parent_process,
+        process=fit(normalized.process, 500),
+        parent_process=fit(normalized.parent_process, 500),
         command_line=normalized.command_line,
-        user=normalized.user,
+        user=fit(normalized.user, 255),
         raw_json={"raw": normalized.raw, "normalized": normalized.model_dump(mode="json")},
     )
     db.add(event)
@@ -107,17 +118,20 @@ def _covered_predicate():
     for token, event_id in pairs:
         by_token[token].add(event_id)
 
-    channel_col = func.coalesce(Event.channel, "")
+    channel_col = func.lower(func.trim(func.coalesce(Event.channel, "")))
+
+    def _token_match(token: str):
+        exact_names, prefixes = CHANNEL_PATTERNS[token]
+        return or_(channel_col.in_(sorted(exact_names)), *(channel_col.like(f"{p}%") for p in prefixes))
+
     clauses = []
     for token, event_ids in by_token.items():
         if not event_ids:
             continue
         if token is None:
-            channel_match = and_(
-                *(~channel_col.ilike(f"%{substr}%") for substr in CHANNEL_TOKEN_SUBSTRINGS.values())
-            )
+            channel_match = and_(*(~_token_match(t) for t in CHANNEL_PATTERNS))
         else:
-            channel_match = channel_col.ilike(f"%{CHANNEL_TOKEN_SUBSTRINGS[token]}%")
+            channel_match = _token_match(token)
         clauses.append(and_(channel_match, Event.event_id.in_(event_ids)))
     return or_(*clauses) if clauses else false()
 
@@ -203,8 +217,10 @@ def list_events(
     triggered a rule, so the frontend can show the real signal-to-noise
     ratio (e.g. "64,558 events processed, 8 flagged").
     """
+    # id as the tiebreaker: EVTX events routinely share a timestamp, and
+    # without a total order Postgres may page the same row twice or skip one.
     stmt = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity, covered).order_by(
-        Event.timestamp.desc()
+        Event.timestamp.desc(), Event.id.desc()
     )
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
@@ -283,7 +299,9 @@ def list_alert_rows(
     matched_at, not Event.timestamp, so it agrees with how an incident's own
     evidence list (`get_incident_alerts_with_events`) is already ordered.
     """
-    stmt = _filtered_alerts_stmt(host, start_date, end_date, severity, q).order_by(Alert.matched_at.desc())
+    stmt = _filtered_alerts_stmt(host, start_date, end_date, severity, q).order_by(
+        Alert.matched_at.desc(), Alert.id.desc()
+    )
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
     return [(alert, event) for alert, event in db.execute(stmt)]
@@ -315,7 +333,7 @@ def get_alerts_for_event_ids(db: Session, event_ids: list[int]) -> dict[int, Ale
     """
     if not event_ids:
         return {}
-    alerts = list(db.scalars(select(Alert).where(Alert.event_id.in_(event_ids))))
+    alerts = list(db.scalars(select(Alert).where(Alert.event_id.in_(event_ids)).order_by(Alert.id)))
     best: dict[int, Alert] = {}
     for alert in alerts:
         existing = best.get(alert.event_id)

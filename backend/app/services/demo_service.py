@@ -1,12 +1,12 @@
 """Clears the operational data a demo run creates, so a replay can start
 clean without dropping the schema.
 
-Needed because nothing in the ingest pipeline deduplicates (see
-services/ingest_service.py) and because incident grouping is anchored on
-Incident.created_at (services/incident_service.py): a row left over from an
-earlier demo run can silently absorb the next run's alerts if it falls
-within that run's rebased +/-1h window, which would make a freshly-started
-replay look like it detected nothing. A full reset removes that risk
+Needed because ingest deduplicates events against what is already stored
+(a re-run of the same fixture would ingest nothing new) and because incident
+grouping merges new alerts into an active incident on the same host and
+time (services/incident_service.py): rows left over from an earlier demo run
+would absorb the next run's alerts, making a fresh replay look like it
+detected nothing. A full reset removes that risk
 entirely rather than trying to guess which rows are "demo" rows -- no
 column distinguishes a replayed row from an uploaded one, and adding one
 just to support a partial reset is exactly the kind of scope creep this
@@ -17,6 +17,7 @@ from sqlalchemy import delete, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+from app.models.ai_opinion import AiOpinion
 from app.models.alert import Alert
 from app.models.audit_log import AuditLog
 from app.models.chat_message import ChatMessage
@@ -30,6 +31,9 @@ from app.models.incident import Incident
 # constrained, but it reads clearer grouped with the other per-incident
 # history.
 _RESET_ORDER = (
+    # No FK, but its sample_event_ids point at events about to be deleted --
+    # left behind, they would later resolve to unrelated recycled event ids.
+    ("ai_opinions", AiOpinion),
     ("chat_messages", ChatMessage),
     ("audit_log", AuditLog),
     ("alerts", Alert),
@@ -42,11 +46,18 @@ _RESET_ORDER = (
 # left off -- purely cosmetic (nothing depends on low ids), but "INC-0001"
 # reads better on stage than "INC-0847". Postgres-only: SQLite (used by the
 # test suite) has no sequence to restart and reuses low rowids on its own.
-_SEQUENCES = ("events_id_seq", "alerts_id_seq", "incidents_id_seq", "chat_messages_id_seq", "audit_log_id_seq")
+_SEQUENCES = (
+    "events_id_seq",
+    "alerts_id_seq",
+    "incidents_id_seq",
+    "chat_messages_id_seq",
+    "audit_log_id_seq",
+    "ai_opinions_id_seq",
+)
 
 
 def reset_demo_data(db: Session) -> dict[str, int]:
-    """Deletes every row from the five operational tables, in FK-safe order,
+    """Deletes every row from the operational tables, in FK-safe order,
     in one transaction. Returns {table_name: rows_deleted}. Schema,
     migrations and the detection rule files are untouched -- this is a data
     reset, not a teardown.

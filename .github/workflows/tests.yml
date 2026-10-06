@@ -29,8 +29,11 @@ jobs:
         working-directory: .
         run: python ai/tools/build_kb.py
 
-      - name: Run pytest
+      - name: Run pytest (offline suite)
         run: python -m pytest -v
+
+      - name: Run integration tests (models + knowledge base)
+        run: python -m pytest -v -m integration
 
   frontend:
     runs-on: ubuntu-latest
