@@ -31,3 +31,11 @@ frontend/dist/
 # script requires them to be present; a fresh clone just has fewer clean
 # fixtures to test false positives against.
 backend/sample_logs/real_world_fixtures/benign/
+# ML layer: regenerable intermediates, not curated inputs.
+# - cache/ is ~300MB of pickled normalized events, rebuilt by extract_ml_features.py
+# - attack_features_70.csv is rebuilt by `eval_ml_model.py --rebuild`
+# The trained model (app/ml/models/anomaly_detector.joblib) IS tracked: the
+# ingest path needs it at runtime, and a fresh clone without it silently has
+# no ML layer at all.
+backend/scripts/cache/
+backend/scripts/eval/attack_features_70.csv

@@ -22,6 +22,8 @@ from sqlalchemy.orm import Session
 from app.detection.engine import RuleMatch
 from app.detection.rule_loader import get_loaded_rules
 from app.detection.sequences import SEQUENCE_PATTERNS
+from app.detection.synthetic import NON_YAML_RULES
+from app.ml.rule import ML_RULE_ID
 from app.models.alert import Alert
 from app.models.event import Event
 from app.models.incident import Incident
@@ -206,17 +208,22 @@ def build_incident_evidence(db: Session, incident: Incident) -> dict:
         return evidence
 
     primary_alert, primary_event = alerts_with_events[0]
-    # Merges in the sequence engine's synthetic patterns the same way
+    # Merges in the detectors that have no YAML file behind them the same way
     # get_incident_detail's own rules_by_id does -- a sequence's rule_id
-    # (detection/sequences.py) was never a loaded YAML rule, so it would
-    # otherwise resolve to no title at all.
-    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | SEQUENCE_PATTERNS
+    # (detection/sequences.py) and the ML layer's (app/ml/rule.py) were never
+    # loaded YAML rules, so they would otherwise resolve to no title at all.
+    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | NON_YAML_RULES
     rule = rules_by_id.get(primary_alert.rule_id)
 
     evidence["matched_rule"] = rule.title if rule else None
-    evidence["detection_method"] = (
-        "multi-event sequence correlation" if primary_alert.rule_id in SEQUENCE_PATTERNS else "single-event Sigma rule"
-    )
+    if primary_alert.rule_id in SEQUENCE_PATTERNS:
+        evidence["detection_method"] = "multi-event sequence correlation"
+    elif primary_alert.rule_id == ML_RULE_ID:
+        # Naming this honestly matters downstream: the RAG explanation layer
+        # reads detection_method, and an anomaly score is not a rule match.
+        evidence["detection_method"] = "unsupervised behavioural anomaly (no specific technique)"
+    else:
+        evidence["detection_method"] = "single-event Sigma rule"
     evidence["process"] = primary_event.process
     evidence["parent_process"] = primary_event.parent_process
     evidence["command_line"] = primary_event.command_line

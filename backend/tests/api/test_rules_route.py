@@ -10,6 +10,7 @@ is reporting what actually loaded, so a test double would defeat it.
 from datetime import datetime, timedelta, timezone
 
 from app.detection.rule_loader import get_loaded_rules
+from app.ml.rule import ML_RULE_ID
 from app.models.alert import Alert
 from app.models.event import Event
 
@@ -40,8 +41,37 @@ def test_lists_every_loaded_rule(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["count"] == body["total"] == len(get_loaded_rules())
+    # The YAML rule set plus the one built-in that has no YAML file: the ML
+    # anomaly layer (app/ml/). It files alerts under its own rule_id, so
+    # omitting it here would leave a live detector missing from the list its
+    # own alerts point at.
+    assert body["count"] == body["total"] == len(get_loaded_rules()) + 1
     assert body["total"] > 0
+
+
+def test_lists_the_ml_anomaly_detector_as_a_builtin(api_client):
+    client, _ = api_client
+
+    rules = client.get("/rules").json()["rules"]
+    ml = next(r for r in rules if r["rule_id"] == ML_RULE_ID)
+
+    assert ml["title"] and ml["title"] != "Unknown rule"
+    # Structurally empty on purpose -- it is not a Sigma rule.
+    assert ml["condition"] == ""
+    assert ml["selections"] == []
+    assert ml["category"] is None
+    # An anomaly score maps to no ATT&CK technique; inventing one would be
+    # the fabricated confidence docs/DOCUMENTATION.md section 9 forbids.
+    assert ml["technique_id"] is None
+
+
+def test_ml_anomaly_detector_is_addressable_by_id(api_client):
+    client, _ = api_client
+
+    response = client.get(f"/rules/{ML_RULE_ID}")
+
+    assert response.status_code == 200
+    assert response.json()["rule_id"] == ML_RULE_ID
 
 
 def test_rule_carries_yaml_metadata(api_client):
@@ -120,7 +150,7 @@ def test_filters_by_technique_level_and_category(api_client):
     by_technique = client.get("/rules", params={"technique_id": "t1059.001"}).json()
     assert by_technique["count"] >= 1
     assert {r["technique_id"] for r in by_technique["rules"]} == {"T1059.001"}
-    assert by_technique["total"] == len(get_loaded_rules())
+    assert by_technique["total"] == len(get_loaded_rules()) + 1  # + the ML built-in
 
     by_level = client.get("/rules", params={"level": "high"}).json()
     assert {r["level"] for r in by_level["rules"]} == {"high"}

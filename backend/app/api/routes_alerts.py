@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
-from app.detection.sequences import SEQUENCE_PATTERNS
+from app.detection.synthetic import NON_YAML_RULES
 from app.services.event_service import count_alert_rows, list_alert_rows
 
 router = APIRouter()
@@ -73,7 +73,7 @@ def get_alerts(
     # Sequence-detected alerts (detection/sequences.py) carry a rule_id
     # that was never a loaded YAML rule -- merge in their titles/technique
     # ids too, or every such alert would show as "Unknown rule".
-    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | SEQUENCE_PATTERNS
+    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | NON_YAML_RULES
 
     result = []
     for alert, event in rows:

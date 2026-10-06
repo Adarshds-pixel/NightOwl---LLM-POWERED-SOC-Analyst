@@ -3,7 +3,7 @@ and reports recall on known-malicious samples and false positives on
 known-clean ones.
 
 Runs the pipeline in-process (`read_records_as_dicts` -> `normalize_event` ->
-`evaluate_event`, plus `detect_sequences` for the 2-pattern sequence engine --
+`evaluate_event`, plus `detect_sequences` for the 3-pattern sequence engine --
 see detection/sequences.py), deliberately skipping HTTP and the database:
 this measures *detection*, not ingestion plumbing, and it stays side-effect
 free so it can be run against a live deployment without polluting its data.

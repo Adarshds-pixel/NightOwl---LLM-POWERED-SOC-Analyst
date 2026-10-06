@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.auth import require_session_auth
 from app.core.rate_limit import reset_rate_limiter
+from app.ml.runtime import reset_detector_cache
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -72,6 +73,30 @@ def _reset_rate_limiter():
     reset_rate_limiter()
     yield
     reset_rate_limiter()
+
+
+@pytest.fixture(autouse=True)
+def _disable_ml_detector(request, monkeypatch):
+    """Keeps the ML layer out of tests that assert exact alert counts.
+
+    The synthetic single-event records most API/ingest tests use are not
+    10-minute windows of real host telemetry, so scoring them says nothing
+    useful -- but it can still produce an alert and break `assert
+    alerts_created == 1`.
+
+    Opt back in with `@pytest.mark.use_ml_detector` (see
+    tests/services/test_ingest_ml.py, which exercises the real model end to
+    end). This used to be a blanket disable with no way out, which is why the
+    ML path inside ingest_service.py had no integration coverage at all.
+    """
+    if request.node.get_closest_marker("use_ml_detector"):
+        reset_detector_cache()
+        yield
+        reset_detector_cache()
+        return
+
+    monkeypatch.setattr("app.services.ingest_service.get_detector", lambda: None)
+    yield
 
 
 @pytest.fixture

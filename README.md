@@ -10,6 +10,7 @@ This is a final-year major project built by a team of 4, AI-assisted, over a 30-
 - Automatic MITRE ATT&CK technique mapping + severity scoring
 - Incident grouping, status workflow, and a backend audit trail
 - RAG pipeline (ChromaDB + LangChain + LLM) generating grounded, plain-English incident explanations and recommended responses
+- **Unsupervised ML anomaly layer** — a Ledoit-Wolf Mahalanobis model scores each 10-minute host window against a benign baseline and raises supplementary "this host is behaving unusually" alerts. Deliberately scoped as *evidence*, not detection: measured held-out recall is ~13% at ~52% precision, and the detection rate below comes from the Sigma rules, not this layer. See [`ML.md`](ML.md)
 - **Self-critique reasoning chain** — the LLM checks its own draft explanation against the retrieved sources before returning it, instead of a single-shot prompt
 - **Source-attribution UI** — every explanation shows the exact knowledge-base chunks + similarity scores it was grounded in
 - **Real admin authentication** — single-admin login, backend-enforced signed session cookie, no accounts/roles beyond the one operator
@@ -23,8 +24,9 @@ Three layers, one directory each.
 
 ```
 ├── backend/        FastAPI service: API routes, detection engine, ingestion,
-│                   MITRE mapping, incident/severity services, DB models,
-│                   Alembic migrations, tests, and EVTX sample_logs
+│                   MITRE mapping, incident/severity services, the ML
+│                   anomaly layer (app/ml/), DB models, Alembic migrations,
+│                   tests, and EVTX sample_logs
 ├── frontend/       React + Vite + Tailwind SOC console
 ├── ai/             AI layer: RAG knowledge base, ATT&CK dataset, vector
 │                   store, and the build/evaluation tooling
@@ -60,7 +62,8 @@ To (re)build the knowledge base the AI layer retrieves from, run `python ai/tool
 |---|---|
 | Backend | FastAPI, SQLAlchemy, Alembic |
 | Database | PostgreSQL |
-| Detection | Sigma-style YAML rules (`pySigma`) |
+| Detection | Sigma-style YAML rules (`pySigma`) + 3-pattern sequence engine |
+| Anomaly detection | scikit-learn (Ledoit-Wolf covariance + Mahalanobis distance) |
 | ATT&CK mapping | MITRE ATT&CK (official STIX/JSON dataset) |
 | AI / RAG | LangChain, ChromaDB, Sentence Transformers, Groq |
 | Frontend | React 19, Vite, Tailwind CSS v4, Recharts |
@@ -68,12 +71,13 @@ To (re)build the knowledge base the AI layer retrieves from, run `python ai/tool
 
 ## Status
 
-**Complete.** Backend, detection, AI/RAG, real admin authentication, and the frontend console are built and working end to end: a real admin login gates every protected route, EVTX upload creates real incidents, the explain and chat endpoints answer from the knowledge base with source attribution, and the console renders all of it from live API data. The backend test suite is 534 tests. Detection accuracy is tracked against a real-world EVTX corpus (`backend/scripts/run_detection_benchmark.py`), not just synthetic fixtures — currently 50/61 (82.0%) with 0 false positives; this number moves if the corpus or rule set changes, so treat it as a snapshot and re-run the script for the current figure. See `docs/DOCUMENTATION.md` and `backend/scripts/failure_matrix.md` (the generated, always-current source of truth) for the full breakdown.
+**Complete.** Backend, detection, AI/RAG, real admin authentication, and the frontend console are built and working end to end: a real admin login gates every protected route, EVTX upload creates real incidents, the explain and chat endpoints answer from the knowledge base with source attribution, and the console renders all of it from live API data. The backend test suite is 631 tests. Detection accuracy is tracked against a real-world EVTX corpus (`backend/scripts/run_detection_benchmark.py`), not just synthetic fixtures — currently 50/61 (82.0%) with 0 false positives; this number moves if the corpus or rule set changes, so treat it as a snapshot and re-run the script for the current figure. See `docs/DOCUMENTATION.md` and `backend/scripts/failure_matrix.md` (the generated, always-current source of truth) for the full breakdown. That figure measures the Sigma rules and the sequence engine only; the ML anomaly layer is evaluated separately and far more modestly — see [`ML.md`](ML.md).
 
 Deliberately **not** implemented, because nothing in the system could honestly back them, or because they don't fit a single-admin deployment: threat-intel feeds, a geographic attack map, host CPU/memory/disk telemetry, and multi-user accounts/RBAC. Where a design reference called for one of those, the UI shows a real equivalent instead.
 
 ## Documentation
 
+- [`ML.md`](ML.md) — the ML anomaly layer: architecture, the two held-out evaluation protocols and their measured results, why 42 of 70 features are not fitted, and the withdrawn earlier metrics.
 - [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md) — the single reference document: pipeline, data model, API surface, detection engine, AI layer with its evaluation results, authentication, Demo Mode, frontend design system, the honesty policy, setup/running/testing/troubleshooting, and the full decision log + engineering history.
 
 ## Team

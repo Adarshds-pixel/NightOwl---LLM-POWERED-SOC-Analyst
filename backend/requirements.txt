@@ -34,3 +34,13 @@ PyYAML>=6.0
 # installed transitive dependency but never pinned directly.
 itsdangerous>=2.2.0
 bcrypt>=4.0.0
+
+# ML Anomaly Detection (Pair 3)
+# scikit-learn is pinned exactly, unlike everything else in this file: a
+# pickled LedoitWolf estimator ships in app/ml/models/, and unpickling an
+# sklearn estimator across a minor version is not guaranteed to work. The
+# pin is the version that produced the committed model -- bump it and the
+# model together, by retraining (scripts/train_ml_model.py).
+scikit-learn==1.7.2
+joblib>=1.3.0
+numpy>=1.26.0

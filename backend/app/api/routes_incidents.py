@@ -35,7 +35,7 @@ from app.core.config import settings
 from app.core.errors import not_found
 from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
-from app.detection.sequences import SEQUENCE_PATTERNS
+from app.detection.synthetic import NON_YAML_RULES
 from app.mitre.loader import load_mitre_techniques
 from app.models.incident import Incident
 from app.rag import cache
@@ -317,7 +317,7 @@ def get_incident_detail(incident_id: int, db: Session = Depends(get_db)) -> Inci
     # Sequence-detected alerts (detection/sequences.py) carry a rule_id
     # that was never a loaded YAML rule -- merge in their titles/technique
     # ids too, or every such alert would show as "Unknown rule".
-    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | SEQUENCE_PATTERNS
+    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | NON_YAML_RULES
     alerts = []
     for alert, event in get_incident_alerts_with_events(db, incident_id):
         rule = rules_by_id.get(alert.rule_id)

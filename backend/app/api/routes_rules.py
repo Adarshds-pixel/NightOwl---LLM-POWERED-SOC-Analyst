@@ -11,6 +11,10 @@ Read-only by design: rules are version-controlled files reviewed like
 code, not rows a UI can toggle at runtime, so there is deliberately no
 POST/PATCH/DELETE here and `enabled` reflects "this rule loaded and is in
 the running set", not a user-flippable switch.
+
+The ML anomaly layer (`app/ml/`) is appended as a built-in entry: it files
+alerts under a rule_id with no YAML file behind it, so it would otherwise
+be a live detector missing from the list its own alerts point at.
 """
 
 from datetime import datetime
@@ -20,6 +24,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.ml.rule import ML_ANOMALY_RULE
+from app.ml.runtime import get_detector
 from app.detection.rule_loader import get_loaded_rules
 from app.services.rule_service import get_rule_activity
 
@@ -84,7 +90,47 @@ def _build_rules(db: Session) -> list[RuleInfo]:
             last_triggered=activity[rule.rule_id].last_triggered if rule.rule_id in activity else None,
         )
         for rule in get_loaded_rules()
-    ]
+    ] + [_ml_rule_info(activity)]
+
+
+def _ml_rule_info(activity) -> RuleInfo:
+    """The ML anomaly layer as a read-only built-in entry in the rule list.
+
+    It creates alerts under a rule_id (`ml-anomaly-detector`) but has no YAML
+    file, so without this the Rules page omitted a live detector entirely and
+    `GET /rules/ml-anomaly-detector` 404'd on an id the alerts list was
+    already showing.
+
+    The empty structural fields are honest, not placeholders: this detector
+    has no Sigma condition, no selections, and no logsource category, because
+    it is not a Sigma rule. `enabled` reflects whether a trained model is
+    actually on disk -- it is the one entry in this list that can be present
+    but inactive.
+    """
+    detector = get_detector()
+    return RuleInfo(
+        rule_id=ML_ANOMALY_RULE.rule_id,
+        title=ML_ANOMALY_RULE.title,
+        description=ML_ANOMALY_RULE.description,
+        level=ML_ANOMALY_RULE.level,
+        category=None,
+        technique_id=ML_ANOMALY_RULE.technique_id,
+        tactics=ML_ANOMALY_RULE.tactics,
+        condition="",
+        selections=[],
+        author="NightOwl",
+        date="",
+        status="stable",
+        references=["ML.md"],
+        filename="app/ml/detector.py",
+        enabled=detector is not None,
+        match_count=activity[ML_ANOMALY_RULE.rule_id].match_count
+        if ML_ANOMALY_RULE.rule_id in activity else 0,
+        matches_24h=activity[ML_ANOMALY_RULE.rule_id].matches_24h
+        if ML_ANOMALY_RULE.rule_id in activity else 0,
+        last_triggered=activity[ML_ANOMALY_RULE.rule_id].last_triggered
+        if ML_ANOMALY_RULE.rule_id in activity else None,
+    )
 
 
 @router.get("/rules", response_model=RuleListResponse)

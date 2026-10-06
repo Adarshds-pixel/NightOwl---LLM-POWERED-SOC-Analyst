@@ -100,7 +100,7 @@ def test_sample_file_in_incidents_and_techniques_out(api_client, monkeypatch):
 
 
 def test_sequence_detected_alert_resolves_rule_title_and_technique_through_the_real_api(api_client):
-    """The 2-pattern sequence engine's rule_id was never a loaded YAML
+    """The 3-pattern sequence engine's rule_id was never a loaded YAML
     rule (detection/sequences.py), so it needs its own merge into every
     read route that resolves an Alert's rule_id -> human title/technique
     (routes_alerts.py, routes_events.py, routes_incidents.py).

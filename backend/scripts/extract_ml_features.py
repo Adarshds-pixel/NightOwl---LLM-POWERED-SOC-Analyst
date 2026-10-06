@@ -1,108 +1,30 @@
+"""CLI: build the benign feature matrix (scripts/ml_features.csv) from the
+NightOwl-Benign-Dataset EVTX corpus.
+
+The feature logic itself lives in app/ml/features.py -- it is imported by the
+live ingest path and must not sit under scripts/ (excluded from the Docker
+image). This module is now just the batch driver around it.
+"""
+
 import os
 import sys
 import glob
 from pathlib import Path
-from datetime import timedelta
 import csv
+import pickle
 from collections import defaultdict
-import numpy as np
 
 # Adjust sys.path to import from backend.app
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.ingestion.evtx_reader import read_records_as_dicts
 from app.ingestion.normalizer import normalize_events
-from app.schemas.event import NormalizedEvent
+from app.ml.features import FEATURE_NAMES, extract_features  # noqa: F401  (re-exported for callers)
+
 
 def get_evtx_files(dataset_dir: str) -> list[str]:
     return glob.glob(os.path.join(dataset_dir, "*.evtx"))
 
-def extract_features(events: list[NormalizedEvent]) -> dict:
-    # Process Features
-    process_events = [e for e in events if e.event_id in (1, 4688)]
-    process_names = [e.process.lower() for e in process_events if e.process]
-    process_count = len(process_events)
-    unique_process_count = len(set(process_names))
-    rare_process_count = sum(1 for p in set(process_names) if process_names.count(p) == 1)
-    
-    # parent_child_relationship_count
-    parent_child_relationship_count = sum(1 for e in process_events if e.parent_process and e.process)
-    
-    # parent_child_anomaly_count (placeholder: 0 for now)
-    parent_child_anomaly_count = 0
-    
-    # PowerShell Features
-    # Powershell event ID 4104 or PowerShell channel
-    ps_events = [e for e in events if e.event_id == 4104 or (e.channel and "powershell" in e.channel.lower())]
-    powershell_count = len(ps_events)
-    
-    encoded_command_count = sum(1 for e in events if e.command_line and ("-enc" in e.command_line.lower() or "-encodedcommand" in e.command_line.lower()))
-    
-    script_block_count = sum(1 for e in ps_events if e.event_id == 4104)
-    
-    # Network Features
-    # Event ID 3
-    network_events = [e for e in events if e.event_id == 3]
-    network_event_count = len(network_events)
-    unique_destinations = set(e.destination_ip for e in network_events if e.destination_ip)
-    unique_destination_count = len(unique_destinations)
-    
-    # external_destination_count (naive: not starting with 10., 192.168., 172.16-31)
-    def is_external(ip: str):
-        if not ip: return False
-        if ip.startswith("10.") or ip.startswith("192.168.") or ip.startswith("127."):
-            return False
-        parts = ip.split(".")
-        if len(parts) == 4 and parts[0] == "172" and 16 <= int(parts[1]) <= 31:
-            return False
-        return True
-    
-    external_destination_count = sum(1 for ip in unique_destinations if is_external(ip))
-    unique_destination_port_count = len(set(e.destination_port for e in network_events if e.destination_port))
-    
-    # Command-Line Features
-    cmd_lengths = [len(e.command_line) for e in process_events if e.command_line]
-    average_command_length = float(np.mean(cmd_lengths)) if cmd_lengths else 0.0
-    maximum_command_length = max(cmd_lengths) if cmd_lengths else 0
-    
-    argument_count = sum(len(e.command_line.split()) for e in process_events if e.command_line)
-    suspicious_argument_count = sum(1 for e in process_events if e.command_line and ("hidden" in e.command_line.lower() or "bypass" in e.command_line.lower()))
-    encoded_command_indicator = 1 if encoded_command_count > 0 else 0
-    
-    # User Features
-    users = set(e.user.lower() for e in events if e.user)
-    unique_user_count = len(users)
-    processes_per_user = process_count / unique_user_count if unique_user_count > 0 else float(process_count)
-    
-    # Temporal Features (10-minute window)
-    events_per_minute = len(events) / 10.0
-    processes_per_minute = process_count / 10.0
-    network_events_per_minute = network_event_count / 10.0
-    
-    return {
-        "process_count": process_count,
-        "unique_process_count": unique_process_count,
-        "rare_process_count": rare_process_count,
-        "parent_child_relationship_count": parent_child_relationship_count,
-        "parent_child_anomaly_count": parent_child_anomaly_count,
-        "powershell_count": powershell_count,
-        "encoded_command_count": encoded_command_count,
-        "script_block_count": script_block_count,
-        "network_event_count": network_event_count,
-        "unique_destination_count": unique_destination_count,
-        "external_destination_count": external_destination_count,
-        "unique_destination_port_count": unique_destination_port_count,
-        "average_command_length": float(average_command_length),
-        "maximum_command_length": maximum_command_length,
-        "argument_count": argument_count,
-        "suspicious_argument_count": suspicious_argument_count,
-        "encoded_command_indicator": encoded_command_indicator,
-        "unique_user_count": unique_user_count,
-        "processes_per_user": float(processes_per_user),
-        "events_per_minute": events_per_minute,
-        "processes_per_minute": processes_per_minute,
-        "network_events_per_minute": network_events_per_minute,
-    }
 
 def main():
     dataset_dir = Path(__file__).resolve().parent.parent / "sample_logs" / "real_world_fixtures" / "NightOwl-Benign-Dataset"
@@ -115,8 +37,22 @@ def main():
     
     total_raw = 0
     
+    cache_dir = Path(__file__).resolve().parent / "cache"
+    cache_dir.mkdir(exist_ok=True)
+    
     for f in files:
         print(f"Reading {Path(f).name}...")
+        cache_file = cache_dir / (Path(f).name + ".pkl")
+        if cache_file.exists():
+            print(f"Loading {Path(f).name} from cache...")
+            with open(cache_file, "rb") as cf:
+                file_events = pickle.load(cf)
+            for key, event in file_events.items():
+                dedup_dict[key] = event
+            total_raw += len(file_events)
+            continue
+            
+        file_events = {}
         for raw_record in read_records_as_dicts(Path(f)):
             if not raw_record:
                 continue
@@ -129,8 +65,12 @@ def main():
                     if event.event_record_id is None:
                         key = (event.host, event.channel, event.timestamp, event.event_id)
                     dedup_dict[key] = event
+                    file_events[key] = event
             except Exception as e:
                 pass
+        
+        with open(cache_file, "wb") as cf:
+            pickle.dump(file_events, cf)
                 
     events = list(dedup_dict.values())
     print(f"Total raw events: {total_raw}")

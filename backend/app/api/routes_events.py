@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
-from app.detection.sequences import SEQUENCE_PATTERNS
+from app.detection.synthetic import NON_YAML_RULES
 from app.services.event_service import count_events, get_alerts_for_event_ids, get_event, list_events
 
 router = APIRouter()
@@ -99,7 +99,7 @@ def get_events(
     # Sequence-detected alerts (detection/sequences.py) carry a rule_id
     # that was never a loaded YAML rule -- merge in their titles/technique
     # ids too, or every such alert would show as "Unknown rule".
-    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | SEQUENCE_PATTERNS
+    rules_by_id = {rule.rule_id: rule for rule in get_loaded_rules()} | NON_YAML_RULES
 
     rows = []
     for event in events:
@@ -159,7 +159,7 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db)) -> EventDetai
         raise HTTPException(status_code=404, detail=f"event {event_id} not found")
 
     alert = get_alerts_for_event_ids(db, [event.id]).get(event.id)
-    rules_by_id = {r.rule_id: r for r in get_loaded_rules()} | SEQUENCE_PATTERNS
+    rules_by_id = {r.rule_id: r for r in get_loaded_rules()} | NON_YAML_RULES
     rule = rules_by_id.get(alert.rule_id) if alert else None
     # create_event stores {"raw": ..., "normalized": ...}; tolerate a row
     # written before that shape existed rather than 500-ing on it.

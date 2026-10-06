@@ -7,10 +7,11 @@ still owns (file-format checks, multipart handling); this module starts at
 `IngestResponse`-shaped counts the route returns -- including the telemetry-
 profiler fields (`channels`, `providers`, `event_id_breakdown`) that show
 what's actually in a file, computed in the same pass as everything else
-rather than a second read of the upload, and the 2-pattern sequence engine
+rather than a second read of the upload, the 3-pattern sequence engine
 (`detection/sequences.py`) that runs once over the whole persisted batch
 after the per-event rule loop below, for the handful of techniques a
-single-event rule structurally cannot express.
+single-event rule structurally cannot express, and the ML anomaly layer
+(`app/ml/`) that scores each 10-minute host window in the batch.
 
 `rules` is a parameter rather than a `get_loaded_rules()` call inside this
 function, on purpose: several existing tests
@@ -21,18 +22,22 @@ means those tests still patch the thing that actually runs.
 """
 
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Iterable
 
 from sqlalchemy.orm import Session
 
-from app.detection.engine import covered_event_ids, evaluate_event
+from app.detection.engine import RuleMatch, covered_event_ids, evaluate_event
 from app.detection.rule_loader import LoadedRule
 from app.detection.sequences import detect_sequences
+from app.ml.features import extract_features
+from app.ml.rule import ML_ANOMALY_RULE, ML_RULE_ID
+from app.ml.runtime import get_detector
 from app.ingestion.normalizer import EventNormalizationError, canonical_channel, normalize_event
 from app.services.advisory_patterns import is_named_pipe_discovery, is_non_kernel_driver_service_installation
+from app.services import severity_service
 from app.services.detection_service import save_alerts
 from app.services.event_service import find_existing_event_keys, save_events
 from app.services.incident_service import find_or_create_incident
@@ -301,7 +306,7 @@ def ingest_records(
                 incident_ids.append(incident.id)
             alert_data.append((event_row.id, match, stamp, incident.id))
 
-    # The 2-pattern sequence engine (pending.md item 5): needs the whole
+    # The 3-pattern sequence engine (pending.md item 5): needs the whole
     # batch at once (a multi-event correlation, not a per-event rule), so
     # it runs after the per-event loop above rather than inside it. Feeds
     # the exact same incident/alert plumbing every regular rule match
@@ -318,6 +323,67 @@ def ingest_records(
         alert_data.append((anchor_event.id, match, stamp, incident.id))
 
     alerts = save_alerts(db, alert_data)
+
+    # =========================================================================
+    # ML Anomaly Detection Phase
+    # Evaluates the 10-minute host windows of this batch using Ledoit-Wolf.
+    # Yields additional rule matches appended to the response without replacing
+    # existing Sigma rules.
+    # =========================================================================
+    ml_detector = get_detector()
+    if ml_detector is not None:
+        windows: dict[tuple[str, datetime], list] = defaultdict(list)
+        for saved_event, norm_event in zip(saved, normalized_events, strict=True):
+            # Floor minute to nearest 10 -- the same bucketing the model was
+            # trained on (scripts/extract_ml_features.py).
+            minute_floored = (norm_event.timestamp.minute // 10) * 10
+            bucket_time = norm_event.timestamp.replace(minute=minute_floored, second=0, microsecond=0)
+            windows[(norm_event.host, bucket_time)].append((saved_event, norm_event))
+
+        ml_alert_data = []
+        for (host, bucket_time), paired_events in windows.items():
+            try:
+                features = extract_features([pe[1] for pe in paired_events])
+                # select() projects onto the schema this model was fitted on,
+                # by name. Never pass list(features.values()) -- that is
+                # extract_features' dict order, which the model does not know.
+                score_res = ml_detector.score_window(ml_detector.select(features))[0]
+            except (KeyError, ValueError):
+                # A feature-schema mismatch means the model and the extractor
+                # have drifted apart. Skip the window, but make it loud --
+                # this is a bug to fix, not a condition to tolerate.
+                logger.exception(
+                    "ML scoring skipped for %s @ %s: feature schema mismatch", host, bucket_time
+                )
+                continue
+
+            if score_res["severity"] not in ("High", "Medium"):
+                continue
+
+            raw_level = "high" if score_res["severity"] == "High" else "medium"
+            ml_match = RuleMatch(
+                rule_id=ML_RULE_ID,
+                title=f"{ML_ANOMALY_RULE.title} [{score_res['severity']}]",
+                level=severity_service.compute_severity(raw_level, []),
+                score=severity_service.compute_severity_score(raw_level, []),
+                # No technique: an anomaly score says "unlike the baseline",
+                # which maps to no single ATT&CK technique. See app/ml/rule.py.
+                technique_id=None,
+            )
+            anchor_saved = paired_events[-1][0]
+
+            incident = find_or_create_incident(db, host, bucket_time, ml_match)
+            if incident.id not in incident_ids:
+                incident_ids.append(incident.id)
+            ml_alert_data.append((anchor_saved.id, ml_match, bucket_time, incident.id))
+
+        if ml_alert_data:
+            ml_alerts = save_alerts(db, ml_alert_data)
+            alerts.extend(ml_alerts)
+            rule_matches += len(ml_alert_data)
+            for _, match, _, _ in ml_alert_data:
+                if match.title not in matched_titles:
+                    matched_titles.append(match.title)
 
     # An advisory-flagged event that also became a real alert (either a
     # per-event rule or a sequence's anchor event, e.g. the SMB-enum-probe

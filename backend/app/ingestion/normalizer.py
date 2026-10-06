@@ -36,9 +36,14 @@ class EventNormalizationError(Exception):
 
 def _extract_host(system: dict) -> str:
     host = system.get("Computer")
-    if not isinstance(host, str) or not host:
+    if not isinstance(host, str) or not host.strip():
         raise EventNormalizationError("record missing 'System.Computer'")
-    return host
+    # Upper-cased because Windows computer names are case-insensitive, but
+    # the string in System.Computer is not consistently cased across
+    # channels: the benign corpus contains 876 windows under `Server002`
+    # and 1 under `SERVER002`, which split one machine into two hosts for
+    # incident grouping, per-host filtering, and ML windowing alike.
+    return host.strip().upper()
 
 
 def _extract_channel(system: dict) -> str | None:

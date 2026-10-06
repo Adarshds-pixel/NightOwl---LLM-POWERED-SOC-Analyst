@@ -1,1484 +1,309 @@
 # NightOwl — Unsupervised ML Integration
-## Isolation Forest Workflow, Architecture, and Implementation Concept
 
-> **Purpose:** This document defines the proposed machine-learning enhancement for the NightOwl project. It is based on the existing NightOwl project documentation and the agreed approach of adding **unsupervised Isolation Forest anomaly detection** without replacing the existing Sigma/rule-based detection or RAG/LLM explanation layers.
+## Ledoit-Wolf Mahalanobis anomaly detection: architecture, evaluation, and limits
 
----
-
-# 1. Executive Summary
-
-NightOwl currently converts Windows Sysmon/EVTX telemetry into prioritized incidents through:
-
-1. EVTX ingestion and normalization
-2. Sigma-style rule detection
-3. Multi-event sequence correlation
-4. Incident grouping and severity scoring
-5. MITRE ATT&CK mapping
-6. RAG retrieval
-7. LLM-based explanation and self-critique
-8. SOC web-console presentation
-
-The existing detection layer is **rule-based**, not machine learning.
-
-The proposed ML enhancement adds an **unsupervised anomaly-detection layer using Isolation Forest**.
-
-The ML layer will learn the patterns of normal Windows behavior from primarily benign telemetry and identify behavior windows that are unusual. It will produce an anomaly score and an ML anomaly signal. This signal will be correlated with existing Sigma and sequence alerts.
-
-The recommended architecture is therefore:
-
-**Known malicious behavior → Sigma rules**
-
-**Known multi-event behavior → Sequence engine**
-
-**Unusual/previously unseen behavior → Isolation Forest**
-
-**Explain and investigate evidence → MITRE ATT&CK + RAG + LLM**
+> **Purpose:** This document defines the unsupervised anomaly-detection layer that
+> supplements NightOwl's Sigma rules. It replaces earlier experimental concepts
+> (Isolation Forest, TF-IDF) and documents the evaluation methodology, the measured
+> results, and what this layer can and cannot be relied on to do.
+>
+> **Revision note (2026-10-05):** the metrics in the previous version of this
+> document (Accuracy 97.80%, Precision 83.87%, Recall 61.90%, F1 71.23%) were
+> measured on the training set and are withdrawn. §4 explains what was wrong with
+> them and §5 reports host-held-out replacements. The honest numbers are
+> substantially worse. See `docs/DOCUMENTATION.md` §9 for the project's honesty
+> policy, which this correction applies.
 
 ---
 
-# 2. Current NightOwl Architecture
+# 1. Executive summary
 
-The existing NightOwl pipeline is:
+NightOwl converts Windows Sysmon/EVTX telemetry into prioritized incidents through
+deterministic Sigma-style rules, multi-event sequence correlation, and RAG/LLM
+incident explanation.
 
-```text
-                    EVTX UPLOAD
-                         |
-                         v
-                  +--------------+
-                  |  INGESTION   |
-                  | EVTX Reader  |
-                  | Normalizer   |
-                  +------+-------+
-                         |
-                         v
-                 NORMALIZED EVENTS
-                         |
-                         v
-                  +--------------+
-                  |   DETECTION  |
-                  |              |
-                  | 45 Sigma     |
-                  | rules        |
-                  |      +       |
-                  | 3 sequence   |
-                  | correlations|
-                  +------+-------+
-                         |
-                         v
-                      ALERTS
-                         |
-                         v
-                  +--------------+
-                  | CORRELATION  |
-                  | Same host     |
-                  | 1-hour window |
-                  +------+-------+
-                         |
-                         v
-                     INCIDENT
-                         |
-                         v
-                  +--------------+
-                  |  MITRE + RAG |
-                  |     + LLM    |
-                  +------+-------+
-                         |
-                         v
-                  SOC WEB CONSOLE
-```
+The ML layer adds unsupervised anomaly detection using **Ledoit-Wolf shrunk
+covariance + Mahalanobis distance**. It learns the covariance structure of normal
+Windows behaviour strictly from benign telemetry, evaluates 10-minute host
+behaviour windows, and flags windows whose distance exceeds a percentile of the
+benign baseline.
 
-The project documentation states that NightOwl turns raw Windows Sysmon/EVTX telemetry into prioritized, explained incidents. Its detection layer uses 45 Sigma-style YAML rules and three multi-event sequence patterns, followed by incident correlation and an AI/RAG explanation layer.
+**What the measurements support:** on a host the baseline actually covers, the
+layer is meaningfully better than chance at separating attack windows from normal
+ones (PR-AUC 0.77 against a 0.25 base rate on `Server002`), and at a strict
+threshold it is reasonably precise (85% precision at the 99.5th percentile on that
+host). Its **recall is low — about 13%**. It finds roughly one attack window in
+eight.
+
+**What the measurements do not support:** any claim that this layer is a detector
+in its own right. It is supplementary evidence of unusual host behaviour. Known
+threats and single-event Living-off-the-Land executions are caught by the Sigma
+rules and the sequence engine, which is where NightOwl's actual 50/61 (82.0%)
+detection rate comes from.
 
 ---
 
-# 3. Important Distinction: AI vs ML
-
-NightOwl already contains AI functionality, but it does not currently contain a machine-learning anomaly detector.
-
-| Component | Current Status | Type |
-|---|---|---|
-| EVTX ingestion | Implemented | Data processing |
-| Event normalization | Implemented | Data processing |
-| 45 Sigma-style rules | Implemented | Rule-based detection |
-| 3 sequence correlations | Implemented | Deterministic correlation |
-| MITRE ATT&CK mapping | Implemented | Knowledge/enrichment |
-| ChromaDB RAG | Implemented | Retrieval/AI |
-| LLM explanation | Implemented | Generative AI |
-| Isolation Forest | **Proposed** | **Unsupervised ML** |
-| Supervised classifier | Not proposed initially | Supervised ML |
-
-The proposed ML work therefore **adds** machine learning; it does not replace the current detection architecture.
-
----
-
-# 4. Recommended ML Approach
+# 2. Architecture
 
 ## Algorithm
 
-**Isolation Forest**
+**Ledoit-Wolf Mahalanobis distance** over `log1p`-transformed feature vectors.
 
-## Learning type
+* **Why not Isolation Forest?** It suffered from the curse of dimensionality across
+  50+ dense volumetric features, producing unstable anomaly scoring and a high
+  false-positive rate.
+* **Why not TF-IDF over command lines?** Standard Windows background noise (Temp
+  paths, GUIDs) introduces extreme natural variance that swamps malicious strings.
+* **Why Ledoit-Wolf specifically?** Shrinkage keeps the covariance matrix
+  invertible across correlated, highly skewed behavioural features without
+  hand-tuning a regularization term.
 
-**Unsupervised Learning**
+## Feature extraction
 
-## ML task
+`backend/app/ml/features.py` produces **70 features** per (host, 10-minute window):
 
-**Behavioral anomaly detection**
+* **53 volumetric** — event-ID counts (Sysmon 1/3/11, Security 4624/4688/…),
+  per-minute rates, unique process/destination/user counts, command-line
+  statistics, ratios.
+* **8 basic heuristics** — service creation, account/group change, log cleared,
+  LSASS access, LOLBin usage, suspicious PowerShell, remote named pipe, admin
+  share access.
+* **9 advanced content-aware heuristics** — `exploit_tool_regex_match`,
+  `uac_bypass_registry_count`, `winrm_spawned_recon_count`,
+  `suspicious_service_imagepath_count`, `accessibility_hijack_count`,
+  `advanced_lolbin_count`, `db_failed_logon_count`, `domain_enumeration_count`,
+  `account_tampering_count`.
 
-## Main objective
+This module lives under `app/`, not `scripts/`, because the live ingest path
+imports it. It previously lived in `backend/scripts/`, which neither
+`.dockerignore` nor the Dockerfile's `COPY` list includes — so in every container
+build the import raised `ModuleNotFoundError`, a bare `except Exception` swallowed
+it, and **the ML layer silently never ran in Docker at all.**
 
-Identify Windows behavior that is significantly different from learned normal behavior.
+## Only 28 of the 70 features are actually used
 
-The ML system should answer:
+`NightOwlAnomalyDetector.train()` drops any feature the benign corpus cannot
+support — constant, or non-zero in under 1% of windows — and records the survivors
+as the model's schema. On the current corpus that leaves **28 features**; 42 are
+dropped.
 
-> "How unusual is this behavior compared with the normal Windows behavior seen by the model?"
+This is not tuning. Mahalanobis distance is scale-free, so a feature the baseline
+never exercises gets only the shrinkage floor as its variance (≈4e-4 here), and its
+first ordinary value in production reads as an enormous deviation. Measured against
+the previous 70-feature model:
 
-It should not automatically answer:
+| scenario | old 70-feature model | current 28-feature model |
+|---|---|---|
+| median benign window | 22.5 — Low | 20.2 — Low |
+| **normal host, 120 network connections** | **77,940 — High** | **193 — Low** |
+| **benign admin, 8 PowerShell script blocks** | **11,936 — High** | **64 — Low** |
+| noisy enumeration burst (400 processes) | 12,514 — High | 9,084 — High |
 
-> "Is this definitely malware?"
+The benign corpus contains almost no Sysmon EID 3: `unique_destination_count` is 0
+in all 1829 windows and `network_event_count` is non-zero in 6. The 70-feature
+model would therefore have fired `High` on essentially every 10-minute window of
+any host that browses the web. The dropped features are listed by
+`scripts/train_ml_model.py` on every run.
 
-An anomaly is a signal for investigation, not proof of maliciousness.
+**Cost of the cull:** 7 of the 9 advanced heuristics are among the dropped
+features, and they were the single strongest signal in the old model (a single
+firing added ~1181 to the distance, 2.7× the threshold). Recall falls as a result.
+That is the correct trade: those features only "worked" because the baseline never
+saw them fire, which is the same property that would make them fire on benign
+production hosts. Catching those specific executions is the Sigma rules' job.
 
----
+## Scoring
 
-# 5. Why Isolation Forest?
-
-Isolation Forest is a strong starting point for NightOwl because:
-
-- It is designed for anomaly/outlier detection.
-- It works well with numerical/tabular feature vectors.
-- It does not require malicious/benign labels for the initial training process.
-- It is relatively lightweight compared with deep-learning alternatives.
-- It is easier to integrate into the existing Python backend.
-- It is easier to explain and demonstrate in an academic project.
-- It can complement deterministic Sigma rules rather than replacing them.
-
-The recommended implementation should start with **one Isolation Forest model** rather than multiple ML models.
-
-Possible future comparison algorithms include One-Class SVM, Local Outlier Factor, DBSCAN, or an Autoencoder, but they should not be added until the first Isolation Forest implementation is working and evaluated.
-
----
-
-# 6. Final Hybrid Architecture
-
-```text
-                         +----------------+
-                         |    EVTX FILE   |
-                         +-------+--------+
-                                 |
-                                 v
-                        +------------------+
-                        | EVTX INGESTION   |
-                        | Parse + Read     |
-                        +--------+---------+
-                                 |
-                                 v
-                        +------------------+
-                        | EVENT NORMALIZER |
-                        +--------+---------+
-                                 |
-                                 v
-                        +------------------+
-                        | NORMALIZED       |
-                        | EVENTS           |
-                        +--------+---------+
-                                 |
-                    +------------+------------+
-                    |                         |
-                    v                         v
-          +-------------------+     +-------------------+
-          | SIGMA RULE ENGINE |     | FEATURE ENGINE    |
-          | Existing          |     | New ML component  |
-          | 45 rules          |     |                   |
-          | + 3 sequences     |     | Behavioral        |
-          +---------+---------+     | features          |
-                    |               +---------+---------+
-                    |                         |
-                    |                         v
-                    |               +-------------------+
-                    |               | ISOLATION FOREST  |
-                    |               | UNSUPERVISED ML   |
-                    |               +---------+---------+
-                    |                         |
-                    |                         v
-                    |                  ANOMALY SCORE
-                    |                         |
-                    +------------+------------+
-                                 |
-                                 v
-                       +---------------------+
-                       | ALERT CORRELATION   |
-                       | Sigma + ML +        |
-                       | sequence signals   |
-                       +----------+----------+
-                                  |
-                                  v
-                           +-------------+
-                           |  INCIDENT   |
-                           +------+------+
-                                  |
-                    +-------------+-------------+
-                    |                           |
-                    v                           v
-             +-------------+             +-------------+
-             | MITRE ATT&CK|             | RAG         |
-             | Enrichment  |             | Retrieval   |
-             +------+------+             +------+------+ 
-                    |                           |
-                    +-------------+-------------+
-                                  |
-                                  v
-                           +-------------+
-                           |    LLM      |
-                           | Explanation |
-                           +------+------+
-                                  |
-                                  v
-                           +-------------+
-                           | SOC CONSOLE |
-                           +-------------+
-```
+Thresholds are the 99.5th (suspicious → Medium) and 99.9th (→ High) percentiles of
+the **training** distances. They describe the baseline's own spread. They are not a
+false-positive rate, and §4 is about what happens when they are mistaken for one.
 
 ---
 
-# 7. Complete End-to-End Workflow
+# 3. Dataset
 
-## Step 1 — EVTX Upload
+| | windows | source |
+|---|---|---|
+| Benign | 1829 | `NightOwl-Benign-Dataset/` — 31 EVTX files, 2 hosts: `LAPTOP-5GVGMJ14` (952), `Server002` (877) |
+| Attack | 87 | `real_world_fixtures/detected/` (50 files) + `undetected/` (11 files) |
 
-The analyst uploads a Windows `.evtx` file.
+## The `bits_openvpn.evtx` exclusion
 
-```text
-User
- |
- v
-NightOwl UI
- |
- v
-POST /ingest
- |
- v
-EVTX file
-```
+One attack-folder capture contains 1,537 `Microsoft-Windows-Bits-Client` events
+from routine Windows Update / Google Update / OneDrive polling, with zero malicious
+events and no OpenVPN traces. The dataset pipeline labels every window in an attack
+capture `is_attack = 1`, so its 190 benign windows counted as false negatives. The
+model scored them correctly as benign; the label was wrong.
 
-The file is processed through the existing ingestion pipeline.
+Those 190 windows are excluded. This is a ground-truth correction, not a
+convenience — but it is an exclusion that improves the reported metric, so it is
+named explicitly as `MISLABELED_CAPTURES` in `scripts/eval_ml_model.py` rather than
+applied silently.
 
----
+## Baseline coverage is the limiting factor
 
-## Step 2 — EVTX Parsing
-
-The EVTX reader extracts Windows event records.
-
-Conceptually:
-
-```text
-EVTX
- |
- +-- Event 1
- +-- Event 2
- +-- Event 3
- +-- ...
- +-- Event N
-```
-
-The raw event information is preserved.
+Two hosts is not a baseline. It is why 42 features have no support, why the two
+hosts disagree so sharply in §5, and why no number in this document should be
+expected to hold on a third machine.
 
 ---
 
-## Step 3 — Event Normalization
+# 4. What was wrong with the previous metrics
 
-Each raw event is converted into NightOwl's normalized event representation.
+The previous §4 reported Accuracy 97.80%, Precision 83.87%, Recall 61.90%, F1
+71.23%, TN 1819 / FP 10.
 
-Important fields include:
+**The benign half of that evaluation was the training set.** `scratch_prod_eval.py`
+loaded its benign windows from `scripts/ml_features.csv` — the same file
+`train_ml_model.py` fits on. TN + FP = 1829 = that file's row count exactly.
 
-```text
-timestamp
-host
-event_id
-process
-parent_process
-command_line
-user
-event_data
-raw_json
-```
+Since the threshold is the 99.5th percentile *of the training distances*, "10
+benign windows flagged out of 1829" (0.547%) is arithmetic, not a measurement. Any
+model trained this way produces that number. Refitting with 5-fold cross-validation
+gives an out-of-sample rate of **0.875% ± 0.27** on the same corpus, and the
+host-held-out protocols in §5 give 2.1–3.8%.
 
-This gives both the existing rule engine and the ML feature extractor a consistent source.
+Two further problems with those figures:
 
----
+* **Accuracy was meaningless at that class ratio.** 1829 benign vs 87 attack means
+  a classifier that never fires scores **95.6%**. The reported 97.80% was 2.2
+  points above doing nothing.
+* **They no longer reproduced.** Re-running the same script today gives 87 attack
+  windows, TP 60 / FN 27, recall 68.97%, F1 76.43% — not 84 / 52 / 32 / 61.90% /
+  71.23%. This document was written 2026-09-28 18:18; `extract_ml_features.py` was
+  last edited at 18:49. The published numbers described a pre-final extractor, and
+  the "32 remaining false negatives" breakdown described a run that no longer
+  existed.
 
-# 8. Two Detection Paths
+Only **recall** in the old table was measured on genuinely unseen data.
 
-After normalization, the events are processed through two paths:
+### The previous explanation for the false negatives was also wrong
 
-```text
-                    NORMALIZED EVENTS
-                           |
-             +-------------+-------------+
-             |                           |
-             v                           v
-       EXISTING PATH                NEW ML PATH
-             |                           |
-             v                           v
-       Sigma Rules                Feature Engineering
-             |                           |
-             v                           v
-       Known Threats              Isolation Forest
-                                         |
-                                         v
-                                  Unusual Behavior
-```
+The old §5B attributed the stealth misses to covariance mathematics: "appending a
+Boolean heuristic does not guarantee an anomaly spike if the benign dataset has
+non-zero variance for that feature."
+
+The benign variance for those features was exactly **zero**, which made them
+extremely powerful rather than weak — a single firing moved the distance by ~1181
+against a 439 threshold. The misses were windows where the heuristic **did not
+fire**: extraction-logic gaps, not a mathematical ceiling. For example,
+`Discovery_Remote_System_NamedPipes_Sysmon_18` uses the pipes `\wkssvc` and
+`\browser`, while the extractor matched only `lsarpc|samr|svcctl|srvsvc`.
 
 ---
 
-# 9. Existing Sigma Detection Path
+# 5. Measured results
 
-NightOwl currently has 45 Sigma-style YAML rules.
+Produced by `backend/scripts/eval_ml_model.py`. Both protocols refit the model and
+re-derive the threshold inside each fold. Benign windows are never split randomly —
+consecutive 10-minute windows from one host are near-duplicates, so a random split
+leaks.
 
-The existing engine checks events against the rules.
+## Protocol A — within-host temporal split (the deployment condition)
 
-Example:
+Fit on each host's first 70% of windows by time; score its last 30% plus all 87
+attack windows. This is what deployment looks like: the baseline covers the host
+being monitored, and the question is whether its later windows read as normal.
 
-```text
-Event:
-Process = powershell.exe
-CommandLine = powershell -enc ...
+| threshold | Precision | Recall | F1 | benign FP rate |
+|---|---|---|---|---|
+| 99.0th pct | 52.83% | 16.09% | 24.67% | 4.55% |
+| **99.5th pct (shipped)** | **52.27%** | **13.22%** | **21.10%** | **3.82%** |
+| 99.9th pct | 59.46% | 12.64% | 20.85% | 2.73% |
 
-             |
-             v
+**PR-AUC 0.4931** against a 0.2403 random baseline — a 2.05× lift.
 
-Sigma Rule Match
+The two hosts differ sharply, and the average hides it:
 
-             |
-             v
+| host | features fitted | PR-AUC (random) | Precision @99.5 | Recall @99.5 |
+|---|---|---|---|---|
+| `Server002` | 28 / 70 | **0.7701** (0.2479) | 84.62% | 12.64% |
+| `LAPTOP-5GVGMJ14` | 7 / 70 | 0.3325 (0.2332) | 38.71% | 13.79% |
 
-Alert
-```
+On the server the layer works: 3.1× lift over chance, 85% precision, 2 false
+positives in 264 held-out benign windows. On the laptop it barely beats chance —
+only 7 features survived the support test, because a single workstation generates
+too narrow a behavioural range to model.
 
-The existing system also has three multi-event sequence correlations:
+## Protocol B — host-held-out (transfer to an unseen machine)
 
-1. Process Herpaderping
-2. SMB share-enumeration probe
-3. Kerberos password spray
+Fit on one host, score the other entirely. Pessimistic by design: in deployment the
+baseline would include the monitored host. Reported because it bounds how far a
+single-host baseline transfers.
 
-These remain in the system.
+| threshold | Precision | Recall | F1 | benign FP rate |
+|---|---|---|---|---|
+| 99.0th pct | 5.99% | 20.11% | 9.23% | 30.02% |
+| **99.5th pct (shipped)** | **29.63%** | **9.20%** | **14.04%** | **2.08%** |
+| 99.9th pct | 42.42% | 8.05% | 13.53% | 1.04% |
 
-The ML implementation should not remove or rewrite these mechanisms.
+**PR-AUC 0.1464** against a 0.0869 random baseline — a 1.68× lift.
 
----
+A baseline from one machine does not describe a different kind of machine. At the
+99.0th percentile, a model fitted on the laptop flags 531 of Server002's 877
+windows.
 
-# 10. ML Feature Engineering
+## Accuracy
 
-This is the most important stage of the new ML pipeline.
+Deliberately not headlined. At these class ratios the majority-class baseline is
+75–96% depending on the fold, and accuracy tracks it almost exactly. The evaluation
+script prints it only with that baseline beside it.
 
-Isolation Forest should not receive raw EVTX XML directly.
+## Summary
 
-Instead:
-
-```text
-Normalized Events
-       |
-       v
-Group by Host
-       |
-       v
-Create Behavior Window
-       |
-       v
-Extract Features
-       |
-       v
-Feature Vector
-       |
-       v
-Isolation Forest
-```
-
----
-
-# 11. Recommended Behavior Window
-
-Start with a **5–10 minute host-level behavior window**.
-
-Example:
-
-```text
-HOST-01
-
-10:00:00 ─────────────── 10:10:00
-
-Events:
-  ProcessCreate
-  ProcessCreate
-  NetworkConnect
-  PowerShell
-  FileCreate
-  ProcessCreate
-  ...
-```
-
-These events are aggregated into one behavioral feature vector.
-
-Why?
-
-A single event is often insufficient to determine whether behavior is suspicious.
-
-For example:
-
-```text
-powershell.exe
-```
-
-may be normal.
-
-But:
-
-```text
-Word
-  |
-  +--> PowerShell
-          |
-          +--> Encoded command
-                  |
-                  +--> Network connection
-                          |
-                          +--> certutil
-```
-
-is much more interesting from a behavioral perspective.
+| | previous claim | measured (Protocol A, 99.5th) |
+|---|---|---|
+| Precision | 83.87% | 52.27% |
+| Recall | 61.90% | **13.22%** |
+| F1 | 71.23% | 21.10% |
+| Benign FP rate | 0.55% | 3.82% |
+| Accuracy | 97.80% | not quoted without its baseline |
 
 ---
 
-# 12. Feature Categories
+# 6. Limits and conclusion
 
-## 12.1 Process Features
+> **NightOwl is a hybrid Windows SOC platform. The ML layer is supplementary
+> evidence, not a detector.**
 
-Examples:
+What it provides: a signal that a 10-minute host window deviates from the host's
+established behavioural baseline — noisy enumeration, volumetric spikes, unusual
+process mix. At the shipped threshold it is right about half the time it fires, and
+it fires for roughly one attack window in eight.
 
-```text
-process_count
-unique_process_count
-rare_process_count
-parent_child_relationship_count
-parent_child_anomaly_count
+What it does not provide, and must not be described as providing:
+
+* **Technique attribution.** An anomaly score maps to no ATT&CK technique. ML
+  alerts carry `technique_id = None` deliberately (`app/ml/rule.py`); inventing one
+  would be exactly the fabricated confidence `docs/DOCUMENTATION.md` §9 forbids.
+* **Coverage of stealth execution.** Single-event Living-off-the-Land activity
+  generates too little volume to shift a Mahalanobis distance. This is the Sigma
+  rules' and the sequence engine's job, and they do it: 50/61 (82.0%) with 0 false
+  positives.
+* **Any guarantee on an unmodelled host.** See Protocol B.
+
+## Known work
+
+1. **Extend the benign corpus.** The binding constraint is two hosts and no network
+   telemetry. Captures containing Sysmon EID 3 and PowerShell 4104 would restore
+   the ~42 dropped features, most of the recall, and the advanced heuristics —
+   without the false-positive cliff that made them unusable before.
+2. **Per-host baselines.** Protocol B shows a shared model transfers poorly. One
+   model per monitored host, fitted on that host's own history, matches how the
+   layer actually performs best (`Server002`, PR-AUC 0.77).
+3. **Close the extraction gaps from §4.** Extend the named-pipe list (`wkssvc`,
+   `browser`, `atsvc`, `winreg`, `spoolss`) and audit the other advanced heuristics
+   against `scripts/32_fns_dump.txt`. These are cheap recall wins once the corpus
+   supports the features again.
+
+## Reproducing these numbers
+
+```bash
+cd backend
+./venv/Scripts/python.exe scripts/extract_ml_features.py   # rebuild the benign matrix
+./venv/Scripts/python.exe scripts/train_ml_model.py        # fit + report dropped features
+./venv/Scripts/python.exe scripts/eval_ml_model.py         # both protocols
 ```
 
-These describe process execution behavior.
-
----
-
-## 12.2 PowerShell Features
-
-Examples:
-
-```text
-powershell_count
-encoded_command_count
-script_block_count
-suspicious_powershell_pattern_count
-```
-
-These describe PowerShell activity within the window.
-
----
-
-## 12.3 Network Features
-
-Examples:
-
-```text
-network_event_count
-unique_destination_count
-external_destination_count
-unique_destination_port_count
-```
-
-These describe network behavior.
-
----
-
-## 12.4 Command-Line Features
-
-Examples:
-
-```text
-average_command_length
-maximum_command_length
-argument_count
-suspicious_argument_count
-encoded_command_indicator
-```
-
-These describe command-line characteristics.
-
----
-
-## 12.5 User Features
-
-Examples:
-
-```text
-unique_user_count
-processes_per_user
-rare_user_process_combination
-```
-
-These describe account/process relationships.
-
----
-
-## 12.6 Temporal Features
-
-Examples:
-
-```text
-events_per_minute
-processes_per_minute
-network_events_per_minute
-time_of_day
-```
-
-These describe event frequency and timing.
-
----
-
-# 13. Example Feature Vector
-
-A 10-minute behavior window might become:
-
-```text
-process_count                 = 35
-unique_process_count          = 17
-rare_process_count            = 4
-powershell_count              = 8
-encoded_command_count         = 3
-network_event_count           = 14
-unique_destinations           = 7
-external_destinations         = 5
-unique_users                  = 2
-average_command_length        = 147
-maximum_command_length        = 512
-events_per_minute             = 50
-processes_per_minute          = 3
-parent_child_anomalies        = 2
-```
-
-This becomes a numerical vector:
-
-```text
-X = [
-    35,
-    17,
-    4,
-    8,
-    3,
-    14,
-    7,
-    5,
-    2,
-    147,
-    512,
-    50,
-    3,
-    2
-]
-```
-
-The actual final feature list should be determined after examining the real event fields available in the NightOwl corpus.
-
----
-
-# 14. ML Training Workflow
-
-The recommended unsupervised training workflow is:
-
-```text
-             BENIGN / NORMAL TELEMETRY
-                       |
-                       v
-                 EVTX Parsing
-                       |
-                       v
-                 Normalization
-                       |
-                       v
-                Feature Extraction
-                       |
-                       v
-                 Feature Matrix
-                       |
-                       v
-               Preprocessing
-                       |
-                       v
-              ISOLATION FOREST
-                       |
-                       v
-                 Trained Model
-                       |
-                       v
-                  model file
-```
-
-The primary training data should represent normal Windows behavior.
-
----
-
-# 15. Important Dataset Rule
-
-Do not assume:
-
-```text
-detected = malicious
-undetected = benign
-```
-
-That is incorrect.
-
-The NightOwl documentation describes the detected/undetected directories as benchmark outputs that are re-derived by the detection benchmark scripts. They are not automatically ML labels.
-
-For the unsupervised approach:
-
-```text
-TRAINING:
-Primarily normal/benign behavior
-
-TESTING:
-Benign + malicious/attack behavior
-```
-
-Attack captures are particularly useful for evaluating whether the trained anomaly detector assigns higher anomaly scores to attack behavior.
-
----
-
-# 16. Testing Workflow
-
-After training:
-
-```text
-Attack EVTX
-    |
-    v
-Parse
-    |
-    v
-Normalize
-    |
-    v
-Feature Extraction
-    |
-    v
-Isolation Forest
-    |
-    v
-Anomaly Score
-    |
-    v
-Evaluate
-```
-
-Test on both:
-
-```text
-BENIGN DATA
-+
-ATTACK DATA
-```
-
-The goal is to determine whether malicious behavior tends to receive higher anomaly scores than benign behavior.
-
----
-
-# 17. Threshold Selection
-
-Isolation Forest produces an anomaly/outlier signal.
-
-NightOwl should convert this into an operational category.
-
-Conceptually:
-
-```text
-             ANOMALY SCORE
-                   |
-       +-----------+-----------+
-       |           |           |
-       v           v           v
-     Normal    Suspicious    High
-```
-
-Do not permanently choose arbitrary thresholds before testing.
-
-Instead:
-
-1. Train the model.
-2. Run it on validation data.
-3. Inspect score distributions.
-4. Measure false positives.
-5. Measure attack detection.
-6. Select thresholds based on evidence.
-7. Re-test on unseen data.
-
-This follows NightOwl's existing project philosophy of measuring detection behavior against real data.
-
----
-
-# 18. ML Alert Structure
-
-A new ML alert can conceptually contain:
-
-```text
-ML Alert
----------------------------
-Detection Method:
-ML_ANOMALY
-
-Host:
-WORKSTATION-01
-
-Behavior Window:
-10:00 - 10:10
-
-Anomaly Score:
-High
-
-Evidence:
-- Unusual process activity
-- Unusual PowerShell frequency
-- External network activity
-- Rare process relationship
-```
-
-The exact database/API schema should be designed to fit NightOwl's existing `alerts` and `incidents` architecture.
-
----
-
-# 19. Combining ML and Sigma
-
-This is the key benefit of the hybrid approach.
-
-Example:
-
-```text
-                    HOST-01
-                       |
-             +---------+---------+
-             |                   |
-             v                   v
-        SIGMA ALERT          ML ALERT
-             |                   |
-   Known suspicious        Unusual behavior
-      PowerShell                |
-             |              Score: High
-             |                   |
-             +---------+---------+
-                       |
-                       v
-                 CORRELATION
-                       |
-                       v
-                   INCIDENT
-```
-
-A single incident can therefore contain evidence from multiple detection mechanisms.
-
----
-
-# 20. Example Scenario
-
-Suppose an attacker executes:
-
-```text
-Word
- |
- v
-PowerShell
- |
- v
-Encoded command
- |
- v
-Network connection
- |
- v
-Certutil
-```
-
-### Sigma may detect:
-
-```text
-Suspicious PowerShell
-```
-
-### Isolation Forest may detect:
-
-```text
-Unusual process chain
-+
-unusual PowerShell frequency
-+
-unusual network activity
-```
-
-### Correlation produces:
-
-```text
-Incident #42
-
-Sigma Evidence:
-Suspicious PowerShell
-
-ML Evidence:
-High behavioral anomaly
-
-Host:
-WORKSTATION-01
-```
-
-This is much stronger than either detector alone.
-
----
-
-# 21. MITRE ATT&CK Enrichment
-
-Existing NightOwl MITRE mapping remains useful.
-
-For deterministic Sigma detections:
-
-```text
-Sigma Rule
-    |
-    v
-MITRE Technique
-```
-
-For an ML anomaly:
-
-```text
-ML anomaly
-    |
-    v
-Behavioral evidence
-    |
-    v
-Potential technique context
-```
-
-Do not automatically assign a MITRE technique to an anomaly simply because its score is high.
-
-The technique mapping should be evidence-based.
-
----
-
-# 22. RAG Workflow
-
-Once the incident exists:
-
-```text
-Incident
-   |
-   +-- Sigma evidence
-   +-- ML evidence
-   +-- Sequence evidence
-   +-- Events
-   +-- Process information
-   +-- Command line
-   +-- User
-   +-- MITRE techniques
-          |
-          v
-      RAG Retrieval
-          |
-          v
-   Relevant MITRE/Playbook
-       knowledge
-```
-
-NightOwl already uses a ChromaDB vector store containing MITRE technique descriptions and playbooks.
-
----
-
-# 23. LLM Explanation Workflow
-
-The existing LLM layer can then use:
-
-```text
-Incident Context
-       +
-ML Anomaly Information
-       +
-Sigma Evidence
-       +
-MITRE Context
-       +
-Retrieved RAG Chunks
-       |
-       v
-      LLM
-       |
-       v
-Explanation
-       +
-Recommendation
-       +
-Fact/Inference/Uncertainty
-```
-
-Example:
-
-```text
-FACT:
-PowerShell was launched from the observed parent process.
-
-FACT:
-The behavior window received a high ML anomaly score.
-
-FACT:
-The event generated a Sigma alert.
-
-INFERENCE:
-The combination may indicate suspicious execution.
-
-UNCERTAINTY:
-Available telemetry does not independently prove malicious intent.
-
-RECOMMENDATION:
-Investigate the parent process, command line,
-and network destinations.
-```
-
----
-
-# 24. Final Dashboard Workflow
-
-The SOC analyst should see:
-
-```text
-+--------------------------------------------------+
-|                 NIGHTOWL                         |
-+--------------------------------------------------+
-| INCIDENT #42                                     |
-|                                                  |
-| Host: WORKSTATION-01                            |
-| Severity: HIGH                                  |
-|                                                  |
-| Detection Sources:                              |
-|   [Sigma] Suspicious PowerShell                 |
-|   [ML]    High Behavioral Anomaly               |
-|                                                  |
-| ML Anomaly: HIGH                                |
-|                                                  |
-| MITRE ATT&CK: T1059.001                         |
-|                                                  |
-| Evidence Timeline                               |
-| -----------------------------------------------  |
-| Word -> PowerShell -> Network -> Certutil       |
-|                                                  |
-| AI Investigation                                |
-| -----------------------------------------------  |
-| Explanation                                     |
-| Fact / Inference / Uncertainty                  |
-| Recommended Response                            |
-+--------------------------------------------------+
-```
-
----
-
-# 25. Complete ML Workflow Diagram
-
-```text
-                    +----------------+
-                    |    EVTX FILE   |
-                    +-------+--------+
-                            |
-                            v
-                   +------------------+
-                   | EVTX PARSER      |
-                   +--------+---------+
-                            |
-                            v
-                   +------------------+
-                   | NORMALIZATION    |
-                   +--------+---------+
-                            |
-                            v
-                   +------------------+
-                   | EVENTS           |
-                   | host             |
-                   | timestamp        |
-                   | process          |
-                   | parent_process   |
-                   | command_line     |
-                   | user             |
-                   | event_data       |
-                   +--------+---------+
-                            |
-                            v
-                   +------------------+
-                   | HOST BEHAVIOR    |
-                   | WINDOW           |
-                   | 5–10 minutes     |
-                   +--------+---------+
-                            |
-                            v
-                   +------------------+
-                   | FEATURE ENGINE   |
-                   +--------+---------+
-                            |
-            +---------------+---------------+
-            |               |               |
-            v               v               v
-        Process          Network        Command
-        Features         Features       Features
-            |               |               |
-            +---------------+---------------+
-                            |
-                            v
-                   +------------------+
-                   | FEATURE VECTOR   |
-                   +--------+---------+
-                            |
-                            v
-                   +------------------+
-                   | ISOLATION FOREST |
-                   | UNSUPERVISED ML  |
-                   +--------+---------+
-                            |
-                            v
-                   +------------------+
-                   | ANOMALY SCORE    |
-                   +--------+---------+
-                            |
-                     +------+------+
-                     |             |
-                     v             v
-                  Normal       Anomaly
-                                   |
-                                   v
-                              ML ALERT
-```
-
----
-
-# 26. Complete Hybrid Workflow Diagram
-
-```text
-                         EVTX
-                          |
-                          v
-                     INGESTION
-                          |
-                          v
-                    NORMALIZER
-                          |
-                          v
-                  NORMALIZED EVENTS
-                          |
-              +-----------+-----------+
-              |                       |
-              v                       v
-       +-------------+         +-------------+
-       | SIGMA       |         | ML FEATURE  |
-       | ENGINE      |         | ENGINE      |
-       +------+------+         +------+------+
-              |                       |
-              v                       v
-       Known Threats          Behavioral Features
-              |                       |
-              |                       v
-              |                +-------------+
-              |                | ISOLATION   |
-              |                | FOREST      |
-              |                +------+------+
-              |                       |
-              |                       v
-              |                Anomaly Score
-              |                       |
-              +-----------+-----------+
-                          |
-                          v
-                    ALERT CORRELATION
-                          |
-                          v
-                       INCIDENT
-                          |
-             +------------+------------+
-             |                         |
-             v                         v
-       MITRE ATT&CK                 RAG
-             |                         |
-             +------------+------------+
-                          |
-                          v
-                         LLM
-                          |
-                          v
-                Explanation + Response
-                          |
-                          v
-                     SOC CONSOLE
-```
-
----
-
-# 27. ML Training vs Detection-Time Workflow
-
-These are two separate processes.
-
-## Training
-
-```text
-Normal EVTX
-    |
-    v
-Feature Extraction
-    |
-    v
-Feature Matrix
-    |
-    v
-Isolation Forest
-    |
-    v
-Trained Model
-    |
-    v
-Save Model
-```
-
-## Detection
-
-```text
-New EVTX
-    |
-    v
-Feature Extraction
-    |
-    v
-Saved Isolation Forest
-    |
-    v
-Anomaly Score
-    |
-    v
-ML Alert
-```
-
-The trained model does not need to be retrained for every uploaded EVTX file.
-
----
-
-# 28. Recommended Software Architecture
-
-A clean implementation can add an ML module to the backend:
-
-```text
-backend/
-└── app/
-    ├── api/
-    ├── core/
-    ├── detection/
-    │   ├── rules/
-    │   ├── engine.py
-    │   └── sequences.py
-    │
-    ├── ml/
-    │   ├── __init__.py
-    │   ├── feature_extractor.py
-    │   ├── anomaly_detector.py
-    │   ├── model_manager.py
-    │   └── scoring.py
-    │
-    ├── ingestion/
-    ├── services/
-    ├── rag/
-    └── models/
-```
-
-### Responsibilities
-
-`feature_extractor.py`
-
-```text
-Events
-  ↓
-Behavior windows
-  ↓
-Feature vectors
-```
-
-`anomaly_detector.py`
-
-```text
-Feature vectors
-  ↓
-Isolation Forest
-  ↓
-Anomaly scores
-```
-
-`model_manager.py`
-
-```text
-Train
-Load
-Save
-Version
-```
-
-`scoring.py`
-
-```text
-Raw anomaly signal
-  ↓
-NightOwl anomaly category
-```
-
-The exact package names can be changed to match the repository's existing conventions.
-
----
-
-# 29. Model Lifecycle
-
-```text
-          COLLECT NORMAL DATA
-                  |
-                  v
-          FEATURE EXTRACTION
-                  |
-                  v
-          TRAIN ISOLATION FOREST
-                  |
-                  v
-              VALIDATE
-                  |
-        +---------+---------+
-        |                   |
-        v                   v
-     Good?               Not Good?
-        |                   |
-        v                   v
-   Save Model        Improve Features
-        |                   |
-        +---------+---------+
-                  |
-                  v
-            DEPLOY MODEL
-                  |
-                  v
-           DETECT ANOMALIES
-                  |
-                  v
-           COLLECT FEEDBACK
-                  |
-                  v
-        PERIODICALLY RETRAIN
-```
-
-Retraining should be controlled and evaluated rather than automatically changing the production model after every alert.
-
----
-
-# 30. Evaluation Strategy
-
-Do not evaluate the ML model using accuracy alone.
-
-For anomaly detection, measure:
-
-- False positives
-- Detection rate / recall on attack test data
-- Precision where ground-truth labels are available
-- ROC-AUC or PR-AUC where appropriate
-- Anomaly score distributions
-- Detection latency
-- Number of ML alerts generated
-- Overlap between ML alerts and Sigma alerts
-- Additional attacks/behaviors identified only by ML
-
-A particularly important experiment is:
-
-```text
-Sigma only
-      VS
-Sigma + Isolation Forest
-```
-
-Compare whether the hybrid system finds additional suspicious behavior without creating an unacceptable number of false positives.
-
-NightOwl already has benchmark scripts for measuring detection against its real-world fixture corpus, so the ML evaluation should be added as a separate ML evaluation rather than confusing it with the existing rule benchmark.
-
----
-
-# 31. What Success Looks Like
-
-The goal is not:
-
-```text
-ML detects everything
-```
-
-The goal is:
-
-```text
-             KNOWN THREATS
-                  |
-               SIGMA
-                  |
-                  v
-               ALERTS
-
-
-          UNUSUAL BEHAVIOR
-                  |
-           ISOLATION FOREST
-                  |
-                  v
-               ANOMALIES
-
-
-              BOTH
-               |
-               v
-           CORRELATION
-               |
-               v
-            INCIDENT
-               |
-               v
-          RAG + LLM
-               |
-               v
-       ANALYST EXPLANATION
-```
-
-The ML layer should provide **additional evidence**, especially for behavior that isn't represented by the current deterministic rules.
-
----
-
-# 32. What Not to Do
-
-### Do not replace Sigma.
-
-Keep the existing 45 rules.
-
-### Do not train on raw EVTX XML.
-
-Convert events into meaningful behavioral features.
-
-### Do not train on every attack capture as if it were normal.
-
-The unsupervised model should learn normal behavior.
-
-### Do not treat detected/undetected as ML labels.
-
-That directory split belongs to the existing detection benchmark.
-
-### Do not claim anomaly = malware.
-
-An anomaly is a suspicious signal.
-
-### Do not add many models initially.
-
-Start with one Isolation Forest.
-
-### Do not hard-code thresholds without evaluation.
-
-Choose thresholds from validation experiments.
-
-### Do not automatically map every anomaly to a MITRE technique.
-
-Technique assignment must be supported by evidence.
-
----
-
-# 33. Final Recommended Architecture
-
-The final NightOwl system should be described as:
-
-```text
-             NIGHTOWL HYBRID SOC
-                     |
-     +---------------+---------------+
-     |               |               |
-     v               v               v
-  RULE-BASED      UNSUPERVISED     KNOWLEDGE
-  DETECTION           ML            ANALYSIS
-     |               |               |
-  Sigma +          Isolation       RAG +
-  Sequences         Forest          LLM
-     |               |               |
-     +-------+-------+               |
-             |                       |
-             v                       |
-         CORRELATION <---------------+
-             |
-             v
-          INCIDENT
-             |
-             v
-       MITRE ATT&CK
-             |
-             v
-       SOC EXPLANATION
-             |
-             v
-          ANALYST
-```
-
----
-
-# 34. One-Line Project Definition
-
-> **NightOwl is a hybrid Windows SOC investigation platform that combines deterministic Sigma-based detection, unsupervised Isolation Forest behavioral anomaly detection, incident correlation, MITRE ATT&CK enrichment, and grounded RAG/LLM analysis to help analysts identify and investigate both known and unusual Windows activity.**
-
----
-
-# 35. Key Points to Remember
-
-| Question | Answer |
-|---|---|
-| ML type | **Unsupervised Learning** |
-| Algorithm | **Isolation Forest** |
-| ML task | **Behavioral anomaly detection** |
-| Primary training data | **Normal/benign Windows telemetry** |
-| Attack data | **Evaluation/testing** |
-| Initial number of ML models | **1** |
-| Input | Engineered behavioral feature vectors |
-| Recommended window | **5–10 minutes per host initially** |
-| Output | Anomaly/outlier score + anomaly category |
-| Existing Sigma rules | **Keep them** |
-| Existing sequence engine | **Keep it** |
-| MITRE | **Keep it** |
-| RAG | **Keep it** |
-| LLM | **Keep it** |
-| Main benefit | Detect unusual behavior not covered by deterministic rules |
-| ML replaces Sigma? | **No** |
-| Anomaly automatically means malware? | **No** |
-
----
-
-# 36. Final Concept
-
-The entire idea can be remembered with four words:
-
-```text
-DETECT → CORRELATE → EXPLAIN → INVESTIGATE
-```
-
-**Sigma + Isolation Forest**
-
-↓
-
-**Alerts + Anomalies**
-
-↓
-
-**Incident Correlation**
-
-↓
-
-**MITRE + RAG + LLM**
-
-↓
-
-**SOC Analyst**
-
-This is the recommended ML enhancement for the existing NightOwl project.
+Add `--rebuild` to `eval_ml_model.py` to re-parse the attack EVTX corpus rather
+than using the cached matrix.

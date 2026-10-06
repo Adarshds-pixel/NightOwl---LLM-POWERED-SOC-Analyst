@@ -130,7 +130,7 @@ Rules are Sigma-style YAML files in `backend/app/detection/rules/` (**45** as of
 
 - **The sequence engine** (`detection/sequences.py`) hand-codes 3 multi-event correlations no single-event rule can express: Process Herpaderping (FileCreate → ProcessAccess → ImageLoad, chained via Sysmon `ProcessGuid`, T1055), an SMB share-enumeration probe (a `\srvsvc` PipeConnect corroborated by an inbound port-445 connection, T1135), and a Kerberos password spray (≥4 distinct `TargetUserName` values from one source IP within 60s, T1110.003). It runs once per ingest batch after the per-event rule loop, feeding the same alert/incident creation path a normal rule match uses.
 - **Advisory patterns** (`services/advisory_patterns.py`) are narrow event shapes too false-positive-prone for a deterministic rule (e.g. `\lsass`/`\srvsvc` named-pipe connects from `System`) but still worth a human second look — routed to the LLM advisory second-opinion mechanism instead, never creating an Alert/Incident of their own.
-- **ML Anomaly Detection** (Isolation Forest) is being introduced to baseline normal behavior across 5-10 minute host windows. The `NightOwl-Benign-Dataset` corpus (31 files covering Server002 and LAPTOP-5GVGMJ14) provides the necessary normal activity for extracting behavioral feature vectors (e.g., process counts, parent-child ratios, encoded powershell execution rates) so the model can score unseen behavioral deviation without rigid signatures.
+- **The ML anomaly layer** (`app/ml/`) scores every 10-minute host window in an ingest batch with an unsupervised **Ledoit-Wolf shrunk-covariance Mahalanobis** model fitted only on benign telemetry (`NightOwl-Benign-Dataset`, 31 files, 1829 windows across `Server002` and `LAPTOP-5GVGMJ14`). Windows beyond the 99.5th percentile of the baseline become alerts under the built-in rule id `ml-anomaly-detector`, carrying **no ATT&CK technique** — an anomaly score maps to none, and inventing one would break §9. It is supplementary evidence, not a detector: measured held-out **recall is ~13% at ~52% precision** (PR-AUC 0.49 vs a 0.24 base rate). The 50/61 detection rate in §14 comes from the Sigma rules and the sequence engine, not from this layer. Only 28 of its 70 features are actually fitted — the rest have too little support in a two-host benign corpus to model safely. [`ML.md`](../ML.md) documents the architecture, the evaluation protocols, and the withdrawn earlier metrics in full.
 
 **Verifying detection accuracy** — see §14.
 
@@ -335,7 +335,7 @@ Frontend variables live in `frontend/.env.local` (`VITE_API_BASE_URL`, `VITE_API
 ## 13. Testing
 
 ```bash
-cd backend && ./venv/Scripts/python.exe -m pytest -q     # 611 passed, 1 skipped (612 total tests)
+cd backend && ./venv/Scripts/python.exe -m pytest -q     # 630 passed, 1 skipped (631 total tests)
 cd frontend && npx tsc -b && npm run build && npm run lint
 ```
 
@@ -380,7 +380,7 @@ cd backend
 
 **Current state** (re-run the scripts above for the up-to-date number): **50/61 detected (82.0%), 0 false positives** across all 8 clean fixtures. Every miss in `failure_matrix.md` is hand-classified (`channel_provider_gap`, `rule_missing`, `rule_too_narrow`, `insufficient_telemetry`, etc.) with the real field values checked, not a guessed reason — read that file before adding a new rule for a miss.
 
-Two rules-adjacent mechanisms live outside `app/detection/rules/`: `app/detection/sequences.py` (the 3-pattern multi-event correlator, §5) and `app/services/advisory_patterns.py` (LLM second-opinion patterns). Both are read by `routes_alerts.py`/`routes_events.py`/`routes_incidents.py` alongside the loaded YAML rules when resolving an alert's title/technique.
+Three rules-adjacent mechanisms live outside `app/detection/rules/`: `app/detection/sequences.py` (the 3-pattern multi-event correlator, §5), `app/ml/` (the anomaly layer, §5), and `app/services/advisory_patterns.py` (LLM second-opinion patterns). The first two file real alerts under rule ids that have no YAML file, so `app/detection/synthetic.py` merges both into the `rules_by_id` lookup that `routes_alerts.py`/`routes_events.py`/`routes_incidents.py`/`incident_service.py` use to resolve an alert's title/technique — without it those alerts render as "Unknown rule". Note the benchmark numbers above are the **Sigma + sequence** rate; `run_detection_benchmark.py` does not score the ML layer, which is evaluated separately by `scripts/eval_ml_model.py`.
 
 ### Verifying a specific behaviour quickly
 
