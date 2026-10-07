@@ -50,6 +50,18 @@ export function useEvents(filters: EventFilters, pageSize: number) {
   const severityParam = filters.severity !== 'all' && filters.severity !== 'clean' ? filters.severity : undefined
   const alertOnlyParam = filters.severity === 'clean' ? false : (filters.alertOnly ?? undefined)
 
+  // Back to page 0 when the filters change -- during render, so the load
+  // never fires once with the previous page's offset.
+  const filterKey = JSON.stringify([
+    filters.host, filters.search, alertOnlyParam, severityParam, filters.startDate, filters.endDate, pageSize,
+  ])
+  const [appliedKey, setAppliedKey] = useState(filterKey)
+  if (appliedKey !== filterKey) {
+    setAppliedKey(filterKey)
+    setPage(0)
+  }
+  const effectivePage = appliedKey === filterKey ? page : 0
+
   const load = useCallback(() => {
     const thisRequest = ++requestId.current
     setLoading(true)
@@ -62,7 +74,7 @@ export function useEvents(filters: EventFilters, pageSize: number) {
       start_date: filters.startDate,
       end_date: filters.endDate,
       limit: pageSize,
-      offset: page * pageSize,
+      offset: effectivePage * pageSize,
     })
       .then((res) => {
         if (thisRequest !== requestId.current) return
@@ -75,15 +87,11 @@ export function useEvents(filters: EventFilters, pageSize: number) {
       .finally(() => {
         if (thisRequest === requestId.current) setLoading(false)
       })
-  }, [filters.host, filters.search, alertOnlyParam, severityParam, filters.startDate, filters.endDate, page, pageSize])
+  }, [filters.host, filters.search, alertOnlyParam, severityParam, filters.startDate, filters.endDate, effectivePage, pageSize])
 
   useEffect(() => {
     load()
   }, [load])
-
-  useEffect(() => {
-    setPage(0)
-  }, [filters.host, filters.search, alertOnlyParam, severityParam, filters.startDate, filters.endDate, pageSize])
 
   // Only event-id narrowing is client-side now (the API has no event-id
   // filter); severity is a real query param, so `total` and the pagination
@@ -93,5 +101,5 @@ export function useEvents(filters: EventFilters, pageSize: number) {
     return true
   })
 
-  return { events: visible, rawEvents: events, total, page, setPage, loading, error, refresh: load }
+  return { events: visible, rawEvents: events, total, page: effectivePage, setPage, loading, error, refresh: load }
 }

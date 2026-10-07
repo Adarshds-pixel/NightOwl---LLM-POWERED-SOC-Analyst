@@ -57,7 +57,7 @@ export const TACTIC_LABELS: Record<Tactic, string> = {
   execution: 'Execution',
   persistence: 'Persistence',
   'privilege-escalation': 'Privilege Escalation',
-  stealth: 'Defense Evasion',
+  stealth: 'Stealth (formerly Defense Evasion)',
   'defense-impairment': 'Defense Impairment',
   'credential-access': 'Credential Access',
   discovery: 'Discovery',

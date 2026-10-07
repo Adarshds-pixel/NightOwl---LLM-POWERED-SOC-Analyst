@@ -3,7 +3,7 @@ import { Check, MessageSquare, SendHorizontal, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { IncidentSummary } from '../../api'
-import { useHealth } from '../../context/health/useHealth'
+import { useSystemStatus } from '../../hooks/useSystemStatus'
 import { EXPLAIN_STAGES, useExplain } from '../../hooks/useExplain'
 import { incidentRef } from '../../lib/format'
 import { Badge, Button, Card, EmptyState, SeverityBadge, TypingDots } from '../ui'
@@ -19,10 +19,10 @@ import { Badge, Button, Card, EmptyState, SeverityBadge, TypingDots } from '../u
  */
 export function AiAssistantPanel({ incident }: { incident: IncidentSummary | null }) {
   const navigate = useNavigate()
-  const { status: healthStatus } = useHealth()
+  const { status: systemStatus, aiReady } = useSystemStatus()
   const [question, setQuestion] = useState('')
   const explain = useExplain(incident?.id ?? 0)
-  const online = healthStatus === 'healthy'
+  const online = aiReady
 
   function ask() {
     if (!incident) return
@@ -40,7 +40,7 @@ export function AiAssistantPanel({ incident }: { incident: IncidentSummary | nul
       hero
       action={
         <Badge accent={online ? 'violet' : 'neutral'} dot>
-          {online ? 'AI online' : 'API offline'}
+          {online ? 'AI ready' : systemStatus ? (systemStatus.llm.ready ? 'Knowledge base missing' : 'AI not configured') : 'Checking AI'}
         </Badge>
       }
     >

@@ -27,7 +27,7 @@ import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useExplain } from '../hooks/useExplain'
 import { useIncidentDetail } from '../hooks/useIncidentDetail'
 import type { AlertInfo } from '../api'
-import { formatDateTime, formatDuration, formatRelativeTime, incidentRef } from '../lib/format'
+import { formatDateTime, formatRelativeTime, incidentRef } from '../lib/format'
 import { eventTypeLabel } from '../lib/events'
 import { buildIncidentTimeline } from '../lib/timeline'
 
@@ -93,12 +93,17 @@ function IncidentDetailPage() {
     {
       key: 'severity',
       header: 'Severity',
-      cell: (alert) => <SeverityBadge severity={alert.severity} score={alert.severity_score} />,
+      cell: (alert) =>
+        alert.kind === 'ml' ? (
+          <Badge accent="neutral">ML anomaly</Badge>
+        ) : (
+          <SeverityBadge severity={alert.severity} score={alert.severity_score} />
+        ),
     },
     {
       key: 'event',
       header: 'Event',
-      cell: (alert) => <span className="text-text-dim">{eventTypeLabel(alert.event.event_id)}</span>,
+      cell: (alert) => <span className="text-text-dim">{eventTypeLabel(alert.event.event_id, alert.event.channel)}</span>,
     },
     {
       key: 'rule',
@@ -107,6 +112,11 @@ function IncidentDetailPage() {
       cell: (alert) => (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="truncate text-meta text-text-dim">{alert.rule_title ?? 'Unknown rule'}</span>
+          {alert.occurrence_count > 1 && (
+            <Badge accent="neutral" className="shrink-0">
+              x{alert.occurrence_count}
+            </Badge>
+          )}
           {alert.technique_id && (
             <Badge accent="violet" className="shrink-0">
               {alert.technique_id}
@@ -169,11 +179,11 @@ function IncidentDetailPage() {
             <KeyValue label="Severity" value={<SeverityBadge severity={incident.severity} score={incident.severity_score} />} />
             <KeyValue label="Host" value={incident.host} mono />
             <KeyValue label="Detected" value={formatDateTime(incident.created_at)} mono />
-            <KeyValue label="Open for" value={formatDuration(incident.created_at)} mono />
+            <KeyValue label="Status" value={incident.status} />
             <KeyValue label="Alerts" value={incident.alerts.length} mono />
             <KeyValue label="Techniques" value={incident.mitre_technique_ids.length} mono />
             <KeyValue label="Reference" value={incidentRef(incident.id)} mono />
-            <KeyValue label="Detection source" value="Sigma rules on ingested EVTX" />
+            <KeyValue label="Detection source" value={detectionSource(incident.alerts)} />
           </dl>
           <StatusControl incidentId={incident.id} currentStatus={incident.status} onChanged={handleStatusChanged} />
         </div>
@@ -281,6 +291,16 @@ function IncidentDetailPage() {
       <EventDetailDrawer eventId={selectedEventId} onClose={() => setSelectedEventId(null)} />
     </div>
   )
+}
+
+/** What actually raised this incident's alerts -- never a hard-coded claim. */
+function detectionSource(alerts: { kind?: string }[]): string {
+  const kinds = new Set(alerts.map((alert) => alert.kind ?? 'sigma'))
+  const parts: string[] = []
+  if (kinds.has('sigma')) parts.push('Detection rules')
+  if (kinds.has('sequence')) parts.push('Sequence correlation')
+  if (kinds.has('ml')) parts.push('ML anomaly (supporting only)')
+  return parts.length ? parts.join(' + ') : '--'
 }
 
 export default IncidentDetailPage

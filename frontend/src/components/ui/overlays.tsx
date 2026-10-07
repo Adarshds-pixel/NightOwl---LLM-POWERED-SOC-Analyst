@@ -12,26 +12,74 @@ import { createPortal } from 'react-dom'
  * globally via CSS (see index.css).
  */
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 function useOverlayBehaviour(open: boolean, onClose: () => void) {
   const previouslyFocused = useRef<HTMLElement | null>(null)
+  // Callers pass inline arrows; keeping the latest one in a ref means a
+  // parent re-render (e.g. the 30 s incident poll) no longer tears the
+  // effect down -- which used to yank focus back to the trigger behind the
+  // open overlay and re-run the scroll lock.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!open) return
     previouslyFocused.current = document.activeElement as HTMLElement
 
+    function topDialog(): HTMLElement | null {
+      const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"]')
+      return dialogs.length ? dialogs[dialogs.length - 1] : null
+    }
+
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        onCloseRef.current()
+        return
+      }
+      // Focus trap: Tab cycles within the open dialog instead of escaping
+      // to the page behind it.
+      if (event.key !== 'Tab') return
+      const dialog = topDialog()
+      if (!dialog) return
+      const items = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null)
+      if (items.length === 0) {
+        event.preventDefault()
+        return
+      }
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKeyDown)
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+
+    // The app scrolls inside <main>, not <body>; lock both.
+    const scrollers = [document.body, ...document.querySelectorAll<HTMLElement>('main')]
+    const previousOverflow = scrollers.map((el) => el.style.overflow)
+    scrollers.forEach((el) => {
+      el.style.overflow = 'hidden'
+    })
+    // Move focus into the dialog once it has rendered.
+    const focusTimer = window.setTimeout(() => topDialog()?.querySelector<HTMLElement>(FOCUSABLE)?.focus(), 0)
 
     return () => {
+      window.clearTimeout(focusTimer)
       document.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = previousOverflow
+      scrollers.forEach((el, i) => {
+        el.style.overflow = previousOverflow[i]
+      })
       previouslyFocused.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 }
 
 export function Modal({

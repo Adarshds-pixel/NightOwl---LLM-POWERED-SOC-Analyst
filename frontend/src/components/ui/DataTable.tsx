@@ -208,7 +208,7 @@ function nextSort(current: SortState | null | undefined, key: string): SortState
   return null
 }
 
-function applySort<T>(rows: T[], columns: Column<T>[], sort: SortState | null | undefined): T[] {
+export function applySort<T>(rows: T[], columns: Column<T>[], sort: SortState | null | undefined): T[] {
   if (!sort) return rows
   const column = columns.find((c) => c.key === sort.key)
   if (!column?.sortValue) return rows

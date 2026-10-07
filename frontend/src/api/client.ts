@@ -17,6 +17,7 @@ import type {
   MitreTechniquesResponse,
   RuleListResponse,
   Severity,
+  SystemStatusResponse,
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
@@ -161,6 +162,13 @@ async function rawFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 
 export function getHealth() {
   return apiFetch<{ status: string }>('/health')
+}
+
+/** What is actually configured and loaded (LLM key, knowledge base, rules,
+ *  ML model) -- the honest source for status badges; /health only proves the
+ *  API process answers. */
+export function getSystemStatus() {
+  return apiFetch<SystemStatusResponse>('/system/status')
 }
 
 export interface ListIncidentsParams {
@@ -371,6 +379,8 @@ export interface ListAlertsParams {
   severity?: Severity
   /** Case-insensitive substring match on process, command line, user, host. */
   q?: string
+  /** 'detection' = rule + sequence alerts only; 'ml' = ML anomaly records only. */
+  kind?: 'detection' | 'ml'
   limit?: number
   offset?: number
 }

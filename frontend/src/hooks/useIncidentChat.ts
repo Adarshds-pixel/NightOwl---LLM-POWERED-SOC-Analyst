@@ -30,12 +30,27 @@ export function useIncidentChat(incidentId: number) {
   // turns (the AI Assistant page lets you switch incidents via a
   // dropdown while a request is still in flight).
   const requestId = useRef(0)
+  // The in-flight history load. send() waits for it, so a message sent
+  // straight away (the dashboard's "ask the assistant" prefill) is not wiped
+  // when the history response lands and replaces `turns`.
+  const loadPromise = useRef<Promise<void>>(Promise.resolve())
 
   const load = useCallback(() => {
     const thisRequest = ++requestId.current
-    setLoading(true)
+    // A different incident (or a reload) ends any send in flight for the
+    // previous one -- without this `sending` stayed true forever and the
+    // input stayed disabled until a page reload.
+    setSending(false)
+    setSendError(null)
     setError(null)
-    getChatHistory(incidentId)
+    if (incidentId <= 0) {
+      setTurns([])
+      setLoading(false)
+      loadPromise.current = Promise.resolve()
+      return
+    }
+    setLoading(true)
+    loadPromise.current = getChatHistory(incidentId)
       .then((res) => {
         if (thisRequest !== requestId.current) return
         setTurns(
@@ -63,8 +78,9 @@ export function useIncidentChat(incidentId: number) {
   const send = useCallback(
     async (message: string) => {
       const trimmed = message.trim()
-      if (!trimmed || sending) return
+      if (!trimmed || sending || incidentId <= 0) return
 
+      await loadPromise.current.catch(() => undefined)
       const thisRequest = requestId.current
       setSending(true)
       setSendError(null)

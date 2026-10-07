@@ -19,7 +19,7 @@ export function ChatPanel({
   initialMessage?: string
   className?: string
 }) {
-  const { turns, loading, error, sending, sendError, send } = useIncidentChat(incidentId)
+  const { turns, loading, error, sending, sendError, send, refresh } = useIncidentChat(incidentId)
   const autoSentRef = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -38,7 +38,7 @@ export function ChatPanel({
   return (
     <Card title="Incident chat" icon={<MessagesSquare className="h-3.5 w-3.5" />} accent="violet" className={className}>
       {error ? (
-        <ErrorState message={error} />
+        <ErrorState message={error} onRetry={refresh} />
       ) : (
         <div ref={scrollRef} className="max-h-96 overflow-y-auto pr-1">
           <ChatHistory turns={turns} loading={loading} sending={sending} />
@@ -48,7 +48,7 @@ export function ChatPanel({
       <div className="mt-3">
         <CommandInput
           onSubmit={send}
-          disabled={sending}
+          disabled={sending || Boolean(error)}
           placeholder="Ask about this incident..."
           note={sendError ?? 'Answers are grounded in the MITRE knowledge base; verify before acting.'}
         />

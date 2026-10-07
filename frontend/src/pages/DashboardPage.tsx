@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { Crosshair, Network, ShieldAlert } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { IngestResponse } from '../api'
 import { ActiveIncidentsPanel } from '../components/dashboard/ActiveIncidentsPanel'
 import { AiAssistantPanel } from '../components/dashboard/AiAssistantPanel'
@@ -86,11 +86,20 @@ function ThreatBanner({ level, activeCount }: { level: ThreatLevel; activeCount:
  * recent-alerts list and the pipeline panel, so one page load means one
  * alert query rather than three.
  */
+const DASHBOARD_REFRESH_MS = 30_000
+
 function DashboardPage() {
   const { incidents, meta, loading, error, refresh } = useIncidentsSnapshot()
   const { byId } = useMitreCatalog()
-  const alertsQuery = useAlerts({ limit: 200 })
-  const { eventTotal, refresh: refreshEventTotals } = useEventTotals()
+  // Detections only (ML anomaly records are never counted as alerts), and
+  // refreshed on the same 30 s cadence as the incident snapshot so the KPI
+  // row never mixes fresh incident counts with stale alert counts.
+  const alertsQuery = useAlerts({ limit: 200, kind: 'detection' }, DASHBOARD_REFRESH_MS)
+  const { eventTotal, alertTotal: alertingEventTotal, refresh: refreshEventTotals } = useEventTotals()
+  useEffect(() => {
+    const timer = window.setInterval(refreshEventTotals, DASHBOARD_REFRESH_MS)
+    return () => window.clearInterval(timer)
+  }, [refreshEventTotals])
   // Coverage-honesty panels for the one upload entry point this page has
   // (the empty-state control below) -- captured here rather than only in
   // that branch's local scope, since a successful upload immediately
@@ -146,7 +155,11 @@ function DashboardPage() {
 
   if (incidents.length === 0) {
     return (
-      <div className="p-5">
+      <div className="flex flex-col gap-4 p-5">
+        {/* A clean upload creates no incident, so the page stays in this
+            branch -- its coverage verdict and AI opinion must still show. */}
+        <TelemetryProfilePanel ingest={lastIngest} hasAiOpinion={aiOpinionId !== null} />
+        <AiOpinionPanel opinionId={aiOpinionId} hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0} />
         <Card>
           <EmptyState
             message="Nothing ingested yet"
@@ -231,7 +244,7 @@ function DashboardPage() {
           <PipelineHealthPanel
             alerts={alertsQuery.alerts}
             eventTotal={eventTotal}
-            alertTotal={alertsQuery.total}
+            alertTotal={alertingEventTotal}
             now={activityNow}
           />
         </div>

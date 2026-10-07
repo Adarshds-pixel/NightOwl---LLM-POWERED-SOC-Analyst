@@ -9,8 +9,8 @@ import '@fontsource/jetbrains-mono/500.css'
 import '@fontsource/jetbrains-mono/600.css'
 import './index.css'
 import App from './App.tsx'
-import { AppProviders } from './context/AppProviders'
 import { AuthProvider } from './context/auth/AuthProvider'
+import { SessionScopedProviders } from './context/SessionScopedProviders'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -18,9 +18,9 @@ createRoot(document.getElementById('root')!).render(
         contexts need to be, see App.tsx) and to every route guard inside
         the router that AppProviders wraps. */}
     <AuthProvider>
-      <AppProviders>
+      <SessionScopedProviders>
         <App />
-      </AppProviders>
+      </SessionScopedProviders>
     </AuthProvider>
   </StrictMode>,
 )

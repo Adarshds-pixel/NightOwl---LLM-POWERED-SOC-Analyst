@@ -47,7 +47,7 @@ export function NotificationPanel({
           <EmptyState
             icon={<BellOff className="h-5 w-5" />}
             message="You are all caught up"
-            hint="New open incidents appear here as soon as detection creates them."
+            hint="New open incidents appear here within 30 seconds of an upload that creates them."
           />
         ) : (
           unseen.slice(0, 20).map((incident) => (

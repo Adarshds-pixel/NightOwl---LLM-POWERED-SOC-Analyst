@@ -7,10 +7,13 @@ import { getAlerts, type AlertRow, type ListAlertsParams } from '../api'
  * rather than GET /events?alert_only=true, which intentionally collapses
  * an event matched by two rules down to one row).
  *
- * Manages its own page state exactly like useEvents does, so a call site
- * that only wants a whole-feed total (`useAlerts({ limit: 1, severity:
- * 'critical' })`) and one that wants a real paginated table
- * (`AlertsPage.tsx`) both work from the same hook.
+ * `kind: 'detection'` restricts to rule + sequence detections; `kind: 'ml'`
+ * to ML anomaly records. Every count presented as "alerts" should use
+ * 'detection' -- an anomaly is not a detection.
+ *
+ * Manages its own page state, so a call site that only wants a whole-feed
+ * total (`useAlerts({ limit: 1, severity: 'critical' })`) and one that wants
+ * a paginated table both work from the same hook.
  */
 export function useAlerts(params: Omit<ListAlertsParams, 'limit' | 'offset'> & { limit?: number } = {}, pollMs = 0) {
   const [page, setPage] = useState(0)
@@ -22,11 +25,17 @@ export function useAlerts(params: Omit<ListAlertsParams, 'limit' | 'offset'> & {
 
   const refresh = useCallback(() => setGeneration((g) => g + 1), [])
 
-  const { host, start_date, end_date, q, severity, limit = 50 } = params
+  const { host, start_date, end_date, q, severity, kind, limit = 50 } = params
 
-  useEffect(() => {
+  // Reset to page 0 when the filters change -- during render, not in an
+  // effect, so the load below never fires once with the stale page offset.
+  const filterKey = JSON.stringify([host, start_date, end_date, q, severity, kind, limit])
+  const [appliedKey, setAppliedKey] = useState(filterKey)
+  if (appliedKey !== filterKey) {
+    setAppliedKey(filterKey)
     setPage(0)
-  }, [host, start_date, end_date, q, severity, limit])
+  }
+  const effectivePage = appliedKey === filterKey ? page : 0
 
   useEffect(() => {
     let cancelled = false
@@ -34,7 +43,16 @@ export function useAlerts(params: Omit<ListAlertsParams, 'limit' | 'offset'> & {
     async function load(showSpinner: boolean) {
       if (showSpinner) setLoading(true)
       try {
-        const response = await getAlerts({ host, start_date, end_date, q, severity, limit, offset: page * limit })
+        const response = await getAlerts({
+          host,
+          start_date,
+          end_date,
+          q,
+          severity,
+          kind,
+          limit,
+          offset: effectivePage * limit,
+        })
         if (cancelled) return
         setAlerts(response.alerts)
         setTotal(response.total)
@@ -55,7 +73,7 @@ export function useAlerts(params: Omit<ListAlertsParams, 'limit' | 'offset'> & {
       cancelled = true
       if (timer) window.clearInterval(timer)
     }
-  }, [host, start_date, end_date, q, severity, limit, page, pollMs, generation])
+  }, [host, start_date, end_date, q, severity, kind, limit, effectivePage, pollMs, generation])
 
-  return { alerts, total, page, setPage, loading, error, refresh }
+  return { alerts, total, page: effectivePage, setPage, loading, error, refresh }
 }

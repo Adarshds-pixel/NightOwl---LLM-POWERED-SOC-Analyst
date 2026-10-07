@@ -114,7 +114,7 @@ function ReportsPage() {
 
   function regenerate() {
     setGeneratedAt(new Date().toISOString())
-    push({ tone: 'success', title: 'Report regenerated', description: 'Rebuilt from the current API data.' })
+    push({ tone: 'success', title: 'Report regenerated', description: "Rebuilt from the console's latest incident snapshot." })
   }
 
   return (
@@ -166,7 +166,8 @@ function ReportsPage() {
           </div>
         </div>
         <p className="mt-3 text-meta text-text-faint">
-          Every figure below is read from the live API at generation time. NightOwl does not store reports
+          Every figure below comes from the console's incident snapshot (refreshed every 30 seconds, up to 1,000
+          incidents) and the loaded rule set. NightOwl does not store reports
           server-side, so this document exists only here and in whatever you export.
         </p>
       </Card>
@@ -301,7 +302,7 @@ function ReportsPage() {
 
       {report.incidentCount > 100 && (
         <p className="text-micro text-text-faint">
-          The table lists the first 100 incidents; CSV and JSON exports contain all {report.incidentCount}.
+          The table lists the first 100 incidents; CSV and JSON exports contain all {report.incidentCount} in the snapshot.
         </p>
       )}
     </div>

@@ -14,6 +14,7 @@ import {
   Pagination,
   PageHeader,
   SearchInput,
+  SegmentedControl,
   Select,
   SeverityBadge,
   StatCard,
@@ -21,24 +22,25 @@ import {
   type Column,
   type SortState,
 } from '../components/ui'
+import { MlAnomalyEvidence } from '../components/incidents/MlAnomalyEvidence'
 import { usePreferences } from '../context/preferences/usePreferences'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useAlerts } from '../hooks/useAlerts'
 import { useRules } from '../hooks/useRules'
 import { activityByHour, eventTypeLabel, levelFor } from '../lib/events'
 import { formatDateTime, incidentRef } from '../lib/format'
-import { SEVERITY_HEX, severityLabel, FILTERABLE_SEVERITIES } from '../lib/severity'
+import { SEVERITY_HEX, SEVERITY_RANK, severityLabel, FILTERABLE_SEVERITIES } from '../lib/severity'
 import { activityAnchorMs, topBy } from '../lib/aggregations'
 import { ACCENT } from '../lib/tokens'
 
 /**
- * Alerts: every real rule match, one row per Alert record -- GET /alerts
- * (backend/app/api/routes_alerts.py), not GET /events?alert_only=true,
- * which intentionally collapses an event matched by two rules down to one
- * row. The status column is the parent incident's status, which is the
- * only status an alert genuinely has.
+ * Alerts: every rule / sequence detection, one row per Alert record -- GET
+ * /alerts?kind=detection (backend/app/api/routes_alerts.py). ML anomaly
+ * records live behind their own tab: they are supporting evidence, not
+ * detections, and never count toward an alert total.
  */
 function AlertsPage() {
+  const [view, setView] = useState<'detection' | 'ml'>('detection')
   const navigate = useNavigate()
   const { prefs } = usePreferences()
   const [search, setSearch] = useState('')
@@ -63,18 +65,21 @@ function AlertsPage() {
     refresh,
   } = useAlerts({
     q: debouncedSearch || undefined,
-    severity: severity === 'all' ? undefined : (severity as Severity),
+    severity: severity === 'all' || view === 'ml' ? undefined : (severity as Severity),
+    kind: view,
     limit: pageSize,
   })
 
-  // Whole-feed severity counts for the KPI tiles, independent of which page
-  // is open (one lightweight limit=1 request each, read for `total` only).
-  const criticalTotal = useAlerts({ limit: 1, severity: 'critical' }).total
-  const highTotal = useAlerts({ limit: 1, severity: 'high' }).total
-  // Rule definitions are session-cached (see useRules), so this costs no
-  // extra request in practice -- and it keeps the whole KPI row whole-feed.
+  // Whole-feed counts for the KPI tiles, independent of which page is open
+  // (one lightweight limit=1 request each, read for `total` only).
+  const detectionTotal = useAlerts({ limit: 1, kind: 'detection' }).total
+  const criticalTotal = useAlerts({ limit: 1, severity: 'critical', kind: 'detection' }).total
+  const highTotal = useAlerts({ limit: 1, severity: 'high', kind: 'detection' }).total
+  const anomalyTotal = useAlerts({ limit: 1, kind: 'ml' }).total
+  // Rule definitions are session-cached (see useRules).
   const { rules } = useRules()
-  const rulesFiredTotal = rules.filter((rule) => rule.match_count > 0).length
+  const detectors = rules.filter((rule) => rule.kind !== 'ml')
+  const rulesFiredTotal = detectors.filter((rule) => rule.match_count > 0).length
 
   const visible = events
   const bySeverity = FILTERABLE_SEVERITIES.map((level) => ({
@@ -88,6 +93,7 @@ function AlertsPage() {
   // alert on this page rather than Date.now(), same fix as the
   // Dashboard's activity graphs (see DashboardPage.tsx).
   const activityNow = activityAnchorMs(events.map((event) => event.timestamp))
+  const isMl = view === 'ml'
   const activity = activityByHour(events, 12, activityNow).map((point) => ({ label: point.label, alerts: point.count }))
 
   const columns: Column<AlertRow>[] = [
@@ -102,7 +108,8 @@ function AlertsPage() {
     {
       key: 'severity',
       header: 'Severity',
-      sortValue: (alert) => alert.severity ?? '',
+      // By rank, not alphabetically ("critical" < "high" < "informational"...).
+      sortValue: (alert) => (alert.severity ? SEVERITY_RANK[alert.severity] : 0),
       cell: (alert) =>
         alert.severity ? <SeverityBadge severity={alert.severity} score={alert.severity_score} /> : <span>--</span>,
     },
@@ -111,7 +118,13 @@ function AlertsPage() {
       header: 'Rule',
       sortValue: (alert) => alert.rule_title ?? '',
       className: 'max-w-[260px]',
-      cell: (alert) => <span className="block truncate text-text">{alert.rule_title ?? 'Unknown rule'}</span>,
+      cell: (alert) => (
+        <span className="flex items-center gap-1.5">
+          {alert.kind === 'sequence' && <Badge accent="violet">Sequence</Badge>}
+          {alert.occurrence_count > 1 && <Badge accent="neutral">x{alert.occurrence_count}</Badge>}
+          <span className="block truncate text-text">{alert.rule_title ?? 'Unknown rule'}</span>
+        </span>
+      ),
     },
     {
       key: 'technique',
@@ -123,7 +136,7 @@ function AlertsPage() {
       key: 'source',
       header: 'Source',
       hideBelow: 'lg',
-      cell: (alert) => <span className="text-text-muted">{eventTypeLabel(alert.event_id)}</span>,
+      cell: (alert) => <span className="text-text-muted">{eventTypeLabel(alert.event_id, alert.channel)}</span>,
     },
     {
       key: 'host',
@@ -164,11 +177,11 @@ function AlertsPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Alerts raised"
-          value={total}
+          label="Detections"
+          value={detectionTotal}
           icon={<Bell className="h-4 w-4" />}
           accent="amber"
-          note="Every rule match -- matches an incident's own evidence count"
+          note={`Rule and sequence alerts${anomalyTotal ? ` · ${anomalyTotal} ML anomaly record(s) shown separately` : ''}`}
         />
         {/* Whole-feed totals, not page-scoped -- a KPI row that mixed the
             two made a filtered or later page look like the alert counts had
@@ -179,21 +192,21 @@ function AlertsPage() {
           value={criticalTotal}
           icon={<Siren className="h-4 w-4" />}
           accent="red"
-          note="Across all alerts"
+          note="Across all detections"
         />
         <StatCard
           label="High"
           value={highTotal}
           icon={<Siren className="h-4 w-4" />}
           accent="amber"
-          note="Across all alerts"
+          note="Across all detections"
         />
         <StatCard
           label="Rules fired"
           value={rulesFiredTotal}
           icon={<Bell className="h-4 w-4" />}
           accent="violet"
-          note={`of ${rules.length} loaded detection rules`}
+          note={`of ${detectors.length} rules and sequence detectors`}
         />
       </div>
 
@@ -202,6 +215,19 @@ function AlertsPage() {
           <FilterBar
             search={<SearchInput value={search} onChange={setSearch} placeholder="Search alerts by process, parent process, command line, user or host..." />}
             filters={
+              <div className="flex flex-wrap items-center gap-2">
+              <SegmentedControl
+                value={view}
+                onChange={(value) => {
+                  setView(value)
+                  setSelected(null)
+                }}
+                options={[
+                  { label: 'Detections', value: 'detection' },
+                  { label: 'ML anomalies (experimental)', value: 'ml' },
+                ]}
+              />
+              {!isMl && (
               <Select
                 label="Severity"
                 value={severity}
@@ -212,24 +238,35 @@ function AlertsPage() {
                 ]}
                 className="w-40"
               />
+              )}
+              </div>
             }
           />
 
-          <Card flush divided title={`${total.toLocaleString()} alerts`}>
+          <Card
+            flush
+            divided
+            title={isMl ? `${total.toLocaleString()} ML anomaly records` : `${total.toLocaleString()} detections`}
+            subtitle={isMl ? 'Supporting evidence only -- unusual windows of log activity, not detections' : undefined}
+          >
             <DataTable
               columns={columns}
               rows={visible}
               rowKey={(alert) => alert.alert_id}
               onRowClick={(alert) => setSelected(alert)}
               isRowActive={(alert) => selected?.alert_id === alert.alert_id}
-              rowAccent={(alert) => (alert.severity ? SEVERITY_HEX[alert.severity] : null)}
+              rowAccent={(alert) => (alert.severity && alert.kind !== 'ml' ? SEVERITY_HEX[alert.severity] : null)}
               sort={sort}
               onSortChange={setSort}
               loading={loading}
               error={error}
               onRetry={refresh}
-              emptyMessage="No alerts match this search"
-              emptyHint="Alerts appear as soon as an ingested event trips a detection rule."
+              emptyMessage={isMl ? 'No ML anomaly records' : 'No detections match this search'}
+              emptyHint={
+                isMl
+                  ? 'The anomaly model scores 10-minute windows of 10+ events per log; small uploads are never scored.'
+                  : 'Detections appear after an uploaded log trips a rule; this page refreshes when reopened.'
+              }
             />
             <Pagination
               page={page}
@@ -237,17 +274,17 @@ function AlertsPage() {
               total={total}
               onPageChange={setPage}
               onPageSizeChange={setPageSize}
-              itemLabel="alerts"
+              itemLabel={isMl ? 'records' : 'detections'}
             />
           </Card>
         </div>
 
         <div className="flex flex-col gap-4 xl:col-span-4">
-          <Card title="Alerts by severity" subtitle="Current page" accent="red">
+          <Card title={isMl ? 'Records by severity' : 'Detections by severity'} subtitle="Current page" accent="red">
             {bySeverity.length > 0 ? <Donut slices={bySeverity} height={170} /> : <p className="text-meta text-text-muted">No alerts to break down.</p>}
           </Card>
 
-          <Card title="Top alerting rules" subtitle="Current page" accent="violet">
+          <Card title={isMl ? 'Top anomaly sources' : 'Top alerting rules'} subtitle="Current page" accent="violet">
             <ul className="flex flex-col gap-2">
               {topRules.map((rule) => (
                 <li key={rule.label} className="flex items-center justify-between gap-3 text-meta">
@@ -259,7 +296,7 @@ function AlertsPage() {
             </ul>
           </Card>
 
-          <Card title="Alerts over time" subtitle="Last 12 hours" accent="amber">
+          <Card title="Activity over time" subtitle="12 hours up to the latest record on this page" accent="amber">
             <TrendChart data={activity} series={[{ key: 'alerts', label: 'Alerts', color: ACCENT.amber }]} height={150} area />
           </Card>
         </div>
@@ -278,8 +315,19 @@ function AlertsPage() {
                 label="Severity"
                 value={selected.severity ? <SeverityBadge severity={selected.severity} score={selected.severity_score} /> : '--'}
               />
-              <KeyValue label="Technique" value={selected.technique_id ?? '--'} mono />
-              <KeyValue label="Event type" value={eventTypeLabel(selected.event_id)} />
+              <KeyValue
+                label="Technique"
+                value={selected.kind === 'ml' ? 'None -- an anomaly maps to no single technique' : (selected.technique_id ?? '--')}
+                mono={selected.kind !== 'ml'}
+              />
+              <KeyValue
+                label="Raised by"
+                value={selected.kind === 'ml' ? 'ML anomaly layer' : selected.kind === 'sequence' ? 'Sequence correlation' : 'Detection rule'}
+              />
+              {selected.occurrence_count > 1 && (
+                <KeyValue label="Occurrences" value={`${selected.occurrence_count} identical matches folded into this alert`} />
+              )}
+              <KeyValue label="Event type" value={eventTypeLabel(selected.event_id, selected.channel)} />
               <KeyValue label="Level" value={levelFor(selected.severity, selected.is_alert).toUpperCase()} mono />
               <KeyValue label="Host" value={selected.host} mono />
               <KeyValue label="User" value={selected.user ?? '--'} mono />
@@ -288,8 +336,12 @@ function AlertsPage() {
               <KeyValue label="Event id" value={selected.id} mono />
             </dl>
 
+            {selected.kind === 'ml' && selected.details && <MlAnomalyEvidence details={selected.details} />}
+
             <div>
-              <p className="text-micro font-medium tracking-[0.1em] text-text-faint uppercase">Command line</p>
+              <p className="text-micro font-medium tracking-[0.1em] text-text-faint uppercase">
+                {selected.kind === 'ml' ? 'Representative event command line' : 'Command line'}
+              </p>
               <pre className="mt-1 overflow-x-auto rounded-control border border-line bg-bg-deep/60 px-3 py-2 font-mono text-micro text-text-dim">
                 {selected.command_line ?? 'Not recorded for this event type'}
               </pre>

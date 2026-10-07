@@ -21,7 +21,7 @@ export function EventDetailDrawer({ eventId, onClose }: { eventId: number | null
     <Drawer
       open={eventId !== null}
       onClose={onClose}
-      title={event ? eventTypeLabel(event.event_id) : 'Event detail'}
+      title={event ? eventTypeLabel(event.event_id, event.channel) : 'Event detail'}
       subtitle={event ? `${event.host} - ${formatDateTime(event.timestamp)}` : undefined}
     >
       {loading && <LoadingState label="Loading raw record" />}

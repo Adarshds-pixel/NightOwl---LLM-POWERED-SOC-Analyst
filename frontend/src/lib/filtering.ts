@@ -17,7 +17,12 @@ export function filterIncidents(
   techniqueById: Map<string, MitreTechnique>,
 ): IncidentSummary[] {
   const term = filters.search.trim().toLowerCase()
-  const cutoff = filters.window === 'all' ? null : Date.now() - Number(filters.window) * 3600_000
+  // Windows are measured back from the newest incident in the data, not
+  // from wall-clock now: incidents carry the historical event time of the
+  // logs they came from, so "last 24 hours" of Date.now() was empty for any
+  // imported archive (the page's stat cards already anchored this way).
+  const anchor = incidents.reduce((max, incident) => Math.max(max, Date.parse(incident.created_at) || 0), 0)
+  const cutoff = filters.window === 'all' || anchor === 0 ? null : anchor - Number(filters.window) * 3600_000
 
   return incidents.filter((incident) => {
     if (filters.severity !== 'all' && incident.severity !== filters.severity) return false

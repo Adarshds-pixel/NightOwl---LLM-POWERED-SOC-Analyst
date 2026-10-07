@@ -19,12 +19,13 @@ import {
   SeverityDotMarker,
   StatusBadge,
 } from '../components/ui'
-import { useHealth } from '../context/health/useHealth'
+import { useSystemStatus } from '../hooks/useSystemStatus'
+import { getIncident, type IncidentSummary } from '../api'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { EXPLAIN_STAGES, useExplain } from '../hooks/useExplain'
 import { useIncidentChat } from '../hooks/useIncidentChat'
 import { selectMostActionableIncident } from '../lib/aggregations'
-import { formatDuration, formatRelativeTime, incidentRef } from '../lib/format'
+import { formatRelativeTime, incidentRef } from '../lib/format'
 
 const SUGGESTED_QUESTIONS = [
   'What happened in this incident, in plain language?',
@@ -49,11 +50,37 @@ function AssistantPage() {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const { incidents, loading, error } = useIncidentsSnapshot()
-  const { status: healthStatus } = useHealth()
+  const { status: systemStatus, aiReady } = useSystemStatus()
 
   const paramId = Number(searchParams.get('incident'))
+  // A deep link to an incident outside the snapshot (capped at 1,000) is
+  // fetched directly instead of silently swapping in a different incident.
+  const [linked, setLinked] = useState<IncidentSummary | null>(null)
+  const inSnapshot = incidents.find((item) => item.id === paramId) ?? null
+  useEffect(() => {
+    if (!paramId || paramId <= 0 || inSnapshot || loading) return
+    let cancelled = false
+    getIncident(paramId)
+      .then((detail) => {
+        if (cancelled) return
+        setLinked({
+          id: detail.id,
+          title: detail.title,
+          status: detail.status,
+          severity: detail.severity,
+          severity_score: detail.severity_score,
+          host: detail.host,
+          mitre_technique_ids: detail.mitre_technique_ids,
+          created_at: detail.created_at,
+        })
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [paramId, inSnapshot, loading])
   const fallback = selectMostActionableIncident(incidents) ?? incidents[0] ?? null
-  const incident = incidents.find((item) => item.id === paramId) ?? fallback
+  const incident = inSnapshot ?? (linked?.id === paramId ? linked : null) ?? fallback
   const incidentId = incident?.id ?? 0
 
   const chat = useIncidentChat(incidentId)
@@ -108,8 +135,8 @@ function AssistantPage() {
         subtitle="Grounded in this incident and the MITRE ATT&CK knowledge base"
         icon={<Sparkles className="h-5 w-5 text-accent-violet" />}
         actions={
-          <Badge accent={healthStatus === 'healthy' ? 'violet' : 'neutral'} dot>
-            {healthStatus === 'healthy' ? 'AI online' : 'API offline'}
+          <Badge accent={aiReady ? 'violet' : 'neutral'} dot>
+            {aiReady ? 'AI ready' : systemStatus ? (systemStatus.llm.ready ? 'Knowledge base missing' : 'AI not configured') : 'Checking AI'}
           </Badge>
         }
       />
@@ -127,7 +154,10 @@ function AssistantPage() {
               <Select
                 value={String(incident.id)}
                 onChange={(value) => setSearchParams({ incident: value })}
-                options={incidents.slice(0, 50).map((item) => ({
+                options={[
+                  ...(incidents.some((item) => item.id === incident.id) ? [] : [incident]),
+                  ...incidents.slice(0, 200),
+                ].map((item) => ({
                   label: `${incidentRef(item.id)} - ${item.title}`,
                   value: String(item.id),
                 }))}
@@ -136,7 +166,7 @@ function AssistantPage() {
             }
           >
             {chat.error ? (
-              <ErrorState message={chat.error} />
+              <ErrorState message={chat.error} onRetry={chat.refresh} />
             ) : (
               <div ref={scrollRef} className="max-h-[46vh] min-h-[240px] overflow-y-auto pr-1">
                 <ChatHistory turns={chat.turns} loading={chat.loading} sending={chat.sending} />
@@ -146,7 +176,7 @@ function AssistantPage() {
             <div className="mt-3">
               <CommandInput
                 onSubmit={chat.send}
-                disabled={chat.sending}
+                disabled={chat.sending || chat.loading || Boolean(chat.error)}
                 note={chat.sendError ?? 'AI responses may contain inaccuracies. Verify critical information.'}
               />
             </div>
@@ -192,7 +222,7 @@ function AssistantPage() {
               <KeyValue label="Host" value={incident.host} mono />
               <KeyValue label="Status" value={<StatusBadge status={incident.status} />} />
               <KeyValue label="Detected" value={formatRelativeTime(incident.created_at)} />
-              <KeyValue label="Open for" value={formatDuration(incident.created_at)} mono />
+              <KeyValue label="Techniques" value={incident.mitre_technique_ids.length} mono />
             </dl>
           </Card>
 
@@ -216,7 +246,7 @@ function AssistantPage() {
                 <InsightTile icon={<Target className="h-4 w-4" />} value={incident.mitre_technique_ids[0] ?? '--'} label="Primary technique" />
                 <InsightTile icon={<Gauge className="h-4 w-4" />} value={incident.severity.toUpperCase()} label="Engine severity" />
                 <InsightTile icon={<BookOpen className="h-4 w-4" />} value={String(explain.result?.sources.length ?? 0)} label="Sources retrieved" />
-                <InsightTile icon={<Clock className="h-4 w-4" />} value={formatDuration(incident.created_at)} label="Time open" />
+                <InsightTile icon={<Clock className="h-4 w-4" />} value={formatRelativeTime(incident.created_at)} label="First activity" />
               </div>
             )}
             <p className="mt-2 text-micro text-text-faint">

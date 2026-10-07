@@ -42,7 +42,10 @@ export function MitreEvidenceLinks({
   return (
     <Card title="MITRE techniques" icon={<Crosshair className="h-3.5 w-3.5" />} accent="magenta" className={className}>
       {groups.length === 0 ? (
-        <p className="text-meta text-text-muted">No techniques resolved for this incident.</p>
+        <p className="text-meta text-text-muted">
+          No ATT&amp;CK technique on this incident. Its alerts come from detectors that do not map to a single
+          technique (e.g. ML anomaly records), or the technique is not in the bundled ATT&amp;CK release.
+        </p>
       ) : (
         <ul className="flex flex-col gap-2">
           {groups.map(({ technique, alerts: evidence }) => {
@@ -85,7 +88,7 @@ export function MitreEvidenceLinks({
                             key={alert.id}
                             onClick={() => onSelectAlert(alert)}
                             marker={<SeverityDotMarker severity={alert.severity} />}
-                            title={alert.rule_title ?? eventTypeLabel(alert.event.event_id)}
+                            title={alert.rule_title ?? eventTypeLabel(alert.event.event_id, alert.event.channel)}
                             meta={alert.event.process ?? alert.event.command_line ?? undefined}
                             trailing={
                               <span className="font-mono text-micro whitespace-nowrap text-text-faint">

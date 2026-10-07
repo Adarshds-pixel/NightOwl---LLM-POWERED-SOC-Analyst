@@ -2,7 +2,8 @@ import clsx from 'clsx'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { AnalystAvatar, NightOwlMark } from '../components/brand/NightOwlMark'
-import { ActivityIndicator, StatusDot, Tooltip } from '../components/ui'
+import { StatusDot, Tooltip } from '../components/ui'
+import { useSystemStatus } from '../hooks/useSystemStatus'
 import { useAuth } from '../context/auth/useAuth'
 import { useHealth } from '../context/health/useHealth'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
@@ -26,6 +27,8 @@ export function Sidebar({
   onToggleCollapsed: () => void
 }) {
   const { status } = useHealth()
+  // Hide Demo Mode when the backend has it disabled (every call would 403).
+  const { status: systemStatus } = useSystemStatus()
   const { incidents } = useIncidentsSnapshot()
   const { username } = useAuth()
   const threat = computeThreatLevel(incidents)
@@ -65,7 +68,7 @@ export function Sidebar({
           <SidebarLink key={entry.to} entry={entry} collapsed={collapsed} />
         ))}
         <div className="my-2 border-t border-line-soft" />
-        {SECONDARY_NAV.map((entry) => (
+        {SECONDARY_NAV.filter((entry) => entry.to !== '/demo' || systemStatus?.demo_mode_enabled !== false).map((entry) => (
           <SidebarLink key={entry.to} entry={entry} collapsed={collapsed} />
         ))}
       </nav>
@@ -79,7 +82,6 @@ export function Sidebar({
                 <StatusDot tone={healthy ? 'good' : status === 'checking' ? 'idle' : 'bad'} />
                 {healthy ? 'API operational' : status === 'checking' ? 'Checking...' : 'API unreachable'}
               </span>
-              <ActivityIndicator accent={healthy ? 'green' : 'red'} active={healthy} />
             </div>
             <p className="mt-1 text-micro text-text-faint">
               Threat level <span className="text-text-dim">{threat.level}</span> - {threat.activeCount} active

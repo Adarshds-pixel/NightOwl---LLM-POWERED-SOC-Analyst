@@ -46,10 +46,15 @@ function LogsPage() {
   const [filters, setFilters] = useState<EventFilters>(EMPTY_EVENT_FILTERS)
   const [pageSize, setPageSize] = useState(prefs.pageSize)
   const [sort, setSort] = useState<SortState | null>(null)
-  const [selectedId, setSelectedId] = useState<number | null>(() => {
-    const param = searchParams.get('event')
-    return param ? Number(param) : null
-  })
+  const eventParam = searchParams.get('event')
+  const [selectedId, setSelectedId] = useState<number | null>(eventParam ? Number(eventParam) : null)
+  // React to ?event= changes while already on this page (the command
+  // palette navigates here with a new id) -- not only on first mount.
+  const [seenEventParam, setSeenEventParam] = useState(eventParam)
+  if (eventParam !== seenEventParam) {
+    setSeenEventParam(eventParam)
+    setSelectedId(eventParam ? Number(eventParam) : null)
+  }
 
   // The typed term updates the input immediately; only the debounced copy
   // reaches the API, so a search is one request rather than one per key.
@@ -111,7 +116,7 @@ function LogsPage() {
       key: 'source',
       header: 'Source',
       hideBelow: 'md',
-      cell: (event) => <span className="whitespace-nowrap text-text-muted">{eventTypeLabel(event.event_id)}</span>,
+      cell: (event) => <span className="whitespace-nowrap text-text-muted">{eventTypeLabel(event.event_id, event.channel)}</span>,
     },
     {
       key: 'host',

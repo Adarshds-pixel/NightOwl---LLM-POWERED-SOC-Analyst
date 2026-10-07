@@ -12,6 +12,7 @@ import {
 } from '../components/ui'
 import { useAuth } from '../context/auth/useAuth'
 import { useHealth } from '../context/health/useHealth'
+import { useSystemStatus } from '../hooks/useSystemStatus'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
 import { usePreferences } from '../context/preferences/usePreferences'
@@ -46,6 +47,7 @@ function SettingsPage() {
   const { prefs, setPref, reset } = usePreferences()
   const { username } = useAuth()
   const { status, latencyMs, samples } = useHealth()
+  const { status: system, error: systemError } = useSystemStatus()
   const { rules } = useRules()
   const { techniques } = useMitreCatalog()
   const { meta } = useIncidentsSnapshot()
@@ -238,18 +240,49 @@ function SettingsPage() {
           {section === 'about' && (
             <Card title="About this deployment" accent="neutral">
               <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <KeyValue label="Detection rules loaded" value={rules.length} mono />
+                <KeyValue label="Detection rules loaded" value={rules.filter((rule) => rule.kind === 'sigma').length} mono />
+                <KeyValue label="Sequence detectors" value={rules.filter((rule) => rule.kind === 'sequence').length} mono />
                 <KeyValue label="ATT&CK catalog entries" value={techniques.length.toLocaleString()} mono />
                 <KeyValue label="Incidents stored" value={meta.totalAll.toLocaleString()} mono />
                 <KeyValue label="Rule source" value="backend/app/detection/rules/*.yml" mono />
                 <KeyValue label="Data store" value="PostgreSQL, plus ChromaDB for the knowledge base" />
-                <KeyValue label="Deployment" value="Single-user local install" />
+                <KeyValue label="Environment" value={system ? system.environment : '--'} />
               </dl>
               <p className="mt-4 text-meta text-text-muted">
-                NightOwl ingests Windows EVTX exports, evaluates them against Sigma rules, groups matches into
-                incidents and explains them with a retrieval-grounded model. Everything on screen anywhere in this
-                console is derived from that pipeline.
+                NightOwl ingests Windows EVTX exports, evaluates them with Sigma-style rules and multi-event sequence
+                detectors, groups detections into incidents by host and time, and explains them with a
+                retrieval-grounded model. An experimental ML layer additionally records statistically unusual
+                windows of log activity as supporting evidence; those records are never counted as detections.
               </p>
+              <div className="mt-4">
+                <p className="text-micro font-medium tracking-[0.1em] text-text-faint uppercase">System status</p>
+                {system ? (
+                  <dl className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {(
+                      [
+                        ['Detection rules', system.detection_rules],
+                        ['LLM provider', system.llm],
+                        ['Knowledge base', system.knowledge_base],
+                        ['ML anomaly layer', system.ml_anomaly_layer],
+                        ['ATT&CK dataset', system.attack_dataset],
+                      ] as const
+                    ).map(([label, component]) => (
+                      <KeyValue
+                        key={label}
+                        label={label}
+                        value={
+                          <span className="flex items-center gap-1.5">
+                            <StatusDot tone={component.ready ? 'good' : 'bad'} pulse={false} />
+                            {component.detail}
+                          </span>
+                        }
+                      />
+                    ))}
+                  </dl>
+                ) : (
+                  <p className="mt-2 text-meta text-text-muted">{systemError ?? 'Checking...'}</p>
+                )}
+              </div>
             </Card>
           )}
         </div>

@@ -25,6 +25,8 @@ import { formatRelativeTime } from '../lib/format'
 import { CATEGORICAL, CATEGORICAL_OTHER } from '../lib/tokens'
 import { topBy } from '../lib/aggregations'
 
+import { SEVERITY_RANK } from '../lib/severity'
+
 const SEVERITY_LEVELS: Severity[] = ['critical', 'high', 'medium', 'low']
 
 /**
@@ -44,7 +46,13 @@ function RulesPage() {
   const [level, setLevel] = useState('all')
   const [category, setCategory] = useState('all')
   const [sort, setSort] = useState<SortState | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('rule'))
+  const ruleParam = searchParams.get('rule')
+  const [selectedId, setSelectedId] = useState<string | null>(ruleParam)
+  const [seenRuleParam, setSeenRuleParam] = useState(ruleParam)
+  if (ruleParam !== seenRuleParam) {
+    setSeenRuleParam(ruleParam)
+    if (ruleParam) setSelectedId(ruleParam)
+  }
 
   const categories = [...new Set(rules.map((rule) => rule.category).filter(Boolean))] as string[]
   const filtered = rules.filter((rule) => {
@@ -87,7 +95,11 @@ function RulesPage() {
       className: 'max-w-[300px]',
       cell: (rule) => (
         <div className="min-w-0">
-          <p className="truncate text-text">{rule.title}</p>
+          <p className="flex items-center gap-1.5 truncate text-text">
+            {rule.kind === 'sequence' && <Badge accent="violet">Sequence</Badge>}
+            {rule.kind === 'ml' && <Badge accent="neutral">ML model · experimental</Badge>}
+            <span className="truncate">{rule.title}</span>
+          </p>
           <p className="truncate text-micro text-text-faint">{rule.description || rule.filename}</p>
         </div>
       ),
@@ -97,7 +109,15 @@ function RulesPage() {
       header: 'Category',
       hideBelow: 'md',
       sortValue: (rule) => rule.category ?? '',
-      cell: (rule) => <Badge accent="primary">{(rule.category ?? 'uncategorised').replace(/_/g, ' ')}</Badge>,
+      cell: (rule) => (
+        <Badge accent="primary">
+          {rule.kind === 'sigma'
+            ? (rule.category ?? 'event-id scoped').replace(/_/g, ' ')
+            : rule.kind === 'ml'
+              ? 'anomaly model'
+              : 'correlation'}
+        </Badge>
+      ),
     },
     {
       key: 'technique',
@@ -109,7 +129,7 @@ function RulesPage() {
     {
       key: 'level',
       header: 'Severity',
-      sortValue: (rule) => rule.level,
+      sortValue: (rule) => (rule.level in SEVERITY_RANK ? SEVERITY_RANK[rule.level as Severity] : 0),
       cell: (rule) =>
         SEVERITY_LEVELS.includes(rule.level as Severity) ? (
           <SeverityBadge severity={rule.level as Severity} />
@@ -121,7 +141,15 @@ function RulesPage() {
       key: 'status',
       header: 'Status',
       cell: (rule) => (
-        <Tooltip label="Rules are version-controlled files; enabling or disabling one means editing the rule set, not flipping a switch here.">
+        <Tooltip
+          label={
+            rule.kind === 'ml'
+              ? rule.enabled
+                ? 'A trained model is loaded.'
+                : 'No usable model is loaded -- see System status in Settings.'
+              : 'Rules are version-controlled files; enabling or disabling one means editing the rule set, not flipping a switch here.'
+          }
+        >
           <span className="flex items-center gap-2">
             <Toggle checked={rule.enabled} label={`${rule.title} enabled`} disabled />
           </span>
@@ -166,9 +194,21 @@ function RulesPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Rules loaded" value={rules.length} icon={<FileCode2 className="h-4 w-4" />} accent="violet" note="Sigma rules parsed at startup" />
-        <StatCard label="Enabled" value={rules.filter((rule) => rule.enabled).length} icon={<Zap className="h-4 w-4" />} accent="magenta" note="Every loaded rule is active" />
-        <StatCard label="Triggered 24h" value={triggeredToday} icon={<Target className="h-4 w-4" />} accent="amber" note="Matches in the last day" />
+        <StatCard
+          label="Rules loaded"
+          value={rules.filter((rule) => rule.kind === 'sigma').length}
+          icon={<FileCode2 className="h-4 w-4" />}
+          accent="violet"
+          note={`Sigma-style YAML rules + ${rules.filter((rule) => rule.kind === 'sequence').length} sequence detectors`}
+        />
+        <StatCard
+          label="Enabled"
+          value={rules.filter((rule) => rule.enabled).length}
+          icon={<Zap className="h-4 w-4" />}
+          accent="magenta"
+          note={`of ${rules.length} detectors${rules.some((rule) => rule.kind === 'ml' && !rule.enabled) ? ' -- ML model not loaded' : ''}`}
+        />
+        <StatCard label="Triggered 24h" value={triggeredToday} icon={<Target className="h-4 w-4" />} accent="amber" note="In the 24 h before the latest alert" />
         <StatCard label="Never fired" value={rules.filter((rule) => rule.match_count === 0).length} icon={<CircleSlash className="h-4 w-4" />} accent="neutral" note="No match in the ingested data" />
         <StatCard label="Categories" value={categories.length} icon={<Layers className="h-4 w-4" />} accent="primary" note="Log source categories covered" />
       </div>
@@ -240,12 +280,20 @@ function RulesPage() {
                   <KeyValue label="Matches total" value={selected.match_count} mono />
                 </dl>
 
-                <div>
-                  <p className="text-micro font-medium tracking-[0.1em] text-text-faint uppercase">Detection logic</p>
-                  <pre className="mt-1 overflow-x-auto rounded-control border border-line bg-bg-deep/60 px-3 py-2 font-mono text-micro text-text-dim">
-                    {`selections: ${selected.selections.join(', ')}\ncondition: ${selected.condition}`}
-                  </pre>
-                </div>
+                {selected.kind === 'sigma' ? (
+                  <div>
+                    <p className="text-micro font-medium tracking-[0.1em] text-text-faint uppercase">Detection logic</p>
+                    <pre className="mt-1 overflow-x-auto rounded-control border border-line bg-bg-deep/60 px-3 py-2 font-mono text-micro text-text-dim">
+                      {`selections: ${selected.selections.join(', ')}\ncondition: ${selected.condition}`}
+                    </pre>
+                  </div>
+                ) : (
+                  <p className="text-meta text-text-dim">
+                    {selected.kind === 'ml'
+                      ? 'Not a rule: a statistical model with no YAML logic. Its records are supporting evidence, never detections.'
+                      : 'A multi-event correlation implemented in code (detection/sequences.py), not a YAML rule.'}
+                  </p>
+                )}
 
                 {selected.tactics.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
@@ -301,8 +349,9 @@ function RulesPage() {
       </div>
 
       <p className="text-micro text-text-faint">
-        Rules live in backend/app/detection/rules as Sigma YAML and are reviewed like code. This page is read-only by
-        design: there is no endpoint that edits or disables a rule at runtime.
+        Rules live in backend/app/detection/rules as Sigma-style YAML and are reviewed like code; sequence detectors
+        live in backend/app/detection/sequences.py and the ML model in backend/app/ml. This page is read-only by design:
+        there is no endpoint that edits or disables a detector at runtime.
       </p>
     </div>
   )

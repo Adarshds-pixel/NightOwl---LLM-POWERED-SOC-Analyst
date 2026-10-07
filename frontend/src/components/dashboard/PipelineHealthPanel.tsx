@@ -2,6 +2,7 @@ import { Activity, Cpu } from 'lucide-react'
 import type { EventLogRow } from '../../api'
 import { useHealth } from '../../context/health/useHealth'
 import { useRules } from '../../hooks/useRules'
+import { useSystemStatus } from '../../hooks/useSystemStatus'
 import { activityByHour } from '../../lib/events'
 import { formatLatency } from '../../lib/format'
 import { ACCENT } from '../../lib/tokens'
@@ -36,8 +37,15 @@ export function PipelineHealthPanel({
 }) {
   const { status, latencyMs, samples } = useHealth()
   const { rules } = useRules()
+  const { status: system } = useSystemStatus()
 
   const online = status === 'healthy'
+  const components = system
+    ? [system.detection_rules, system.llm, system.knowledge_base, system.ml_anomaly_layer]
+    : []
+  const readyCount = components.filter((component) => component.ready).length
+  const detectors = rules.filter((rule) => rule.kind !== 'ml')
+  const firedCount = detectors.filter((rule) => rule.match_count > 0).length
   // 400ms is treated as the top of the scale: anything slower than that on
   // a loopback API is already a bad experience, so the ring saturates.
   const latencyScore = latencyMs === null ? 0 : Math.max(0, 100 - Math.min(100, (latencyMs / 400) * 100))
@@ -52,30 +60,30 @@ export function PipelineHealthPanel({
         <RingGauge
           value={online ? latencyScore : 0}
           label="API"
-          sublabel={online ? formatLatency(latencyMs) : 'unreachable'}
+          sublabel={online ? `${formatLatency(latencyMs)} responsiveness` : 'unreachable'}
           accent={online ? 'green' : 'red'}
           unit=""
         />
         <RingGauge
-          value={rules.length > 0 ? 100 : 0}
-          label="Rules"
-          sublabel={`${rules.length} loaded`}
+          value={components.length ? (readyCount / components.length) * 100 : 0}
+          label="Components"
+          sublabel={system ? `${readyCount} of ${components.length} ready` : 'checking'}
           accent="primary"
-          unit=""
+          unit="%"
         />
         <RingGauge
-          value={Math.min(100, detectionRate * 10)}
-          label="Alerting"
-          sublabel={`${detectionRate.toFixed(2)}% of events flagged`}
+          value={detectionRate}
+          label="Flagged"
+          sublabel={`${detectionRate.toFixed(2)}% of ${eventTotal.toLocaleString()} events`}
           accent="violet"
-          unit=""
+          unit="%"
         />
         <RingGauge
-          value={eventTotal > 0 ? 100 : 0}
-          label="Ingest"
-          sublabel={`${eventTotal.toLocaleString()} events`}
+          value={detectors.length ? (firedCount / detectors.length) * 100 : 0}
+          label="Fired"
+          sublabel={`${firedCount} of ${detectors.length} detectors`}
           accent="magenta"
-          unit=""
+          unit="%"
         />
       </div>
 
@@ -94,7 +102,7 @@ export function PipelineHealthPanel({
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <MiniStat label="API latency" value={formatLatency(latencyMs)} note={`${samples.length} samples this session`} />
-        <MiniStat label="Alerts / events" value={`${alertTotal.toLocaleString()} / ${eventTotal.toLocaleString()}`} note="Signal to noise" />
+        <MiniStat label="Alerting events / events" value={`${alertTotal.toLocaleString()} / ${eventTotal.toLocaleString()}`} note="Events with at least one detection" />
       </div>
 
       <ChartLegend className="mt-3" series={[{ key: 'alerts', label: 'Rule matches per hour', color: ACCENT.amber }]} />

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import {
+  getIncidents,
   ApiError,
   explainIncident,
   fetchDemoFixtureBytes,
@@ -41,7 +42,7 @@ async function fetchDemoFixtureFile(fixture: DemoFixtureInfo): Promise<File> {
 // opaque call), Demo Mode genuinely has four sequential real requests, so
 // narration only ever advances alongside an actual network round trip.
 export function useDemoMode() {
-  const { incidents, refresh: refreshIncidents } = useIncidentsSnapshot()
+  const { refresh: refreshIncidents } = useIncidentsSnapshot()
   const [status, setStatus] = useState<DemoRunStatus>('idle')
   const [currentStage, setCurrentStage] = useState<DemoStageId | null>(null)
   const [log, setLog] = useState<DemoLogLine[]>([])
@@ -60,7 +61,11 @@ export function useDemoMode() {
   // pool is now real-world samples this deployment's shared demo database
   // has very likely already ingested at some point, so this path fires
   // far more often than the old small synthetic pool ever did).
-  const [fallbackIncident, setFallbackIncident] = useState<{ id: number; title: string } | null>(null)
+  const [fallbackIncident, setFallbackIncident] = useState<{
+    id: number
+    title: string
+    reason: 'already_ingested' | 'no_detection'
+  } | null>(null)
   const runningRef = useRef(false)
 
   const appendLog = useCallback((text: string, tone: DemoLogLine['tone'] = 'info') => {
@@ -133,13 +138,21 @@ export function useDemoMode() {
             ? 'Every event in this fixture was already ingested in an earlier run -- nothing new to detect.'
             : 'This fixture triggered no detection rule this run.',
         )
-        const fallback = selectMostActionableIncident(incidents)
+        // Fetched fresh: the snapshot captured when Run was clicked can be
+        // empty (first load) or stale, which used to stop the run with "no
+        // incident to fall back to" even though incidents existed.
+        const fresh = await getIncidents({ limit: 200 })
+        const fallback = selectMostActionableIncident(fresh.incidents)
         if (!fallback) {
           appendLog('No existing incident to fall back to either -- stopping before explain/chat.', 'error')
           setStatus('success')
           return
         }
-        setFallbackIncident({ id: fallback.id, title: fallback.title })
+        setFallbackIncident({
+          id: fallback.id,
+          title: fallback.title,
+          reason: ingest.events_ingested === 0 ? 'already_ingested' : 'no_detection',
+        })
         targetId = fallback.id
         appendLog(`Continuing with existing incident #${targetId} ("${fallback.title}") instead.`, 'success')
       }
@@ -166,7 +179,7 @@ export function useDemoMode() {
     } finally {
       runningRef.current = false
     }
-  }, [appendLog, refreshIncidents, incidents])
+  }, [appendLog, refreshIncidents])
 
   const reset = useCallback(() => {
     setStatus('idle')

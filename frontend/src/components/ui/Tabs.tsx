@@ -37,9 +37,15 @@ export function Tabs<T extends string>({
   const slide = !(systemReduced || prefs.reduceMotion)
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
+    event.preventDefault()
     const index = items.findIndex((item) => item.value === value)
-    if (event.key === 'ArrowRight') onChange(items[(index + 1) % items.length].value)
-    if (event.key === 'ArrowLeft') onChange(items[(index - 1 + items.length) % items.length].value)
+    const next = event.key === 'ArrowRight' ? (index + 1) % items.length : (index - 1 + items.length) % items.length
+    onChange(items[next].value)
+    // Roving tabindex: move focus with the selection, or it is left on a
+    // button that just became tabIndex=-1.
+    const tabs = event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')
+    tabs[next]?.focus()
   }
 
   return (

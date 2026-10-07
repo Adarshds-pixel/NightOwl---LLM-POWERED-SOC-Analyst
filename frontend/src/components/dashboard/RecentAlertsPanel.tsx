@@ -33,7 +33,7 @@ export function RecentAlertsPanel({
       ) : error ? (
         <ErrorState message={error} onRetry={onRetry} />
       ) : alerts.length === 0 ? (
-        <EmptyState message="No alerts raised yet" hint="Alerts appear the moment a detection rule matches an event." />
+        <EmptyState message="No alerts raised yet" hint="Alerts appear after an uploaded log trips a detection rule." />
       ) : (
         <div className="flex flex-col">
           {alerts.slice(0, 6).map((alert) => (

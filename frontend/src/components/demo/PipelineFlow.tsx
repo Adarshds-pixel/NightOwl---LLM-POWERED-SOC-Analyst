@@ -91,7 +91,7 @@ export function PipelineFlow({
       icon: ShieldAlert,
       state: serverSideState,
       value: ingestResult ? ingestResult.rule_matches.toLocaleString() : undefined,
-      caption: 'Sigma rule matches',
+      caption: 'rule + sequence matches',
     },
     {
       id: 'correlate',
@@ -99,7 +99,7 @@ export function PipelineFlow({
       icon: Layers,
       state: serverSideState,
       value: ingestResult ? ingestResult.alerts_created.toLocaleString() : undefined,
-      caption: 'alerts created',
+      caption: 'alerts after de-duplication',
     },
     {
       id: 'mitre',
@@ -107,7 +107,7 @@ export function PipelineFlow({
       icon: Crosshair,
       state: serverSideState,
       value: ingestResult ? ingestResult.matched_rule_titles.length.toLocaleString() : undefined,
-      caption: 'rules mapped',
+      caption: 'distinct detectors fired',
     },
     {
       id: 'ai',

@@ -40,7 +40,11 @@ export function useAiOpinion(opinionId: number | null) {
     }
 
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
     attemptsRef.current = 0
+    // A new upload's opinion must never show the previous upload's result
+    // while its first poll is in flight.
+    setOpinion(null)
     setStalled(false)
     setError(null)
 
@@ -52,7 +56,7 @@ export function useAiOpinion(opinionId: number | null) {
           attemptsRef.current += 1
           if (res.status === 'pending') {
             if (attemptsRef.current < MAX_POLL_ATTEMPTS) {
-              setTimeout(poll, POLL_INTERVAL_MS)
+              timer = setTimeout(poll, POLL_INTERVAL_MS)
             } else {
               setStalled(true)
             }
@@ -68,6 +72,7 @@ export function useAiOpinion(opinionId: number | null) {
 
     return () => {
       cancelled = true
+      if (timer) clearTimeout(timer)
     }
   }, [opinionId])
 

@@ -129,7 +129,7 @@ export function HostGraphLegend() {
         <span className="h-0.5 w-4 rounded-full bg-accent-magenta/60" />
         Shared MITRE technique
       </li>
-      <Tooltip label="Hosts are joined when the same technique appears on both, which is what lateral movement looks like in this data.">
+      <Tooltip label="Hosts are joined when the same ATT&CK technique was detected on both. A shared technique is a lead worth checking, not proof of lateral movement.">
         <li className="cursor-help text-text-faint underline decoration-dotted">What does an edge mean?</li>
       </Tooltip>
     </ul>

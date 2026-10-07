@@ -1,5 +1,11 @@
 import type { EventLogRow, Severity } from '../api'
-import { SYSMON_EVENT_TYPE_LABELS } from './constants'
+import {
+  APPLICATION_EVENT_TYPE_LABELS,
+  POWERSHELL_EVENT_TYPE_LABELS,
+  SECURITY_EVENT_TYPE_LABELS,
+  SYSMON_EVENT_TYPE_LABELS,
+  SYSTEM_EVENT_TYPE_LABELS,
+} from './constants'
 import { bucketCounts } from './aggregations'
 import type { LogLevel } from '../components/ui/Badge'
 
@@ -10,16 +16,41 @@ import type { LogLevel } from '../components/ui/Badge'
  * slightly different ways on two pages.
  */
 
-/** Sysmon event id -> human label, e.g. 1 -> "Process Creation". */
-export function eventTypeLabel(eventId: number): string {
-  return SYSMON_EVENT_TYPE_LABELS[eventId] ?? `Event ${eventId}`
+/** Channel family of a raw Windows channel string (mirrors the backend's
+ *  normalizer.canonical_channel: exact names / log-path prefixes). */
+export function channelFamily(channel: string | null | undefined): string | null {
+  const c = (channel ?? '').trim().toLowerCase()
+  if (!c) return null
+  if (c === 'sysmon' || c.startsWith('microsoft-windows-sysmon/')) return 'sysmon'
+  if (c === 'security') return 'security'
+  if (c === 'powershell' || c === 'windows powershell' || c.startsWith('microsoft-windows-powershell/')) return 'powershell'
+  if (c === 'system') return 'system'
+  if (c === 'application') return 'application'
+  return null
+}
+
+const LABELS_BY_FAMILY: Record<string, Record<number, string>> = {
+  sysmon: SYSMON_EVENT_TYPE_LABELS,
+  security: SECURITY_EVENT_TYPE_LABELS,
+  powershell: POWERSHELL_EVENT_TYPE_LABELS,
+  system: SYSTEM_EVENT_TYPE_LABELS,
+  application: APPLICATION_EVENT_TYPE_LABELS,
+}
+
+/** Human label for an event id IN ITS CHANNEL, e.g. (1, Sysmon) ->
+ *  "Process Creation". Without a recognised channel the honest answer is
+ *  just the number -- the same id means different things in different logs. */
+export function eventTypeLabel(eventId: number, channel?: string | null): string {
+  const family = channelFamily(channel)
+  const label = family ? LABELS_BY_FAMILY[family]?.[eventId] : undefined
+  return label ?? `Event ${eventId}`
 }
 
 /** The "source" column in the mockups. NightOwl ingests Windows event logs
  *  from hosts, so the honest source of a row is its host plus the Sysmon
  *  channel the record came from. */
 export function eventSource(event: EventLogRow): string {
-  return eventTypeLabel(event.event_id)
+  return eventTypeLabel(event.event_id, event.channel)
 }
 
 /** One-line human summary of a raw event, used where the mockups show a
@@ -30,8 +61,8 @@ export function eventMessage(event: EventLogRow): string {
     return `${event.rule_title}: ${event.process ?? 'unknown process'}`
   }
   if (event.command_line) return event.command_line
-  if (event.process) return `${eventTypeLabel(event.event_id)}: ${event.process}`
-  return eventTypeLabel(event.event_id)
+  if (event.process) return `${eventTypeLabel(event.event_id, event.channel)}: ${event.process}`
+  return eventTypeLabel(event.event_id, event.channel)
 }
 
 export interface LevelCounts {

@@ -26,7 +26,8 @@ export function StatusControl({
     if (status === currentStatus || pending) return
     setPending(status)
     try {
-      await updateIncidentStatus(incidentId, { status, actor: 'analyst' })
+      // The audit actor is taken from the server-side session, not sent here.
+      await updateIncidentStatus(incidentId, { status })
       push({ tone: 'success', title: `Incident marked ${status}` })
       onChanged()
     } catch (err) {

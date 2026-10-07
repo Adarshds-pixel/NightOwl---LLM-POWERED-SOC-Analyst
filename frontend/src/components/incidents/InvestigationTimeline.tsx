@@ -9,6 +9,11 @@ function entryTitle(entry: TimelineEntry) {
   if (entry.isAlert) {
     return (
       <span className="flex flex-wrap items-center gap-1.5">
+        {entry.kind === 'ml' && (
+          <Badge accent="neutral" className="shrink-0">
+            ML anomaly · not a detection
+          </Badge>
+        )}
         <span className="font-medium text-text">{entry.ruleTitle ?? 'Unknown rule'}</span>
         {entry.techniqueId && (
           <Badge accent="violet" className="shrink-0">
@@ -18,7 +23,7 @@ function entryTitle(entry: TimelineEntry) {
       </span>
     )
   }
-  const label = eventTypeLabel(entry.eventId)
+  const label = eventTypeLabel(entry.eventId, entry.channel)
   return <span className="text-text-dim">{entry.process ? `${label}: ${entry.process}` : label}</span>
 }
 
@@ -59,7 +64,7 @@ export function InvestigationTimeline({
   return (
     <Card
       title="Investigation timeline"
-      subtitle="Every event behind this incident, in the order it happened"
+      subtitle="Each alert's event and up to five neighbouring events, in the order they happened"
       icon={<Radar className="h-4 w-4" />}
       accent="primary"
     >
@@ -73,8 +78,8 @@ export function InvestigationTimeline({
               title={entryTitle(entry)}
               timestamp={formatDateTime(entry.timestamp)}
               detail={entryDetail(entry)}
-              severity={entry.isAlert ? (entry.severity ?? undefined) : undefined}
-              accentColor={entry.isAlert ? undefined : ACCENT.neutral}
+              severity={entry.isAlert && entry.kind !== 'ml' ? (entry.severity ?? undefined) : undefined}
+              accentColor={entry.isAlert && entry.kind !== 'ml' ? undefined : ACCENT.neutral}
               onClick={() => onSelectEvent(entry.id)}
             />
           ))}

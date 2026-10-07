@@ -12,9 +12,14 @@ import { getRules, type RuleInfo } from '../api'
  * per-rule match counts -- the part that does change -- are re-read.
  */
 let cachedRules: RuleInfo[] | null = null
+// Mounted consumers re-fetch when the cache is invalidated (after an upload
+// or a demo reset) -- before, only components mounted later saw new counts,
+// so the always-mounted command palette and pipeline panel stayed stale.
+const listeners = new Set<() => void>()
 
 export function invalidateRulesCache(): void {
   cachedRules = null
+  listeners.forEach((listener) => listener())
 }
 
 export function useRules() {
@@ -25,7 +30,14 @@ export function useRules() {
 
   const refresh = useCallback(() => {
     invalidateRulesCache()
-    setGeneration((g) => g + 1)
+  }, [])
+
+  useEffect(() => {
+    const listener = () => setGeneration((g) => g + 1)
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+    }
   }, [])
 
   useEffect(() => {

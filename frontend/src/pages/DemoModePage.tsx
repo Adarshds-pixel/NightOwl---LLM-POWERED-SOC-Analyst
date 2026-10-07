@@ -1,7 +1,7 @@
 import { DatabaseZap, Play, RotateCcw, TerminalSquare } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { resetDemoData } from '../api'
+import { ApiError, resetDemoData } from '../api'
 import { DemoTerminal } from '../components/demo/DemoTerminal'
 import { PipelineFlow } from '../components/demo/PipelineFlow'
 import { Button, Card, EmptyState, MiniStat, Modal, PageHeader } from '../components/ui'
@@ -9,6 +9,7 @@ import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useToast } from '../context/toast/useToast'
 import { useDemoMode } from '../hooks/useDemoMode'
 import { invalidateRulesCache } from '../hooks/useRules'
+import { clearSeenIncidentIds } from '../hooks/useUnseenIncidents'
 import { DEMO_CHAT_QUESTION } from '../lib/constants'
 
 /**
@@ -53,10 +54,13 @@ function DemoModePage() {
       // Reports, MITRE and the other useRules() readers keep showing
       // pre-reset counts until something else happens to invalidate it.
       invalidateRulesCache()
+      // Incident ids restart at 1 after a reset; without this the bell would
+      // treat the new #1-#3 as already seen.
+      clearSeenIncidentIds()
       refreshIncidents()
       push({ tone: 'success', title: 'Demo data cleared', description: 'Every event, alert and incident was removed.' })
-    } catch {
-      push({ tone: 'error', title: 'Reset failed' })
+    } catch (err) {
+      push({ tone: 'error', title: 'Reset failed', description: err instanceof ApiError ? err.detail : undefined })
     } finally {
       setResettingData(false)
     }
@@ -66,7 +70,7 @@ function DemoModePage() {
     <div className="flex flex-col gap-4 p-5">
       <PageHeader
         title="Demo Mode"
-        subtitle="Ingest, detect, explain and chat -- every step is a real backend call against a bundled fixture."
+        subtitle="Ingest, detect, explain and chat -- every step is a real backend call, replaying a real attack capture the rules detect."
         icon={<TerminalSquare className="h-5 w-5 text-accent-magenta" />}
         breadcrumbs={[{ label: 'Overview', to: '/' }, { label: 'Demo Mode' }]}
         actions={
@@ -123,8 +127,10 @@ function DemoModePage() {
         <Card title="Results" accent="primary">
           {fallbackIncident && (
             <p className="mb-3 rounded-control border border-accent-amber/30 bg-accent-amber/10 px-3.5 py-2.5 text-meta text-text-dim">
-              This fixture's events were already ingested in an earlier demo run, so there was nothing new to detect
-              this time (0 across the board below is correct, not broken). The AI explanation and chat further down
+              {fallbackIncident.reason === 'already_ingested'
+                ? "This fixture's events were already ingested in an earlier demo run, so there was nothing new to detect this time (0 across the board below is correct, not broken)."
+                : 'This fixture raised no detection in the current database state.'}{' '}
+              The AI explanation and chat further down
               continue with an existing incident instead — <strong>{fallbackIncident.title}</strong> — so there's
               still real data to analyze. Click <strong>Reset demo data</strong> above for a clean slate that lets
               every fixture create a fresh incident again.
@@ -132,7 +138,7 @@ function DemoModePage() {
           )}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MiniStat label="Events ingested" value={ingestResult.events_ingested.toLocaleString()} />
-            <MiniStat label="Rule matches" value={ingestResult.rule_matches} />
+            <MiniStat label="Rule + sequence matches" value={ingestResult.rule_matches} />
             <MiniStat label="Alerts created" value={ingestResult.alerts_created} />
             <MiniStat label="Incidents involved" value={ingestResult.incident_ids.length} />
           </div>

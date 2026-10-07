@@ -18,7 +18,13 @@ const COLLAPSE_KEY = 'nightowl:sidebar-collapsed'
  */
 export function AppLayout() {
   const { pathname } = useLocation()
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === 'true')
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
 

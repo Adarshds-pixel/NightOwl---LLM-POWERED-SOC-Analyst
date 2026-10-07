@@ -42,8 +42,8 @@ export const NAV_ENTRIES: NavEntry[] = [
   {
     to: '/',
     label: 'Overview',
-    title: 'Welcome back, Administrator',
-    subtitle: "Here's what's happening in your environment today.",
+    title: 'Overview',
+    subtitle: 'Detections, incidents and coverage across every log ingested so far.',
     icon: LayoutDashboard,
     end: true,
     keywords: ['dashboard', 'home', 'kpi', 'summary'],

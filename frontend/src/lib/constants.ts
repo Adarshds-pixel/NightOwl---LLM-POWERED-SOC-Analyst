@@ -12,12 +12,76 @@ export const EVENT_PAGE_SIZE = 50
 // Sysmon event IDs this project's rules actually evaluate) plus Process
 // Terminate (5), which shows up in real captures but isn't a detection
 // category. Unrecognized ids fall back to "Event <id>" in the Logs table.
+// Event ids are per channel (Sysmon 1 = process creation, System 1 = clock
+// change), so labels are looked up by channel family, never by id alone.
 export const SYSMON_EVENT_TYPE_LABELS: Record<number, string> = {
   1: 'Process Creation',
+  2: 'File Time Changed',
   3: 'Network Connection',
   5: 'Process Terminated',
+  6: 'Driver Loaded',
+  7: 'Image Loaded',
+  8: 'Remote Thread Created',
+  10: 'Process Access',
   11: 'File Created',
-  13: 'Registry Event',
+  12: 'Registry Key Create/Delete',
+  13: 'Registry Value Set',
+  14: 'Registry Rename',
+  17: 'Pipe Created',
+  18: 'Pipe Connected',
+  19: 'WMI Filter',
+  20: 'WMI Consumer',
+  21: 'WMI Binding',
+  22: 'DNS Query',
+  23: 'File Deleted',
+}
+
+export const SECURITY_EVENT_TYPE_LABELS: Record<number, string> = {
+  1102: 'Audit Log Cleared',
+  4624: 'Logon',
+  4625: 'Failed Logon',
+  4634: 'Logoff',
+  4648: 'Explicit-Credential Logon',
+  4656: 'Object Handle Requested',
+  4661: 'SAM Object Handle',
+  4662: 'Directory Object Operation',
+  4663: 'Object Access',
+  4672: 'Special Privileges Assigned',
+  4688: 'Process Creation',
+  4697: 'Service Installed',
+  4698: 'Scheduled Task Created',
+  4719: 'Audit Policy Changed',
+  4720: 'User Account Created',
+  4728: 'Member Added to Global Group',
+  4732: 'Member Added to Local Group',
+  4738: 'User Account Changed',
+  4741: 'Computer Account Created',
+  4756: 'Member Added to Universal Group',
+  4768: 'Kerberos TGT Requested',
+  4771: 'Kerberos Pre-auth Failed',
+  4781: 'Account Renamed',
+  4798: 'User Group Membership Enumerated',
+  4799: 'Local Group Membership Enumerated',
+  5145: 'Network Share Object Access',
+  5156: 'Network Connection Allowed',
+}
+
+export const POWERSHELL_EVENT_TYPE_LABELS: Record<number, string> = {
+  4103: 'PowerShell Module Logging',
+  4104: 'PowerShell Script Block',
+}
+
+export const SYSTEM_EVENT_TYPE_LABELS: Record<number, string> = {
+  104: 'Event Log Cleared',
+  7036: 'Service State Changed',
+  7040: 'Service Start Type Changed',
+  7045: 'Service Installed',
+}
+
+export const APPLICATION_EVENT_TYPE_LABELS: Record<number, string> = {
+  1040: 'MSI Transaction Started',
+  1042: 'MSI Transaction Ended',
+  18456: 'SQL Server Login Failed',
 }
 
 export const HEALTH_POLL_INTERVAL_MS = 15_000

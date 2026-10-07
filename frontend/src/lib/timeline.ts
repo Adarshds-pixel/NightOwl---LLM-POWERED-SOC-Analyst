@@ -1,4 +1,4 @@
-import type { AlertInfo, Severity } from '../api'
+import type { AlertInfo, AlertKind, Severity } from '../api'
 
 /**
  * One step in an incident's investigation timeline (pending.md item 5 /
@@ -13,6 +13,7 @@ export interface TimelineEntry {
   id: number
   timestamp: string
   eventId: number
+  channel: string | null
   process: string | null
   parentProcess: string | null
   commandLine: string | null
@@ -22,6 +23,8 @@ export interface TimelineEntry {
   techniqueId: string | null
   severity: Severity | null
   severityScore: number | null
+  /** What raised this alert -- 'ml' entries are anomaly evidence, not detections. */
+  kind: AlertKind | null
 }
 
 /**
@@ -40,6 +43,7 @@ export function buildIncidentTimeline(alerts: AlertInfo[]): TimelineEntry[] {
       id: alert.event.id,
       timestamp: alert.event.timestamp,
       eventId: alert.event.event_id,
+      channel: alert.event.channel ?? null,
       process: alert.event.process,
       parentProcess: alert.event.parent_process,
       commandLine: alert.event.command_line,
@@ -49,6 +53,7 @@ export function buildIncidentTimeline(alerts: AlertInfo[]): TimelineEntry[] {
       techniqueId: alert.technique_id,
       severity: alert.severity,
       severityScore: alert.severity_score,
+      kind: alert.kind ?? 'sigma',
     })
   }
 
@@ -59,6 +64,7 @@ export function buildIncidentTimeline(alerts: AlertInfo[]): TimelineEntry[] {
         id: related.id,
         timestamp: related.timestamp,
         eventId: related.event_id,
+        channel: related.channel ?? null,
         process: related.process,
         parentProcess: null,
         commandLine: related.command_line,
@@ -68,9 +74,11 @@ export function buildIncidentTimeline(alerts: AlertInfo[]): TimelineEntry[] {
         techniqueId: null,
         severity: null,
         severityScore: null,
+        kind: null,
       })
     }
   }
 
-  return [...byId.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+  // Compared as instants, not strings: offsets can differ between rows.
+  return [...byId.values()].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp) || a.id - b.id)
 }

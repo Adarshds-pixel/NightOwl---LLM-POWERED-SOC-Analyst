@@ -70,10 +70,14 @@ export function LogUploadControl({
             ? `${result.covered_events}/${result.events_ingested} events had rule coverage — ${result.uncovered_events} not evaluated by any loaded rule${duplicateNote}`
             : verdict.explanation
           : `All ${result.events_ingested.toLocaleString()} events were evaluated against loaded rules — no matches${duplicateNote}`
+      const anomalyNote =
+        result.ml_anomalies > 0
+          ? ` · ${result.ml_anomalies} ML anomaly record(s) (experimental, not detections)`
+          : ''
       push({
         tone,
         title: `${result.events_ingested.toLocaleString()} events ingested`,
-        description,
+        description: description + anomalyNote,
       })
     }
   }, [result, push])

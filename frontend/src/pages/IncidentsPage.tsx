@@ -14,6 +14,7 @@ import {
   Button,
   Card,
   DataTable,
+  applySort,
   ErrorState,
   Pagination,
   PageHeader,
@@ -28,7 +29,7 @@ import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
 import { usePreferences } from '../context/preferences/usePreferences'
 import { activityAnchorMs, bucketCounts, periodDelta } from '../lib/aggregations'
-import { SEVERITY_ACCENT } from '../lib/severity'
+import { SEVERITY_ACCENT, SEVERITY_RANK } from '../lib/severity'
 import { filterIncidents, primaryTactic } from '../lib/filtering'
 import { formatDateTime, incidentRef } from '../lib/format'
 import { SEVERITY_HEX } from '../lib/tokens'
@@ -48,11 +49,23 @@ function IncidentsPage() {
   const { byId } = useMitreCatalog()
 
   // Deep links from the dashboard (e.g. a severity slice) seed the filters.
+  const severityParam = searchParams.get('severity')
+  const statusParam = searchParams.get('status')
   const [filters, setFilters] = useState<IncidentFilterState>(() => ({
     ...DEFAULT_INCIDENT_FILTERS,
-    severity: (searchParams.get('severity') as Severity | null) ?? 'all',
-    status: searchParams.get('status') ?? 'all',
+    severity: (severityParam as Severity | null) ?? 'all',
+    status: statusParam ?? 'all',
   }))
+  const paramKey = `${severityParam ?? ''}|${statusParam ?? ''}`
+  const [seenParamKey, setSeenParamKey] = useState(paramKey)
+  if (paramKey !== seenParamKey) {
+    setSeenParamKey(paramKey)
+    setFilters((current) => ({
+      ...current,
+      severity: (severityParam as Severity | null) ?? 'all',
+      status: statusParam ?? 'all',
+    }))
+  }
   const [sort, setSort] = useState<SortState | null>(null)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(prefs.pageSize)
@@ -76,7 +89,6 @@ function IncidentsPage() {
   // instead of Date.now(): incident.created_at is the real historical
   // EVTX event time, not upload time.
   const activityNow = activityAnchorMs(times)
-  const visible = filtered.slice(page * pageSize, page * pageSize + pageSize)
 
   const columns: Column<IncidentSummary>[] = [
     {
@@ -95,7 +107,7 @@ function IncidentsPage() {
     {
       key: 'severity',
       header: 'Severity',
-      sortValue: (incident) => incident.severity,
+      sortValue: (incident) => SEVERITY_RANK[incident.severity] ?? 0,
       cell: (incident) => <SeverityBadge severity={incident.severity} score={incident.severity_score} />,
     },
     {
@@ -156,6 +168,11 @@ function IncidentsPage() {
     },
   ]
 
+  // Sort the WHOLE filtered list, then page it -- sorting only the visible
+  // page made "sort by severity" show page 1's critical incidents first and
+  // hide the rest on later pages.
+  const visible = applySort(filtered, columns, sort).slice(page * pageSize, page * pageSize + pageSize)
+
   if (loading) {
     return (
       <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-3 xl:grid-cols-5">
@@ -204,21 +221,21 @@ function IncidentsPage() {
           value={meta.totalHigh}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.high}
-          note="Needs triage today"
+          note="Highest severity band"
         />
         <StatCard
           label="Medium"
           value={meta.totalMedium}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.medium}
-          note="Queued for review"
+          note="Second severity band"
         />
         <StatCard
           label="Low"
           value={meta.totalLow}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.low}
-          note="Informational baseline"
+          note="Lowest severity bands"
         />
       </div>
 

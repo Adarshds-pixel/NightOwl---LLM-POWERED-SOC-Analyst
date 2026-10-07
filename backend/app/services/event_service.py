@@ -188,12 +188,15 @@ def _filtered_events_stmt(
         stmt = stmt.where(Event.timestamp >= start_date)
     if end_date is not None:
         stmt = stmt.where(Event.timestamp <= end_date)
+    # "Alerting" means a rule/sequence DETECTION -- an ML anomaly record
+    # anchored on an event does not make that event a detection.
+    detection = (Alert.event_id == Event.id) & (Alert.rule_id != ML_RULE_ID)
     if alert_only is True:
-        stmt = stmt.where(exists().where(Alert.event_id == Event.id))
+        stmt = stmt.where(exists().where(detection))
     elif alert_only is False:
-        stmt = stmt.where(~exists().where(Alert.event_id == Event.id))
+        stmt = stmt.where(~exists().where(detection))
     if severity is not None:
-        stmt = stmt.where(exists().where((Alert.event_id == Event.id) & (Alert.severity == severity)))
+        stmt = stmt.where(exists().where(detection & (Alert.severity == severity)))
     if covered is True:
         stmt = stmt.where(_covered_predicate())
     elif covered is False:
@@ -342,7 +345,13 @@ def get_alerts_for_event_ids(db: Session, event_ids: list[int]) -> dict[int, Ale
     """
     if not event_ids:
         return {}
-    alerts = list(db.scalars(select(Alert).where(Alert.event_id.in_(event_ids)).order_by(Alert.id)))
+    alerts = list(
+        db.scalars(
+            select(Alert)
+            .where(Alert.event_id.in_(event_ids), Alert.rule_id != ML_RULE_ID)
+            .order_by(Alert.id)
+        )
+    )
     best: dict[int, Alert] = {}
     for alert in alerts:
         existing = best.get(alert.event_id)

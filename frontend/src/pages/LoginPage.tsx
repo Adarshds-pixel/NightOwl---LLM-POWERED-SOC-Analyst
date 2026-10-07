@@ -34,8 +34,8 @@ import { useAuth } from '../context/auth/useAuth'
 const FEATURES = [
   {
     icon: ShieldCheck,
-    title: 'AI-Powered Detection',
-    body: 'Leverage LLM reasoning to identify and explain threats.',
+    title: 'Rule-Based Detection, AI Explanation',
+    body: 'Sigma-style rules and sequence correlation detect; an LLM explains what they found.',
   },
   {
     icon: Crosshair,
@@ -45,7 +45,7 @@ const FEATURES = [
   {
     icon: BrainCircuit,
     title: 'Contextual Analysis',
-    body: 'Correlate multi-source signals for deeper insights.',
+    body: 'Group detections per host and time window into investigable incidents.',
   },
   {
     icon: FileText,
@@ -55,7 +55,7 @@ const FEATURES = [
 ]
 
 const STATS = [
-  { value: '24/7', label: 'Threat Monitoring' },
+  { value: 'EVTX', label: 'Windows Log Analysis' },
   { value: 'MITRE ATT&CK', label: 'Technique Mapping' },
   { value: 'AI + Human', label: 'Stronger Together' },
 ]
@@ -136,7 +136,7 @@ export function LoginPage() {
             <section className="hidden flex-col lg:flex lg:pl-6 xl:pl-12">
               <span className="inline-flex w-fit items-center gap-2 rounded-full border border-accent-violet/35 bg-accent-violet/10 px-3.5 py-1.5 text-micro font-medium text-text-dim backdrop-blur-md">
                 <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent-magenta shadow-glow-magenta" />
-                Smarter Security. Always On.
+                Explainable Windows threat detection
               </span>
 
               <h1 className="mt-5 max-w-xl text-[2.75rem] leading-[1.08] font-bold tracking-tight text-text">

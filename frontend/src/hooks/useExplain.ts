@@ -39,6 +39,7 @@ export function useExplain(incidentId: number) {
   }, [])
 
   const run = useCallback(() => {
+    if (incidentId <= 0) return
     const thisRequest = ++requestId.current
     setStatus('loading')
     setStageIndex(0)

@@ -28,6 +28,9 @@ class EventLogRow(BaseModel):
     host: str
     timestamp: datetime
     event_id: int
+    # Raw Windows channel -- event ids collide across channels, so a client
+    # needs it to label an event correctly.
+    channel: str | None = None
     process: str | None
     parent_process: str | None
     command_line: str | None
@@ -111,6 +114,7 @@ def get_events(
                 host=event.host,
                 timestamp=event.timestamp,
                 event_id=event.event_id,
+                channel=event.channel,
                 process=event.process,
                 parent_process=event.parent_process,
                 command_line=event.command_line,
@@ -138,6 +142,9 @@ class EventDetailResponse(BaseModel):
     host: str
     timestamp: datetime
     event_id: int
+    # Raw Windows channel -- event ids collide across channels, so a client
+    # needs it to label an event correctly.
+    channel: str | None = None
     process: str | None
     parent_process: str | None
     command_line: str | None
@@ -170,6 +177,7 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db)) -> EventDetai
         host=event.host,
         timestamp=event.timestamp,
         event_id=event.event_id,
+                channel=event.channel,
         process=event.process,
         parent_process=event.parent_process,
         command_line=event.command_line,

@@ -21,6 +21,7 @@ export function useLiveLogStream(limit = 12, intervalMs = 10_000, paused = false
   const [lastUpdated, setLastUpdated] = useState<number | null>(null)
   const pausedRef = useRef(paused)
   pausedRef.current = paused
+  const [generation, setGeneration] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -58,7 +59,11 @@ export function useLiveLogStream(limit = 12, intervalMs = 10_000, paused = false
       cancelled = true
       if (timer) window.clearInterval(timer)
     }
-  }, [limit, intervalMs])
+  }, [limit, intervalMs, generation])
 
-  return { events, loading, error, lastUpdated }
+  // Re-fetch this panel only (the retry button used to reload the whole page,
+  // which the throttled-state auto-retry could repeat in a loop).
+  const refresh = () => setGeneration((g) => g + 1)
+
+  return { events, loading, error, lastUpdated, refresh }
 }

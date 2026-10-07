@@ -4,6 +4,28 @@
 // they need a Date object.
 
 export type Severity = 'informational' | 'low' | 'medium' | 'high' | 'critical'
+/** What produced an alert: a Sigma-style rule, a multi-event sequence
+ *  correlation, or the ML anomaly layer. An ML anomaly is NOT a detection --
+ *  the UI must never present it as one. */
+export type AlertKind = 'sigma' | 'sequence' | 'ml'
+
+/** Evidence the ML anomaly layer stores on its records (backend
+ *  services/ingest_service._run_ml_layer). */
+export interface MlAnomalyDetails {
+  kind: 'ml_anomaly'
+  mode: 'advisory' | 'alert'
+  family: string
+  distance: number
+  band: 'medium' | 'high'
+  threshold_medium: number
+  threshold_high: number
+  window_start: string
+  window_end: string
+  window_events: number
+  top_features: { feature: string; value: number; baseline_median: number; share: number }[]
+  novel_event_ids: number[]
+  model_trained_at: string
+}
 export type IncidentStatus = 'open' | 'investigating' | 'resolved' | 'closed'
 
 export interface SourceChunk {
@@ -55,6 +77,8 @@ export interface EventInfo {
   host: string
   timestamp: string
   event_id: number
+  /** Raw Windows channel -- needed to label the event id correctly. */
+  channel?: string | null
   process: string | null
   parent_process: string | null
   command_line: string | null
@@ -67,6 +91,8 @@ export interface RelatedEventInfo {
   id: number
   timestamp: string
   event_id: number
+  /** Raw Windows channel -- needed to label the event id correctly. */
+  channel?: string | null
   process: string | null
   command_line: string | null
   user: string | null
@@ -84,6 +110,11 @@ export interface AlertInfo {
   severity_score: number
   event: EventInfo
   related_events: RelatedEventInfo[]
+  kind: AlertKind
+  /** Identical repeats folded into this alert (same rule, host, actor, target within 60 s). */
+  occurrence_count: number
+  last_matched_at: string | null
+  details: MlAnomalyDetails | null
 }
 
 export interface IncidentDetailResponse {
@@ -204,6 +235,11 @@ export interface IngestResponse {
   channels: string[]
   providers: string[]
   event_id_breakdown: EventIdCoverageGroup[]
+  /** ML anomaly layer -- counted separately, never part of rule_matches /
+   *  alerts_created / matched_rule_titles. */
+  ml_anomalies: number
+  ml_anomaly_titles: string[]
+  ml_mode: 'advisory' | 'alert' | 'off'
 }
 
 export type AiOpinionStatus = 'pending' | 'ready' | 'failed'
@@ -235,6 +271,8 @@ export interface EventLogRow {
   host: string
   timestamp: string
   event_id: number
+  /** Raw Windows channel -- needed to label the event id correctly. */
+  channel?: string | null
   process: string | null
   parent_process: string | null
   command_line: string | null
@@ -266,6 +304,12 @@ export interface EventListResponse {
 // always-unique identity -- use it for React keys/selection.
 export interface AlertRow extends EventLogRow {
   alert_id: number
+  rule_id: string
+  kind: AlertKind
+  matched_at: string | null
+  occurrence_count: number
+  last_matched_at: string | null
+  details: MlAnomalyDetails | null
 }
 
 export interface AlertListResponse {
@@ -282,6 +326,8 @@ export interface AlertListResponse {
 // running", not a switch the UI can flip.
 export interface RuleInfo {
   rule_id: string
+  /** 'sigma' = YAML rule, 'sequence' = multi-event correlation, 'ml' = the anomaly model. */
+  kind: AlertKind
   title: string
   description: string
   level: Severity | 'unknown'
@@ -314,6 +360,8 @@ export interface EventDetailResponse {
   host: string
   timestamp: string
   event_id: number
+  /** Raw Windows channel -- needed to label the event id correctly. */
+  channel?: string | null
   process: string | null
   parent_process: string | null
   command_line: string | null
@@ -345,4 +393,23 @@ export interface DemoFixtureInfo {
 
 export interface DemoFixturesResponse {
   fixtures: DemoFixtureInfo[]
+}
+
+// --- System status (GET /system/status, backend/app/api/routes_system.py) --
+// What is actually configured and loaded -- the source of truth for status
+// indicators ("AI ready" means a key is configured and the knowledge base is
+// built, not merely that the API answered /health).
+export interface ComponentStatus {
+  ready: boolean
+  detail: string
+}
+
+export interface SystemStatusResponse {
+  environment: 'local' | 'production'
+  llm: ComponentStatus
+  knowledge_base: ComponentStatus
+  detection_rules: ComponentStatus
+  ml_anomaly_layer: ComponentStatus
+  attack_dataset: ComponentStatus
+  demo_mode_enabled: boolean
 }

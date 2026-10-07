@@ -47,8 +47,19 @@ function MitrePage() {
   const { incidents } = useIncidentsSnapshot()
   const { techniques, byId, loading } = useMitreCatalog()
   const { rules } = useRules()
-  const [tab, setTab] = useState<'tactics' | 'techniques' | 'matrix'>('tactics')
-  const [search, setSearch] = useState(searchParams.get('technique') ?? '')
+  const techniqueParam = searchParams.get('technique')
+  // A ?technique= deep link opens the Techniques tab, where the search it
+  // seeds is actually applied (it used to land on Tactics).
+  const [tab, setTab] = useState<'tactics' | 'techniques' | 'matrix'>(techniqueParam ? 'techniques' : 'tactics')
+  const [search, setSearch] = useState(techniqueParam ?? '')
+  const [seenTechniqueParam, setSeenTechniqueParam] = useState(techniqueParam)
+  if (techniqueParam !== seenTechniqueParam) {
+    setSeenTechniqueParam(techniqueParam)
+    if (techniqueParam) {
+      setSearch(techniqueParam)
+      setTab('techniques')
+    }
+  }
   const [selectedTactic, setSelectedTactic] = useState<Tactic | null>(null)
 
   const matrix = tacticTechniqueMatrix(incidents, byId)
@@ -275,7 +286,7 @@ function MitrePage() {
 
       {tab === 'matrix' && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          <Card title="Full attack matrix" subtitle="All 14 tactics - dimmed columns have no detections" accent="magenta" className="xl:col-span-9">
+          <Card title="Full attack matrix" subtitle={`All ${TACTIC_ORDER.length} tactics - dimmed columns have no detections`} accent="magenta" className="xl:col-span-9">
             <HeatmapGrid incidents={incidents} techniqueById={byId} showAllTactics />
           </Card>
           <Card title="Recently detected" accent="amber" className="xl:col-span-3" bodyClassName="px-2 pb-3">

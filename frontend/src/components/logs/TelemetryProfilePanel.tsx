@@ -23,12 +23,8 @@ const VERDICT_META: Record<VerdictKind, { accent: Accent; icon: typeof AlertTria
  * borrow Sysmon's vocabulary and instead falls back to the bare "Event
  * <id>" form.
  */
-function isSysmonChannel(channel: string | null): boolean {
-  return channel?.toLowerCase().includes('sysmon') ?? false
-}
-
 function groupLabel(group: EventIdCoverageGroup): string {
-  return isSysmonChannel(group.channel) ? eventTypeLabel(group.event_id) : `Event ${group.event_id}`
+  return eventTypeLabel(group.event_id, group.channel)
 }
 
 /**

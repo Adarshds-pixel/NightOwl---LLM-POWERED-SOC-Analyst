@@ -16,12 +16,12 @@ import { Card, EmptyState, ErrorState, LevelBadge, SkeletonRows, StatusDot, View
 export function LiveLogStreamPanel() {
   const { prefs } = usePreferences()
   const [paused, setPaused] = useState(false)
-  const { events, loading, error, lastUpdated } = useLiveLogStream(14, prefs.logStreamIntervalMs, paused)
+  const { events, loading, error, lastUpdated, refresh } = useLiveLogStream(14, prefs.logStreamIntervalMs, paused)
   const live = prefs.logStreamIntervalMs > 0 && !paused
 
   return (
     <Card
-      title="Live log stream"
+      title="Latest events"
       icon={<Radio className="h-3.5 w-3.5" />}
       accent="magenta"
       divided
@@ -31,7 +31,7 @@ export function LiveLogStreamPanel() {
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-micro text-text-faint">
             <StatusDot tone={live ? 'good' : 'idle'} pulse={live} />
-            {live ? 'Live' : paused ? 'Paused' : 'Manual'}
+            {live ? 'Auto-refresh' : paused ? 'Paused' : 'Manual'}
             {lastUpdated && <span className="hidden sm:inline">- {formatTimeOfDay(new Date(lastUpdated).toISOString())}</span>}
           </span>
           <ViewAllLink to="/logs" label="All logs" />
@@ -46,7 +46,7 @@ export function LiveLogStreamPanel() {
         {loading ? (
           <SkeletonRows rows={6} />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => window.location.reload()} />
+          <ErrorState message={error} onRetry={refresh} />
         ) : events.length === 0 ? (
           <EmptyState message="No events ingested yet" hint="Upload an EVTX file or run Demo Mode to populate the stream." />
         ) : (
