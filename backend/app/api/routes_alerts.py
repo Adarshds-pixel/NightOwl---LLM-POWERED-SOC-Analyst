@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
-from app.detection.synthetic import NON_YAML_RULES
+from app.detection.synthetic import NON_YAML_RULES, alert_kind
 from app.services.event_service import count_alert_rows, list_alert_rows
 
 router = APIRouter()
@@ -44,6 +44,15 @@ class AlertRow(BaseModel):
     rule_title: str
     technique_id: str | None
     incident_id: int | None
+    rule_id: str = ""
+    # "sigma" | "sequence" | "ml" -- an ML anomaly is not a rule detection.
+    kind: str = "sigma"
+    matched_at: datetime | None = None
+    # Identical repeats folded into this alert (ingest_service dedup).
+    occurrence_count: int = 1
+    last_matched_at: datetime | None = None
+    # ML anomalies: score, window bounds and the features that drove it.
+    details: dict | None = None
 
 
 class AlertListResponse(BaseModel):
@@ -64,12 +73,16 @@ def get_alerts(
         default=None,
         description="case-insensitive substring match on process, parent process, command line, user or host",
     ),
+    kind: str | None = Query(default=None, pattern="^(detection|ml)$", description="'detection' or 'ml'"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> AlertListResponse:
-    rows = list_alert_rows(db, host=host, start_date=start_date, end_date=end_date, severity=severity, q=q, limit=limit, offset=offset)
-    total = count_alert_rows(db, host=host, start_date=start_date, end_date=end_date, severity=severity, q=q)
+    rows = list_alert_rows(
+        db, host=host, start_date=start_date, end_date=end_date, severity=severity, q=q, kind=kind,
+        limit=limit, offset=offset,
+    )
+    total = count_alert_rows(db, host=host, start_date=start_date, end_date=end_date, severity=severity, q=q, kind=kind)
     # Sequence-detected alerts (detection/sequences.py) carry a rule_id
     # that was never a loaded YAML rule -- merge in their titles/technique
     # ids too, or every such alert would show as "Unknown rule".
@@ -94,6 +107,12 @@ def get_alerts(
                 rule_title=rule.title if rule else "Unknown rule",
                 technique_id=rule.technique_id if rule else None,
                 incident_id=alert.incident_id,
+                rule_id=alert.rule_id,
+                kind=alert_kind(alert.rule_id),
+                matched_at=alert.matched_at,
+                occurrence_count=alert.occurrence_count or 1,
+                last_matched_at=alert.last_matched_at,
+                details=alert.details,
             )
         )
 

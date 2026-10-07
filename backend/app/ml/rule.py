@@ -1,11 +1,8 @@
 """The pseudo-rule the ML anomaly layer files its alerts under.
 
-An ML alert has a rule_id (`ml-anomaly-detector`) but no YAML file, exactly
-like a sequence-engine match. Every read path that resolves an Alert's rule_id
-to a human title looked only at get_loaded_rules() + SEQUENCE_PATTERNS, so ML
-alerts rendered as "Unknown rule" in the alerts list, the events view, the
-incident view, and the incident narrative -- and `GET /rules/ml-anomaly-detector`
-404'd.
+An ML alert has a rule_id (`ml-anomaly-detector`) but no YAML file, like a
+sequence-engine match, so every read path that resolves an Alert's rule_id to
+a title merges this in (detection/synthetic.py's NON_YAML_RULES).
 
 This module deliberately imports nothing from app.detection, so
 app/detection/synthetic.py can merge it in without a circular import.
@@ -20,25 +17,26 @@ ML_RULE_ID = "ml-anomaly-detector"
 class MLAnomalyRule:
     """The title/technique/severity an ML alert carries.
 
-    Shaped to match detection.sequences.SequencePattern so the same
-    `rules_by_id.get(...)` lookups work unchanged -- except technique_id is
-    `None` by design, not by omission: an anomaly score says "this window does
-    not look like the baseline", which maps to no single ATT&CK technique. A
-    fabricated one would be exactly the kind of invented confidence
-    docs/DOCUMENTATION.md §9 forbids.
+    Shaped like detection.sequences.SequencePattern so the same
+    `rules_by_id.get(...)` lookups work -- except technique_id is `None` by
+    design: an anomaly score says "this window does not look like this
+    family's benign baseline", which maps to no single ATT&CK technique, and a
+    fabricated one would be invented confidence.
     """
 
     rule_id: str = ML_RULE_ID
-    title: str = "ML Behavioural Anomaly (Host Window Deviates from Benign Baseline)"
+    title: str = "ML Behavioural Anomaly"
     technique_id: str | None = None
     tactics: list[str] = field(default_factory=list)
-    level: str = "medium"
+    level: str = "low"
     description: str = (
-        "Unsupervised Ledoit-Wolf Mahalanobis model over 10-minute host windows. "
-        "Flags windows whose behaviour sits beyond the 99.5th percentile of the "
-        "benign baseline. Supplementary evidence of unusual activity -- it does "
-        "not identify a specific technique, and single-event stealth executions "
-        "are the Sigma rules' job, not this layer's."
+        "Unsupervised per-log-family model (Ledoit-Wolf Mahalanobis distance over 10-minute host windows of "
+        "one channel: Security, Sysmon, System or Application). Flags a window whose event mix and volume sit "
+        "beyond the 99.5th percentile of the benign baseline, and records which features drove the score. "
+        "Experimental and advisory by default: trained on only two benign hosts, it flags 1-4.5 benign windows "
+        "per host-day and cannot yet tell an attack from an unfamiliar machine, so it never opens an incident "
+        "or changes one -- it is supporting evidence, never a detection. Windows under 10 events are not "
+        "scored; single-event attacks are the rules' job."
     )
 
 

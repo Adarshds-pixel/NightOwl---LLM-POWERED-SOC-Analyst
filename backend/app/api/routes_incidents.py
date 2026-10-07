@@ -36,7 +36,7 @@ from app.core.config import settings
 from app.core.errors import not_found
 from app.db.session import get_db
 from app.detection.rule_loader import get_loaded_rules
-from app.detection.synthetic import NON_YAML_RULES
+from app.detection.synthetic import NON_YAML_RULES, alert_kind
 from app.mitre.loader import load_mitre_techniques
 from app.models.incident import Incident
 from app.rag import cache
@@ -141,6 +141,10 @@ class AlertInfo(BaseModel):
     severity_score: int
     event: EventInfo
     related_events: list[RelatedEventInfo]
+    kind: str = "sigma"
+    occurrence_count: int = 1
+    last_matched_at: datetime | None = None
+    details: dict | None = None
 
 
 class IncidentDetailResponse(BaseModel):
@@ -346,6 +350,10 @@ def get_incident_detail(incident_id: int, db: Session = Depends(get_db)) -> Inci
                 matched_at=alert.matched_at,
                 severity=alert.severity,
                 severity_score=alert.severity_score,
+                kind=alert_kind(alert.rule_id),
+                occurrence_count=alert.occurrence_count or 1,
+                last_matched_at=alert.last_matched_at,
+                details=alert.details,
                 event=EventInfo(
                     id=event.id,
                     host=event.host,

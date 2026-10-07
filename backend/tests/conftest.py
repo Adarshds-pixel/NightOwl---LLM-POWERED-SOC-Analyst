@@ -135,3 +135,4 @@ def api_client():
         yield TestClient(app, headers={CSRF_HEADER: "1"}), TestingSessionLocal
     finally:
         app.dependency_overrides.clear()
+        engine.dispose()

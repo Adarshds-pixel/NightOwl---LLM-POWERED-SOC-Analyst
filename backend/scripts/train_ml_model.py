@@ -1,81 +1,97 @@
-"""CLI: fit the Ledoit-Wolf anomaly detector on the benign feature matrix.
+"""Train the ML anomaly layer: one model per log family on benign windows.
 
-Reads scripts/ml_features.csv (produced by extract_ml_features.py) and writes
-app/ml/models/anomaly_detector.joblib.
+Source: sample_logs/real_world_fixtures/NightOwl-Benign-Dataset/ (tracked in
+git, so a clone can reproduce the shipped model exactly). Add your own benign
+captures with --extra-dir (e.g. logs collected with collect_benign_logs.ps1
+from more machines -- the single most effective way to improve this layer).
 
-Features with no variance across the benign corpus are dropped by
-detector.train() and reported here. That is not a tuning knob: a feature the
-baseline never exercises has only the shrinkage floor as variance, so its
-first non-zero value on a real host scores as an enormous deviation. Keeping
-them is what made the 70-feature model flag any host with ordinary network
-traffic.
+Overlapping exports are de-duplicated by (host, channel, EventRecordID), then
+cut into (host, family, 10-minute) windows; windows smaller than
+MIN_WINDOW_EVENTS are not modelled (they are not scored in production either).
+A family with fewer than MIN_TRAIN_WINDOWS windows gets no model -- the layer
+simply does not score that family rather than score it badly.
+
+    ./venv/Scripts/python.exe scripts/train_ml_model.py
+    ./venv/Scripts/python.exe scripts/train_ml_model.py --extra-dir D:/benign_logs
 """
 
-import csv
+import argparse
 import sys
+from collections import defaultdict
 from pathlib import Path
 
-import numpy as np
+BACKEND = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND))
+sys.path.insert(0, str(BACKEND / "scripts"))
 
-# Adjust sys.path to import from backend.app
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.ml.detector import MIN_TRAIN_WINDOWS, MIN_WINDOW_EVENTS, fit_family, new_bundle  # noqa: E402
+from app.ml.features import FAMILIES, build_vocabulary  # noqa: E402
+from app.ml.runtime import MODEL_PATH  # noqa: E402
+from app.ml.windows import build_windows, dedupe  # noqa: E402
+from run_detection_benchmark import load_events  # noqa: E402  (shared, cached EVTX parsing)
 
-from app.ml.detector import NightOwlAnomalyDetector
-
-IDENTIFIER_COLUMNS = ("host", "window_start", "is_attack")
-
-
-def load_features(csv_path: str):
-    """Return (X, feature_names, identifiers) from a feature CSV."""
-    features = []
-    identifiers = []
-    feature_names = None
-
-    with open(csv_path, "r", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            identifiers.append({k: row.get(k) for k in IDENTIFIER_COLUMNS if k in row})
-            for key in IDENTIFIER_COLUMNS:
-                row.pop(key, None)
-            if feature_names is None:
-                feature_names = list(row.keys())
-            features.append([float(row[name]) for name in feature_names])
-
-    return np.array(features), (feature_names or []), identifiers
+BENIGN_DIR = BACKEND / "sample_logs" / "real_world_fixtures" / "NightOwl-Benign-Dataset"
 
 
-def main():
-    features_csv = Path(__file__).resolve().parent / "ml_features.csv"
-    if not features_csv.exists():
-        print(f"Error: {features_csv} not found. Run extract_ml_features.py first.")
-        sys.exit(1)
+def benign_windows(dirs: list[Path]) -> dict[str, list[tuple[str, object, list]]]:
+    """family -> [(host, window_start, events)] over every .evtx in `dirs`."""
+    events = []
+    for directory in dirs:
+        for path in sorted(directory.glob("*.evtx")):
+            file_events, _read, _skipped = load_events(path)
+            events.extend(file_events)
+    events = dedupe(sorted(events, key=lambda e: e.timestamp))
+    by_family: dict[str, list] = defaultdict(list)
+    for (host, family, start), window in build_windows(events).items():
+        if len(window) >= MIN_WINDOW_EVENTS:
+            by_family[family].append((host, start, window))
+    for family in by_family:
+        by_family[family].sort(key=lambda item: (item[0], item[1]))
+    return by_family
 
-    print(f"Loading features from {features_csv}...")
-    X, feature_names, _ = load_features(str(features_csv))
-    print(f"Loaded {X.shape[0]} windows with {X.shape[1]} features.")
 
-    if X.shape[0] == 0:
-        print("Error: No data loaded. Cannot train model.")
-        sys.exit(1)
+def train(dirs: list[Path]):
+    by_family = benign_windows(dirs)
+    models, skipped = {}, {}
+    for family in FAMILIES:
+        items = by_family.get(family, [])
+        if len(items) < MIN_TRAIN_WINDOWS:
+            skipped[family] = f"{len(items)} windows (< {MIN_TRAIN_WINDOWS})"
+            continue
+        windows = [w for _h, _s, w in items]
+        models[family] = fit_family(family, windows, [h for h, _s, _w in items], build_vocabulary(windows))
+    return models, skipped
 
-    print("Training Ledoit-Wolf Mahalanobis detector...")
-    detector = NightOwlAnomalyDetector()
-    detector.train(X, feature_names)
 
-    model_path = Path(__file__).resolve().parent.parent / "app" / "ml" / "models" / "anomaly_detector.joblib"
-    detector.save(str(model_path))
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--extra-dir", type=Path, action="append", default=[], help="additional benign EVTX directory")
+    args = parser.parse_args()
 
-    print(f"Model successfully saved to {model_path}")
-    print(f"Features fitted : {len(detector.feature_names)}")
-    print(f"Features dropped: {len(detector.dropped_features)} (insufficient benign support)")
-    for name in detector.dropped_features:
-        print(f"  - {name}")
-    print(f"Derived Threshold Suspicious (99.5th %ile): {detector.threshold_suspicious:.4f}")
-    print(f"Derived Threshold High (99.9th %ile): {detector.threshold_high:.4f}")
-    print(
-        "\nNote: those thresholds are percentiles of the TRAINING distances. "
-        "For held-out metrics run scripts/eval_ml_model.py."
+    dirs = [BENIGN_DIR, *args.extra_dir]
+    models, skipped = train(dirs)
+    if not models:
+        print("No family had enough benign windows to model; nothing written.")
+        return 1
+    bundle = new_bundle(
+        models,
+        training_source=", ".join(str(d.relative_to(BACKEND)) if d.is_relative_to(BACKEND) else str(d) for d in dirs),
+        notes={"skipped_families": skipped},
     )
+    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    bundle.save(MODEL_PATH)
+    print(f"Wrote {MODEL_PATH}")
+    for family, model in models.items():
+        print(
+            f"  {family:11} {model.train_windows:5d} windows from {', '.join(model.train_hosts)}; "
+            f"{len(model.feature_names)} features ({len(model.dropped_features)} dropped); "
+            f"thresholds medium {model.threshold_medium:.1f} / high {model.threshold_high:.1f}"
+        )
+    for family, reason in skipped.items():
+        print(f"  {family:11} not modelled: {reason}")
+    print("Thresholds are percentiles of TRAINING distances -- see scripts/eval_ml_model.py for held-out rates.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -392,4 +392,4 @@ def test_build_incident_evidence_counts_additional_alerts_instead_of_detailing_t
 
         evidence = build_incident_evidence(db, incident)
 
-        assert evidence["additional_alerts"] == "1 more alert(s) matched on this incident, not individually listed here"
+        assert evidence["additional_alerts"] == "1 more rule alert(s) matched on this incident, not individually listed here"

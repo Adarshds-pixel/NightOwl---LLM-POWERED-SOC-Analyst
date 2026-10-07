@@ -144,6 +144,11 @@ class IngestResponse(BaseModel):
     channels: list[str]
     providers: list[str]
     event_id_breakdown: list[EventIdCoverageGroup]
+    # ML anomaly layer -- reported separately from rule detections, never
+    # included in rule_matches / alerts_created / matched_rule_titles.
+    ml_anomalies: int = 0
+    ml_anomaly_titles: list[str] = []
+    ml_mode: str = "advisory"
 
 
 async def check_upload_size_limit(request: Request):
@@ -372,6 +377,9 @@ def ingest_evtx(
                 EventIdCoverageGroup(channel=g.channel, event_id=g.event_id, count=g.count, covered=g.covered)
                 for g in outcome.event_id_breakdown
             ],
+            ml_anomalies=outcome.ml_anomalies,
+            ml_anomaly_titles=outcome.ml_anomaly_titles,
+            ml_mode=settings.ml_mode,
         )
     finally:
         if tmp_path is not None and tmp_path.exists():

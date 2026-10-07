@@ -1,0 +1,237 @@
+{
+  "min_window_events": 10,
+  "A_within_host_temporal": {
+    "application": {
+      "test_windows": 55,
+      "flagged": 1,
+      "flag_rate": 0.01818181818181818,
+      "alerts_per_host_day": 2.618181818181818
+    },
+    "system": {
+      "test_windows": 69,
+      "flagged": 2,
+      "flag_rate": 0.028985507246376812,
+      "alerts_per_host_day": 4.173913043478261
+    },
+    "powershell": {
+      "skipped": "16 train / 8 test windows"
+    },
+    "sysmon": {
+      "test_windows": 229,
+      "flagged": 2,
+      "flag_rate": 0.008733624454148471,
+      "alerts_per_host_day": 1.2576419213973797
+    },
+    "security": {
+      "test_windows": 161,
+      "flagged": 5,
+      "flag_rate": 0.031055900621118012,
+      "alerts_per_host_day": 4.472049689440993
+    }
+  },
+  "B_leave_one_host_out": {
+    "application": {
+      "LAPTOP-5GVGMJ14": {
+        "test_windows": 84,
+        "flagged": 18,
+        "flag_rate": 0.21428571428571427
+      },
+      "SERVER002": {
+        "test_windows": 95,
+        "flagged": 3,
+        "flag_rate": 0.031578947368421054
+      }
+    },
+    "system": {
+      "LAPTOP-5GVGMJ14": {
+        "test_windows": 128,
+        "flagged": 90,
+        "flag_rate": 0.703125
+      },
+      "SERVER002": {
+        "test_windows": 99,
+        "flagged": 42,
+        "flag_rate": 0.42424242424242425
+      }
+    },
+    "powershell": {
+      "SERVER002": {
+        "skipped": "0 train windows"
+      }
+    },
+    "sysmon": {
+      "LAPTOP-5GVGMJ14": {
+        "test_windows": 6,
+        "flagged": 6,
+        "flag_rate": 1.0
+      },
+      "SERVER002": {
+        "skipped": "6 train windows"
+      }
+    },
+    "security": {
+      "LAPTOP-5GVGMJ14": {
+        "test_windows": 54,
+        "flagged": 24,
+        "flag_rate": 0.4444444444444444
+      },
+      "SERVER002": {
+        "test_windows": 477,
+        "flagged": 4,
+        "flag_rate": 0.008385744234800839
+      }
+    }
+  },
+  "C_unseen_benign": {
+    "local benign captures (unseen)": {
+      "files": 3,
+      "scored_windows": 314,
+      "flagged": 27,
+      "flag_rate": 0.08598726114649681,
+      "examples": [
+        {
+          "file": "nightowl_benign_security.evtx",
+          "family": "security",
+          "distance": 301.9,
+          "top": [
+            "eid_5058",
+            "total_events",
+            "eid_4798"
+          ]
+        },
+        {
+          "file": "nightowl_benign_security.evtx",
+          "family": "security",
+          "distance": 180.7,
+          "top": [
+            "distinct_logon_sources",
+            "eid_4672",
+            "eid_5061"
+          ]
+        },
+        {
+          "file": "nightowl_benign_security.evtx",
+          "family": "security",
+          "distance": 178.7,
+          "top": [
+            "eid_5058",
+            "total_events",
+            "eid_4798"
+          ]
+        },
+        {
+          "file": "nightowl_benign_security.evtx",
+          "family": "security",
+          "distance": 189.1,
+          "top": [
+            "eid_4634",
+            "eid_4798",
+            "eid_4672"
+          ]
+        },
+        {
+          "file": "nightowl_benign_security.evtx",
+          "family": "security",
+          "distance": 227.3,
+          "top": [
+            "eid_4634",
+            "eid_4624",
+            "eid_4798"
+          ]
+        }
+      ]
+    },
+    "synthetic noise (unseen)": {
+      "files": 5,
+      "scored_windows": 5,
+      "flagged": 5,
+      "flag_rate": 1.0,
+      "examples": [
+        {
+          "file": "noise_afternoon_stretch.evtx",
+          "family": "sysmon",
+          "distance": 5467.4,
+          "top": [
+            "total_events",
+            "eid_5",
+            "eid_1"
+          ]
+        },
+        {
+          "file": "noise_brief_window.evtx",
+          "family": "sysmon",
+          "distance": 5695.8,
+          "top": [
+            "total_events",
+            "eid_5",
+            "eid_1"
+          ]
+        },
+        {
+          "file": "noise_late_session.evtx",
+          "family": "sysmon",
+          "distance": 7268.4,
+          "top": [
+            "total_events",
+            "eid_5",
+            "eid_1"
+          ]
+        },
+        {
+          "file": "noise_mid_morning.evtx",
+          "family": "sysmon",
+          "distance": 5895.2,
+          "top": [
+            "total_events",
+            "eid_5",
+            "eid_1"
+          ]
+        },
+        {
+          "file": "noise_short_burst.evtx",
+          "family": "sysmon",
+          "distance": 4625.5,
+          "top": [
+            "total_events",
+            "eid_5",
+            "eid_1"
+          ]
+        }
+      ]
+    },
+    "mislabeled bits_openvpn (benign)": {
+      "files": 1,
+      "scored_windows": 0,
+      "flagged": 0,
+      "flag_rate": null,
+      "examples": []
+    }
+  },
+  "D_attack_captures": {
+    "attack_windows": 87,
+    "scorable_windows": 26,
+    "flagged": 24,
+    "recall_on_scorable": 0.9230769230769231,
+    "captures_flagged": [
+      "ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx",
+      "DE_1102_security_log_cleared.evtx",
+      "DE_RDP_Tunnel_5156.evtx",
+      "DE_RDP_Tunneling_4624.evtx",
+      "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
+      "ID4728-Massive account group membership change.evtx",
+      "LM_5145_Remote_FileCopy.evtx",
+      "LM_ScheduledTask_ATSVC_target_host.evtx",
+      "LM_sysmon_psexec_smb_meterpreter.evtx",
+      "de_unmanagedpowershell_psinject_sysmon_7_8_10.evtx",
+      "dicovery_4661_net_group_domain_admins_target.evtx",
+      "discovery_bloodhound.evtx",
+      "discovery_meterpreter_ps_cmd_process_listing_sysmon_10.evtx",
+      "kerberos_pwd_spray_4771.evtx",
+      "privesc_rotten_potato_from_webshell_metasploit_sysmon_1_8_3.evtx",
+      "remote_sam_registry_access_via_backup_operator_priv.evtx",
+      "rogue_msi_url_1040_1042.evtx",
+      "samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_securitylogs.evtx",
+      "sysmon_20_21_1_CommandLineEventConsumer.evtx"
+    ]
+  }
+}

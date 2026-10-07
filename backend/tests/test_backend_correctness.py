@@ -245,3 +245,23 @@ def test_overlong_chat_message_is_rejected(api_client):
     client, _ = api_client
     response = client.post("/incidents/1/chat", json={"message": "x" * 5000})
     assert response.status_code == 422
+
+
+def test_ml_anomaly_never_becomes_the_explained_primary_alert():
+    from app.ml.rule import ML_RULE_ID
+    from app.models.event import Event
+    from app.services.incident_service import build_incident_evidence
+
+    with Session(_engine()) as db:
+        incident = find_or_create_incident(db, "H", BASE, _match(title="Real Rule"))
+        ev1 = Event(host="H", timestamp=BASE, event_id=1, process="real.exe", raw_json={})
+        ev0 = Event(host="H", timestamp=BASE - timedelta(minutes=5), event_id=1, process="window.exe", raw_json={})
+        db.add_all([ev0, ev1])
+        db.flush()
+        db.add(Alert(event_id=ev0.id, rule_id=ML_RULE_ID, matched_at=BASE - timedelta(minutes=5), severity="low", incident_id=incident.id))
+        db.add(Alert(event_id=ev1.id, rule_id="r1", matched_at=BASE, severity="high", incident_id=incident.id))
+        db.flush()
+        evidence = build_incident_evidence(db, incident)
+        assert evidence["process"] == "real.exe"
+        assert evidence["detection_method"] == "single-event Sigma rule"
+        assert "supporting_anomalies" in evidence

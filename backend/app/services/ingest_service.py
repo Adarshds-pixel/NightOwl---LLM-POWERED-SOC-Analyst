@@ -22,7 +22,7 @@ means those tests still patch the thing that actually runs.
 """
 
 import logging
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Iterable
@@ -33,9 +33,11 @@ from sqlalchemy.orm import Session
 from app.detection.engine import RuleMatch, covered_event_ids, evaluate_event
 from app.detection.rule_loader import LoadedRule
 from app.detection.sequences import detect_sequences
-from app.ml.features import extract_features
+from app.core.config import settings
+from app.ml.features import WINDOW
 from app.ml.rule import ML_ANOMALY_RULE, ML_RULE_ID
 from app.ml.runtime import get_detector
+from app.ml.windows import build_windows
 from app.ingestion.normalizer import EventNormalizationError, canonical_channel, normalize_event
 from app.services.advisory_patterns import is_named_pipe_discovery, is_non_kernel_driver_service_installation
 from app.services import severity_service
@@ -382,66 +384,7 @@ def ingest_records(
 
     alerts = save_alerts(db, alert_data)
 
-    # =========================================================================
-    # ML Anomaly Detection Phase
-    # Evaluates the 10-minute host windows of this batch using Ledoit-Wolf.
-    # Yields additional rule matches appended to the response without replacing
-    # existing Sigma rules.
-    # =========================================================================
-    ml_detector = get_detector()
-    if ml_detector is not None:
-        windows: dict[tuple[str, datetime], list] = defaultdict(list)
-        for saved_event, norm_event in zip(saved, normalized_events, strict=True):
-            # Floor minute to nearest 10 -- the same bucketing the model was
-            # trained on (scripts/extract_ml_features.py).
-            minute_floored = (norm_event.timestamp.minute // 10) * 10
-            bucket_time = norm_event.timestamp.replace(minute=minute_floored, second=0, microsecond=0)
-            windows[(norm_event.host, bucket_time)].append((saved_event, norm_event))
-
-        ml_alert_data = []
-        for (host, bucket_time), paired_events in windows.items():
-            try:
-                features = extract_features([pe[1] for pe in paired_events])
-                # select() projects onto the schema this model was fitted on,
-                # by name. Never pass list(features.values()) -- that is
-                # extract_features' dict order, which the model does not know.
-                score_res = ml_detector.score_window(ml_detector.select(features))[0]
-            except (KeyError, ValueError):
-                # A feature-schema mismatch means the model and the extractor
-                # have drifted apart. Skip the window, but make it loud --
-                # this is a bug to fix, not a condition to tolerate.
-                logger.exception(
-                    "ML scoring skipped for %s @ %s: feature schema mismatch", host, bucket_time
-                )
-                continue
-
-            if score_res["severity"] not in ("High", "Medium"):
-                continue
-
-            raw_level = "high" if score_res["severity"] == "High" else "medium"
-            ml_match = RuleMatch(
-                rule_id=ML_RULE_ID,
-                title=f"{ML_ANOMALY_RULE.title} [{score_res['severity']}]",
-                level=severity_service.compute_severity(raw_level, []),
-                score=severity_service.compute_severity_score(raw_level, []),
-                # No technique: an anomaly score says "unlike the baseline",
-                # which maps to no single ATT&CK technique. See app/ml/rule.py.
-                technique_id=None,
-            )
-            anchor_saved = paired_events[-1][0]
-
-            incident = find_or_create_incident(db, host, bucket_time, ml_match)
-            if incident.id not in incident_ids:
-                incident_ids.append(incident.id)
-            ml_alert_data.append((anchor_saved.id, ml_match, bucket_time, incident.id))
-
-        if ml_alert_data:
-            ml_alerts = save_alerts(db, ml_alert_data)
-            alerts.extend(ml_alerts)
-            rule_matches += len(ml_alert_data)
-            for _, match, _, _ in ml_alert_data:
-                if match.title not in matched_titles:
-                    matched_titles.append(match.title)
+    ml_anomalies, ml_anomaly_titles = _run_ml_layer(db, saved, normalized_events, incident_ids)
 
     # An advisory-flagged event that also became a real alert (either a
     # per-event rule or a sequence's anchor event, e.g. the SMB-enum-probe
@@ -540,4 +483,93 @@ def ingest_records(
         channels=sorted(channels_seen),
         providers=sorted(providers_seen),
         event_id_breakdown=event_id_breakdown,
+        ml_anomalies=ml_anomalies,
+        ml_anomaly_titles=ml_anomaly_titles,
     )
+
+
+def _run_ml_layer(db: Session, saved, normalized_events, incident_ids: list[int]) -> tuple[int, list[str]]:
+    """Score this batch's (host, log family, 10-minute) windows with the ML
+    anomaly layer and persist any anomaly as an alert carrying its evidence.
+
+    Deliberately kept apart from rule detection (see app/ml/rule.py):
+      * anomalies never count toward rule_matches / alerts_created;
+      * they never change an incident's title, severity or techniques;
+      * in "advisory" mode (the default, see settings.ml_mode) they are only
+        linked to an incident that already covers the host and time, and are
+        otherwise stored on their own -- an anomaly score alone never opens an
+        incident. "alert" mode may open one.
+    A failure while scoring one window is logged and that window skipped; it
+    never fails the upload.
+    """
+    mode = settings.ml_mode
+    if mode == "off":
+        return 0, []
+    bundle = get_detector()
+    if bundle is None:
+        return 0, []
+
+    windows = build_windows(
+        [n for _row, n in zip(saved, normalized_events, strict=True)],
+    )
+    rows_by_identity = {id(n): row for row, n in zip(saved, normalized_events, strict=True)}
+    ml_alert_data = []
+    titles: list[str] = []
+    for (host, family, start), events in windows.items():
+        try:
+            result = bundle.score(family, events)
+            if result is None or result.severity == "low":
+                continue
+            anchor = _ml_anchor_event(events, result.top_features)
+            level = "low" if mode == "advisory" else result.severity
+            match = RuleMatch(
+                rule_id=ML_RULE_ID,
+                title=f"{ML_ANOMALY_RULE.title}: {family.capitalize()} activity",
+                level=level,
+                score=severity_service.compute_severity_score(level, []),
+                technique_id=None,
+            )
+            incident = find_or_create_incident(
+                db, host, start, match, advisory=True, create=(mode == "alert")
+            )
+            if incident is not None and incident.id not in incident_ids and mode == "alert":
+                incident_ids.append(incident.id)
+            details = {
+                "kind": "ml_anomaly",
+                "mode": mode,
+                "family": family,
+                "distance": round(result.distance, 2),
+                "band": result.severity,
+                "threshold_medium": round(result.threshold_medium, 2),
+                "threshold_high": round(result.threshold_high, 2),
+                "window_start": start.isoformat(),
+                "window_end": (start + WINDOW).isoformat(),
+                "window_events": result.window_events,
+                "top_features": result.top_features,
+                "novel_event_ids": result.novel_event_ids,
+                "model_trained_at": bundle.created_at,
+            }
+            ml_alert_data.append(
+                (rows_by_identity[id(anchor)].id, match, start, incident.id if incident else None,
+                 {"details": details})
+            )
+            if match.title not in titles:
+                titles.append(match.title)
+        except Exception:  # noqa: BLE001 -- the ML layer is supplementary; it must never fail an upload
+            logger.exception("ML scoring failed for %s/%s @ %s; window skipped", host, family, start)
+    if ml_alert_data:
+        save_alerts(db, ml_alert_data)
+    return len(ml_alert_data), titles
+
+
+def _ml_anchor_event(events, top_features: list[dict]):
+    """The event that best represents why the window was flagged: the first
+    event of the top contributing event id, else the window's first event."""
+    for feature in top_features:
+        name = feature.get("feature", "")
+        if name.startswith("eid_") and name[4:].isdigit():
+            event_id = int(name[4:])
+            for event in events:
+                if event.event_id == event_id:
+                    return event
+    return events[0]

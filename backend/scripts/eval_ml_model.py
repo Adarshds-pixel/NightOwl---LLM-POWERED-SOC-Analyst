@@ -1,297 +1,179 @@
-"""Host-held-out evaluation of the ML anomaly layer.
+"""Held-out evaluation of the ML anomaly layer (per-family models).
 
-Replaces scripts/eval/evaluate_model.py and scratch_prod_eval.py, both of which
-scored the benign half of the dataset with a model that had been fitted on
-exactly those rows -- and whose threshold was the 99.5th percentile of those
-same distances. "0.5% of benign windows flagged" was therefore arithmetic, not
-a measurement, and the precision and accuracy derived from it were inflated.
+Every number here comes from windows the scoring model never saw.
 
-What this script does differently:
+  A. Within-host temporal split -- the deployment condition. For each
+     family, each host's windows are split chronologically (first 70% train,
+     last 30% test); a model is fitted on all hosts' training parts and its
+     thresholds re-derived from them. Reported: held-out benign windows
+     flagged, and that as alerts per host-day (a host producing a window
+     every 10 minutes yields 144 windows/day).
+  B. Leave-one-host-out -- transfer to an unseen machine of a known kind.
+  C. Unseen benign captures -- the shipped model scored against benign data
+     outside its training set: the local-only captures in
+     real_world_fixtures/benign/ (if present), the synthetic noise fixtures,
+     and the mislabeled attack capture bits_openvpn.evtx.
+  D. Attack captures -- every attack fixture, cut into windows exactly as a
+     single-file upload would be. Most are far smaller than
+     MIN_WINDOW_EVENTS and are therefore NOT scored: the ML layer is a
+     volumetric/behavioural signal, and single-event attacks are the rules'
+     job. Reported: how many attack windows were scorable and how many of
+     those were flagged.
 
-* Benign windows are split BY HOST. Fit on one host, measure the benign false
-  positive rate on the other, then swap. A random split leaks badly here --
-  consecutive 10-minute windows from one machine are near-duplicates.
-* The percentile threshold is re-derived inside each fold, from that fold's
-  training distances only.
-* Attack windows are scored by both folds' models (they share no host with the
-  benign corpus), and the results are pooled.
-* Accuracy is reported next to the majority-class baseline, because with ~1829
-  benign and ~87 attack windows a model that never fires already scores 95.6%.
-* PR-AUC is reported because it is the threshold-independent number, and
-  because precision/recall at one arbitrary percentile hides the trade-off.
-
-Usage:
-    python scripts/eval_ml_model.py              # uses the cached attack matrix
-    python scripts/eval_ml_model.py --rebuild    # re-parse the attack EVTX corpus
+    ./venv/Scripts/python.exe scripts/eval_ml_model.py [--json out.json]
 """
 
 import argparse
-import csv
+import json
 import sys
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import average_precision_score
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+BACKEND = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND))
+sys.path.insert(0, str(BACKEND / "scripts"))
 
-from app.ingestion.evtx_reader import read_records_as_dicts
-from app.ingestion.normalizer import normalize_events
-from app.ml.detector import NightOwlAnomalyDetector
-from app.ml.features import extract_features
+from app.ml.detector import MIN_TRAIN_WINDOWS, MIN_WINDOW_EVENTS, fit_family, new_bundle  # noqa: E402
+from app.ml.features import FAMILIES, build_vocabulary  # noqa: E402
+from app.ml.runtime import MODEL_PATH  # noqa: E402
+from app.ml.detector import AnomalyModelBundle  # noqa: E402
+from app.ml.windows import build_windows, dedupe  # noqa: E402
+from run_detection_benchmark import ATTACK_DIRS, GROUND_TRUTH, load_events  # noqa: E402
+from train_ml_model import BENIGN_DIR, benign_windows  # noqa: E402
 
-SCRIPTS_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = SCRIPTS_DIR.parent
-BENIGN_CSV = SCRIPTS_DIR / "ml_features.csv"
-ATTACK_CACHE = SCRIPTS_DIR / "eval" / "attack_features_70.csv"
-
-# bits_openvpn.evtx sits in the `undetected` attack folder but contains 1,537
-# Microsoft-Windows-Bits-Client events from routine Windows Update / Google
-# Update / OneDrive polling and zero malicious or OpenVPN traces. The dataset
-# pipeline labels every window in an attack capture `is_attack = 1`, so its 190
-# benign windows were being counted as false negatives. Excluding it is a
-# correction to the ground truth, not a convenience -- documented in ML.md §3,
-# and named here so the exclusion is visible wherever the metrics are produced.
-MISLABELED_CAPTURES = ("bits_openvpn",)
-
-PERCENTILES = (99.0, 99.5, 99.9)
-IDENTIFIER_COLUMNS = ("host", "window_start", "is_attack")
+WINDOWS_PER_DAY = 144
 
 
-def load_benign():
-    """Return (X, hosts, starts, feature_names) for the benign baseline corpus."""
-    X, hosts, starts, names = [], [], [], None
-    with open(BENIGN_CSV, "r", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            hosts.append((row.get("host") or "").upper())
-            starts.append(row.get("window_start") or "")
-            for key in IDENTIFIER_COLUMNS:
-                row.pop(key, None)
-            if names is None:
-                names = list(row.keys())
-            X.append([float(row[n]) for n in names])
-    return np.array(X), np.array(hosts), np.array(starts), names
+def _flagged(bundle, family, windows) -> int:
+    return sum(1 for w in windows if (s := bundle.score(family, w)) is not None and s.severity != "low")
 
 
-def build_attack(feature_names):
-    """Parse the attack EVTX corpus into a feature matrix and cache it."""
-    fixtures = BACKEND_DIR / "sample_logs" / "real_world_fixtures"
-    files = sorted(fixtures.glob("detected/*.evtx")) + sorted(fixtures.glob("undetected/*.evtx"))
-
-    rows = []
-    skipped = []
-    for path in files:
-        if any(tag in path.name.lower() for tag in MISLABELED_CAPTURES):
-            skipped.append(path.name)
-            continue
-        windows = defaultdict(list)
-        for record in read_records_as_dicts(path):
-            if not record:
-                continue
-            try:
-                for event in normalize_events([record]):
-                    floored = (event.timestamp.minute // 10) * 10
-                    bucket = event.timestamp.replace(minute=floored, second=0, microsecond=0)
-                    windows[(event.host, bucket)].append(event)
-            except Exception:
-                continue
-        for events in windows.values():
-            if events:
-                feats = extract_features(events)
-                rows.append([float(feats[n]) for n in feature_names])
-
-    print(f"Parsed {len(files) - len(skipped)} attack files -> {len(rows)} windows")
-    if skipped:
-        print(f"Excluded as mislabeled (see MISLABELED_CAPTURES): {', '.join(skipped)}")
-
-    ATTACK_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    with open(ATTACK_CACHE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(feature_names)
-        writer.writerows(rows)
-    return np.array(rows)
-
-
-def load_attack(feature_names, rebuild=False):
-    if rebuild or not ATTACK_CACHE.exists():
-        return build_attack(feature_names)
-    with open(ATTACK_CACHE, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        if list(reader.fieldnames or []) != list(feature_names):
-            print("Cached attack matrix has a stale schema; rebuilding.")
-            return build_attack(feature_names)
-        rows = [[float(r[n]) for n in feature_names] for r in reader]
-    print(f"Loaded {len(rows)} attack windows from cache ({ATTACK_CACHE.name})")
-    return np.array(rows)
-
-
-def confusion(y_true, y_pred):
-    tp = int(np.sum((y_pred == 1) & (y_true == 1)))
-    tn = int(np.sum((y_pred == 0) & (y_true == 0)))
-    fp = int(np.sum((y_pred == 1) & (y_true == 0)))
-    fn = int(np.sum((y_pred == 0) & (y_true == 1)))
-    return tp, tn, fp, fn
-
-
-def report(label, y_true, scores, threshold):
-    y_pred = (scores >= threshold).astype(int)
-    tp, tn, fp, fn = confusion(y_true, y_pred)
-    acc = (tp + tn) / len(y_true)
-    prec = tp / (tp + fp) if (tp + fp) else 0.0
-    rec = tp / (tp + fn) if (tp + fn) else 0.0
-    f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
-    baseline = max(np.mean(y_true == 0), np.mean(y_true == 1))
-    print(f"  {label}")
-    print(f"    TP {tp:4d}  TN {tn:5d}  FP {fp:3d}  FN {fn:3d}")
-    print(
-        f"    Precision {prec * 100:6.2f}%   Recall {rec * 100:6.2f}%   F1 {f1 * 100:6.2f}%"
-    )
-    print(
-        f"    Accuracy  {acc * 100:6.2f}%   (majority-class baseline "
-        f"{baseline * 100:.2f}% -- accuracy is near-meaningless at this class ratio)"
-    )
-    return {"precision": prec, "recall": rec, "f1": f1}
-
-
-def evaluate_split(name, X_train, X_test_benign, X_attack, feature_names):
-    """Fit on X_train, score held-out benign + attack, print every threshold."""
-    detector = NightOwlAnomalyDetector()
-    detector.train(X_train, feature_names)
-    keep = [feature_names.index(n) for n in detector.feature_names]
-
-    train_dist = detector.model.mahalanobis(np.log1p(X_train[:, keep]))
-    benign_scores = detector.model.mahalanobis(np.log1p(X_test_benign[:, keep]))
-    attack_scores = detector.model.mahalanobis(np.log1p(X_attack[:, keep]))
-
-    scores = np.concatenate([benign_scores, attack_scores])
-    labels = np.concatenate([np.zeros(len(benign_scores)), np.ones(len(attack_scores))])
-
-    print()
-    print(f"--- {name} ---")
-    print(f"  Fitted on {len(detector.feature_names)}/{len(feature_names)} features "
-          f"({len(detector.dropped_features)} lacked benign support)")
-    print(f"  Train {len(X_train)} | held-out benign {len(benign_scores)} | attack {len(attack_scores)}")
-    print(f"  PR-AUC (threshold-free): {average_precision_score(labels, scores):.4f}"
-          f"   [random baseline {labels.mean():.4f}]")
-
+def protocol_a(by_family) -> dict:
     out = {}
-    for p in PERCENTILES:
-        threshold = float(np.percentile(train_dist, p))
-        report(f"threshold = {p}th percentile of training distances ({threshold:.1f})",
-               labels, scores, threshold)
-        out[p] = (scores, labels, threshold)
+    for family, items in by_family.items():
+        per_host = defaultdict(list)
+        for host, start, w in items:
+            per_host[host].append((start, w))
+        train, test = [], []
+        for host, rows in per_host.items():
+            rows.sort(key=lambda r: r[0])
+            cut = int(len(rows) * 0.7)
+            train += [(host, w) for _s, w in rows[:cut]]
+            test += [(host, w) for _s, w in rows[cut:]]
+        if len(train) < MIN_TRAIN_WINDOWS or not test:
+            out[family] = {"skipped": f"{len(train)} train / {len(test)} test windows"}
+            continue
+        windows = [w for _h, w in train]
+        model = fit_family(family, windows, [h for h, _w in train], build_vocabulary(windows))
+        bundle = new_bundle({family: model}, "eval")
+        flagged = _flagged(bundle, family, [w for _h, w in test])
+        out[family] = {
+            "test_windows": len(test),
+            "flagged": flagged,
+            "flag_rate": flagged / len(test),
+            "alerts_per_host_day": flagged / len(test) * WINDOWS_PER_DAY,
+        }
     return out
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--rebuild", action="store_true", help="re-parse the attack EVTX corpus")
+def protocol_b(by_family) -> dict:
+    out = {}
+    for family, items in by_family.items():
+        hosts = sorted({h for h, _s, _w in items})
+        results = {}
+        for held_out in hosts:
+            train = [(h, w) for h, _s, w in items if h != held_out]
+            test = [w for h, _s, w in items if h == held_out]
+            if len(train) < MIN_TRAIN_WINDOWS or not test:
+                results[held_out] = {"skipped": f"{len(train)} train windows"}
+                continue
+            windows = [w for _h, w in train]
+            model = fit_family(family, windows, [h for h, _w in train], build_vocabulary(windows))
+            flagged = _flagged(new_bundle({family: model}, "eval"), family, test)
+            results[held_out] = {"test_windows": len(test), "flagged": flagged, "flag_rate": flagged / len(test)}
+        out[family] = results
+    return out
+
+
+def _file_windows(paths) -> dict[str, list]:
+    by_family = defaultdict(list)
+    for path in paths:
+        events, _r, _s = load_events(path)
+        for (_host, family, _start), w in build_windows(dedupe(events)).items():
+            by_family[family].append((path.name, w))
+    return by_family
+
+
+def protocol_c(bundle) -> dict:
+    real = BACKEND / "sample_logs" / "real_world_fixtures"
+    sources = {
+        "local benign captures (unseen)": sorted((real / "benign").glob("*.evtx")),
+        "synthetic noise (unseen)": sorted((BACKEND / "sample_logs" / "demo_fixtures").glob("noise_*.evtx")),
+        "mislabeled bits_openvpn (benign)": [p for d in ATTACK_DIRS for p in d.glob("bits_openvpn.evtx")],
+    }
+    out = {}
+    for label, paths in sources.items():
+        scored = flagged = 0
+        examples = []
+        for family, items in _file_windows(paths).items():
+            for name, w in items:
+                s = bundle.score(family, w)
+                if s is None:
+                    continue
+                scored += 1
+                if s.severity != "low":
+                    flagged += 1
+                    if len(examples) < 5:
+                        examples.append({"file": name, "family": family, "distance": round(s.distance, 1),
+                                         "top": [f["feature"] for f in s.top_features]})
+        out[label] = {"files": len(paths), "scored_windows": scored, "flagged": flagged,
+                      "flag_rate": flagged / scored if scored else None, "examples": examples}
+    return out
+
+
+def protocol_d(bundle) -> dict:
+    paths = [p for d in ATTACK_DIRS for p in sorted(d.glob("*.evtx"))
+             if GROUND_TRUTH.get(p.name, {}).get("split") != "excluded"]
+    total = scored = flagged = 0
+    captures_flagged = []
+    for name_family_items in [_file_windows([p]) for p in paths]:
+        for family, items in name_family_items.items():
+            for name, w in items:
+                total += 1
+                s = bundle.score(family, w)
+                if s is None:
+                    continue
+                scored += 1
+                if s.severity != "low":
+                    flagged += 1
+                    captures_flagged.append(name)
+    return {"attack_windows": total, "scorable_windows": scored, "flagged": flagged,
+            "recall_on_scorable": flagged / scored if scored else None,
+            "captures_flagged": sorted(set(captures_flagged))}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--json", type=Path)
     args = parser.parse_args()
 
-    X_benign, hosts, starts, feature_names = load_benign()
-    X_attack = load_attack(feature_names, rebuild=args.rebuild)
-
-    unique_hosts = sorted(set(hosts))
-    print()
-    print(f"Benign: {len(X_benign)} windows across {len(unique_hosts)} host(s): ", end="")
-    print(", ".join(f"{h} ({int(np.sum(hosts == h))})" for h in unique_hosts))
-    print(f"Attack: {len(X_attack)} windows")
-    if len(unique_hosts) < 2:
-        print("WARNING: only one benign host -- a host-held-out split is not possible.")
-        return
-
-    # ------------------------------------------------------------------
-    # Protocol A -- within-host temporal split. This is the deployment
-    # condition: the baseline covers the host being monitored, and the
-    # question is whether LATER windows from that same host read as normal.
-    # Split chronologically, never randomly: consecutive 10-minute windows
-    # from one machine are near-duplicates, so a random split leaks.
-    # ------------------------------------------------------------------
-    print()
-    print("=" * 72)
-    print("PROTOCOL A -- WITHIN-HOST TEMPORAL SPLIT  (the deployment condition)")
-    print("Fit on each host's first 70% of windows by time, score its last 30%")
-    print("plus all attack windows. Threshold re-derived from the training part.")
-    print("=" * 72)
-
-    pooled_a = {p: {"scores": [], "labels": [], "thresholds": []} for p in PERCENTILES}
-    for host in unique_hosts:
-        idx = np.where(hosts == host)[0]
-        idx = idx[np.argsort(starts[idx])]
-        cut = int(len(idx) * 0.7)
-        if cut < 50 or len(idx) - cut < 20:
-            print(f"\n--- {host}: too few windows to split ({len(idx)}); skipped ---")
-            continue
-        folds = evaluate_split(
-            f"{host}: train on first {cut} windows / test on last {len(idx) - cut}",
-            X_benign[idx[:cut]], X_benign[idx[cut:]], X_attack, feature_names,
-        )
-        for p, (s, l, t) in folds.items():
-            pooled_a[p]["scores"].append(s)
-            pooled_a[p]["labels"].append(l)
-            pooled_a[p]["thresholds"].append(t)
-
-    # ------------------------------------------------------------------
-    # Protocol B -- host-held-out. A much harder ask, and a different
-    # question: can a baseline from one machine describe a different kind of
-    # machine? Reported because it bounds how far a single-host baseline
-    # transfers, not because it is how the system would be deployed.
-    # ------------------------------------------------------------------
-    print()
-    print("=" * 72)
-    print("PROTOCOL B -- HOST-HELD-OUT  (transfer to an unseen machine)")
-    print("Fit on one benign host, score the other host entirely. Pessimistic:")
-    print("in deployment the baseline would include the host being monitored.")
-    print("=" * 72)
-
-    pooled_b = {p: {"scores": [], "labels": [], "thresholds": []} for p in PERCENTILES}
-    for held_out in unique_hosts:
-        train_mask = hosts != held_out
-        folds = evaluate_split(
-            f"train on {', '.join(h for h in unique_hosts if h != held_out)} / test on {held_out}",
-            X_benign[train_mask], X_benign[~train_mask], X_attack, feature_names,
-        )
-        for p, (s, l, t) in folds.items():
-            pooled_b[p]["scores"].append(s)
-            pooled_b[p]["labels"].append(l)
-            pooled_b[p]["thresholds"].append(t)
-
-    for title, pooled in (("PROTOCOL A (within-host temporal)", pooled_a),
-                          ("PROTOCOL B (host-held-out)", pooled_b)):
-        if not pooled[PERCENTILES[0]]["scores"]:
-            continue
-        print()
-        print("=" * 72)
-        print(f"POOLED -- {title}")
-        print("Every benign window scored by a model that never saw it.")
-        print("=" * 72)
-        for p in PERCENTILES:
-            scores = np.concatenate(pooled[p]["scores"])
-            labels = np.concatenate(pooled[p]["labels"])
-            # Each fold has its own threshold; compare each block against its own.
-            preds = np.concatenate([
-                (s >= t).astype(int)
-                for s, t in zip(pooled[p]["scores"], pooled[p]["thresholds"], strict=True)
-            ])
-            tp, tn, fp, fn = confusion(labels, preds)
-            prec = tp / (tp + fp) if (tp + fp) else 0.0
-            rec = tp / (tp + fn) if (tp + fn) else 0.0
-            f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
-            benign_fp_rate = fp / (fp + tn) if (fp + tn) else 0.0
-            print()
-            print(f"  {p}th percentile threshold")
-            print(f"    TP {tp:4d}  TN {tn:5d}  FP {fp:4d}  FN {fn:4d}")
-            print(f"    Precision {prec * 100:6.2f}%   Recall {rec * 100:6.2f}%   F1 {f1 * 100:6.2f}%")
-            print(f"    Held-out benign false-positive rate: {benign_fp_rate * 100:.3f}%")
-            print(f"    PR-AUC: {average_precision_score(labels, scores):.4f}"
-                  f"   [random baseline {labels.mean():.4f}]")
-
-    print()
-    print("Quote recall, F1, PR-AUC and the held-out benign FP rate, and say which")
-    print("protocol they came from. Do NOT quote accuracy without the")
-    print("majority-class baseline beside it.")
+    by_family = benign_windows([BENIGN_DIR])
+    by_family = {f: items for f, items in by_family.items() if f in FAMILIES}
+    bundle = AnomalyModelBundle.load(MODEL_PATH)
+    report = {
+        "min_window_events": MIN_WINDOW_EVENTS,
+        "A_within_host_temporal": protocol_a(by_family),
+        "B_leave_one_host_out": protocol_b(by_family),
+        "C_unseen_benign": protocol_c(bundle),
+        "D_attack_captures": protocol_d(bundle),
+    }
+    print(json.dumps(report, indent=2, default=str))
+    if args.json:
+        args.json.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -1,202 +1,197 @@
-"""Unsupervised behavioural anomaly detector (Ledoit-Wolf Mahalanobis).
+"""Unsupervised behavioural anomaly detector: one Ledoit-Wolf Mahalanobis
+model per log family, fitted on benign windows only.
 
-Fits a shrunk covariance estimate over log1p'd 10-minute host-window feature
-vectors drawn strictly from benign telemetry, then scores unseen windows by
-Mahalanobis distance. Thresholds are percentiles of the *training* distances,
-so they describe the baseline's own spread -- they are not a measured
-false-positive rate. See scripts/eval_ml_model.py for the host-held-out
-evaluation.
+Scoring a window yields its Mahalanobis distance from the family's benign
+baseline (on log1p features) and a per-feature attribution: the distance is
+z^T P z, so feature i contributes z_i (P z)_i. The top contributors are
+stored on the alert so an analyst sees WHY a window was flagged ("12 failed
+logons vs a baseline median of 0"), not just a score.
 
-Two invariants this module enforces, both learned the hard way:
-
-* **Feature identity travels with the model.** The vector order used to be the
-  dict insertion order of extract_features(), stored nowhere. Reordering one
-  line in that function would have silently corrupted every score. The fitted
-  feature names are persisted and checked on every call.
-
-* **Features without baseline support are refused.** Mahalanobis distance is
-  scale-free: a feature the benign corpus barely exercises gets a near-zero
-  variance, so its first ordinary value in production reads as an
-  astronomically large deviation. On the 2-host benign corpus this was not a
-  corner case -- 31 of 70 features never fired at all, and `network_event_count`
-  fired in 6 windows out of 1829, which was enough to make a host with normal
-  web traffic score ~17,000 against a ~400 threshold. train() drops such
-  columns rather than shipping a model that flags any host unlike the baseline.
+Invariants enforced here:
+  * feature identity travels with the model -- every family stores its own
+    ordered feature names and event-id vocabulary, and scoring refuses a
+    vector it was not fitted on;
+  * features without benign support are dropped at fit time (a column that
+    is ~always zero has near-zero variance, so its first non-zero value
+    would read as an astronomically large deviation);
+  * the bundle records the scikit-learn version that produced it and is
+    refused under a different one -- unpickling an estimator across sklearn
+    versions is not guaranteed to work;
+  * windows smaller than MIN_WINDOW_EVENTS are never scored: a handful of
+    events is not "behaviour", and single-event attacks are the rules' job.
 """
 
+from __future__ import annotations
+
 import logging
-import os
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 import joblib
 import numpy as np
+import sklearn
 from sklearn.covariance import LedoitWolf
+
+from app.ml.features import extract_features, novel_event_ids
+from app.schemas.event import NormalizedEvent
 
 logger = logging.getLogger(__name__)
 
-# Below this, a feature carries no usable baseline and is dropped at fit time.
+BUNDLE_FORMAT = 2
+MIN_WINDOW_EVENTS = 10
+MIN_TRAIN_WINDOWS = 30
 MIN_TRAIN_VARIANCE = 1e-9
-
-# A feature must also be non-zero in at least this fraction of benign windows.
-# Variance alone is too weak a test: six non-zero windows out of 1829 clears
-# `var > 0` comfortably while still leaving the column effectively degenerate.
-# The benign corpus has a clean gap here -- features sit at either <=0.71% or
-# >=1.64% support, nothing between.
-MIN_TRAIN_SUPPORT = 0.01
+MIN_TRAIN_SUPPORT = 0.02
+TOP_CONTRIBUTORS = 3
 
 
-class NightOwlAnomalyDetector:
-    def __init__(self, random_state=42):
-        # Ledoit-Wolf shrinkage keeps the covariance invertible across
-        # correlated, highly skewed volumetric features.
-        self.model = LedoitWolf()
-        self.is_trained = False
-        self.threshold_suspicious = None
-        self.threshold_high = None
-        self.feature_names: list[str] | None = None
-        self.dropped_features: list[str] = []
+class ModelCompatibilityError(RuntimeError):
+    pass
 
-    def train(self, features: np.ndarray, feature_names: list[str] | None = None):
-        """Fit on benign feature vectors and derive the severity thresholds.
 
-        Columns the benign set cannot support -- constant, or non-zero in fewer
-        than MIN_TRAIN_SUPPORT of windows -- are dropped and recorded in
-        `dropped_features`; the surviving names become this model's schema.
-        """
-        features = np.asarray(features, dtype=float)
-        if feature_names is not None and len(feature_names) != features.shape[1]:
-            raise ValueError(
-                f"feature_names has {len(feature_names)} entries but the matrix has "
-                f"{features.shape[1]} columns"
-            )
+@dataclass
+class FamilyModel:
+    family: str
+    vocabulary: list[int]
+    feature_names: list[str]
+    dropped_features: list[str]
+    seen_event_ids: list[int]
+    covariance: LedoitWolf
+    baseline_median: dict[str, float]
+    threshold_medium: float
+    threshold_high: float
+    train_windows: int
+    train_hosts: list[str]
 
-        # Log1p transform to handle highly skewed volumetric data
-        features_log = np.log1p(features)
-
-        has_variance = features_log.var(axis=0) > MIN_TRAIN_VARIANCE
-        has_support = (features != 0).mean(axis=0) >= MIN_TRAIN_SUPPORT
-        keep = has_variance & has_support
-        if not keep.any():
-            raise ValueError(
-                "no feature has enough benign support to model; the baseline corpus is too narrow"
-            )
-
-        if feature_names is not None:
-            self.dropped_features = [n for n, k in zip(feature_names, keep, strict=True) if not k]
-            self.feature_names = [n for n, k in zip(feature_names, keep, strict=True) if k]
-        else:
-            self.dropped_features = []
-            self.feature_names = None
-
-        if (~keep).any():
-            logger.warning(
-                "dropping %d unsupported feature(s) from the model: %s",
-                int((~keep).sum()),
-                ", ".join(self.dropped_features) or "unnamed columns",
-            )
-
-        features_log = features_log[:, keep]
-
-        self.model.fit(features_log)
-        self.is_trained = True
-
-        # Percentiles of the TRAINING distances. This is a property of the
-        # baseline, not a held-out false-positive rate -- do not quote it as one.
-        distances = self.model.mahalanobis(features_log)
-        self.threshold_suspicious = float(np.percentile(distances, 99.5))
-        self.threshold_high = float(np.percentile(distances, 99.9))
-
-    def save(self, filepath: str):
-        """Serialize the trained model to disk."""
-        if not self.is_trained:
-            raise RuntimeError("Cannot save an untrained model.")
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        joblib.dump({
-            "model": self.model,
-            "threshold_suspicious": self.threshold_suspicious,
-            "threshold_high": self.threshold_high,
-            "feature_names": self.feature_names,
-            "dropped_features": self.dropped_features,
-        }, filepath)
-
-    def load(self, filepath: str):
-        """Load a previously trained model."""
-        data = joblib.load(filepath)
-        if not (isinstance(data, dict) and "model" in data):
-            # Pre-Ledoit-Wolf IsolationForest artifacts stored a bare estimator
-            # and no thresholds. There is no sane distance threshold to invent
-            # for one, so refuse rather than score every window as anomalous.
-            raise ValueError(
-                f"{filepath} is not a NightOwl detector bundle (no thresholds); "
-                "retrain with scripts/train_ml_model.py"
-            )
-        self.model = data["model"]
-        self.threshold_suspicious = data["threshold_suspicious"]
-        self.threshold_high = data["threshold_high"]
-        self.feature_names = data.get("feature_names")
-        self.dropped_features = data.get("dropped_features", [])
-        self.is_trained = True
-
-    def select(self, features: dict) -> np.ndarray:
-        """Build this model's input vector from a full extract_features() dict.
-
-        Honours the fitted schema, so a model trained before a new feature was
-        added keeps working instead of silently mis-scoring.
-        """
-        if self.feature_names is None:
-            raise RuntimeError("this model has no feature schema; retrain to bind one")
+    def vector(self, features: dict[str, float]) -> np.ndarray:
         missing = [n for n in self.feature_names if n not in features]
         if missing:
-            raise KeyError(f"feature(s) missing from extraction: {missing}")
-        return np.array([[float(features[n]) for n in self.feature_names]])
+            raise KeyError(f"{self.family}: feature(s) missing from extraction: {missing}")
+        return np.log1p(np.array([[max(0.0, float(features[n])) for n in self.feature_names]]))
 
-    def score_window(self, features: np.ndarray) -> list[dict]:
-        """Score one or more feature vectors.
+    def explain(self, x: np.ndarray, features: dict[str, float]) -> list[dict]:
+        z = x[0] - self.covariance.location_
+        contributions = z * (self.covariance.precision_ @ z)
+        order = np.argsort(contributions)[::-1][:TOP_CONTRIBUTORS]
+        return [
+            {
+                "feature": self.feature_names[i],
+                "value": float(features[self.feature_names[i]]),
+                "baseline_median": float(self.baseline_median.get(self.feature_names[i], 0.0)),
+                "share": float(contributions[i] / max(contributions.sum(), 1e-9)),
+            }
+            for i in order
+            if contributions[i] > 0
+        ]
 
-        Returns a list with one entry per input row: a normalized score
-        (0.0-1.0, higher = more anomalous), a severity band, and the raw
-        Mahalanobis distance.
-        """
-        if not self.is_trained:
-            raise RuntimeError("Cannot score with an untrained model.")
 
-        features = np.asarray(features, dtype=float)
-        fitted = getattr(self.model, "location_", None)
-        if fitted is not None and features.shape[1] != fitted.shape[0]:
-            raise ValueError(
-                f"model was fitted on {fitted.shape[0]} features but got "
-                f"{features.shape[1]}; use detector.select(extract_features(window))"
+@dataclass
+class AnomalyScore:
+    family: str
+    distance: float
+    severity: str  # "high" | "medium" | "low"
+    threshold_medium: float
+    threshold_high: float
+    top_features: list[dict]
+    novel_event_ids: list[int]
+    window_events: int
+
+
+@dataclass
+class AnomalyModelBundle:
+    families: dict[str, FamilyModel]
+    sklearn_version: str
+    created_at: str
+    training_source: str
+    format: int = BUNDLE_FORMAT
+    notes: dict = field(default_factory=dict)
+
+    def score(self, family: str, events: list[NormalizedEvent]) -> AnomalyScore | None:
+        """None when this family has no model or the window is too small."""
+        model = self.families.get(family)
+        if model is None or len(events) < MIN_WINDOW_EVENTS:
+            return None
+        features = extract_features(family, events, model.vocabulary)
+        x = model.vector(features)
+        distance = float(model.covariance.mahalanobis(x)[0])
+        if distance >= model.threshold_high:
+            severity = "high"
+        elif distance >= model.threshold_medium:
+            severity = "medium"
+        else:
+            severity = "low"
+        return AnomalyScore(
+            family=family,
+            distance=distance,
+            severity=severity,
+            threshold_medium=model.threshold_medium,
+            threshold_high=model.threshold_high,
+            top_features=model.explain(x, features) if severity != "low" else [],
+            novel_event_ids=novel_event_ids(events, set(model.seen_event_ids)),
+            window_events=len(events),
+        )
+
+    def save(self, path) -> None:
+        joblib.dump(self, path, compress=3)
+
+    @staticmethod
+    def load(path) -> "AnomalyModelBundle":
+        bundle = joblib.load(path)
+        if not isinstance(bundle, AnomalyModelBundle) or getattr(bundle, "format", None) != BUNDLE_FORMAT:
+            raise ModelCompatibilityError(f"{path} is not a format-{BUNDLE_FORMAT} NightOwl model bundle; retrain")
+        if bundle.sklearn_version != sklearn.__version__:
+            raise ModelCompatibilityError(
+                f"{path} was trained with scikit-learn {bundle.sklearn_version} but {sklearn.__version__} is "
+                "installed; retrain with scripts/train_ml_model.py (or install the matching version)"
             )
+        return bundle
 
-        # Log1p transform
-        features_log = np.log1p(features)
 
-        distances = self.model.mahalanobis(features_log)
+def fit_family(
+    family: str,
+    windows: list[list[NormalizedEvent]],
+    hosts: list[str],
+    vocabulary: list[int],
+    medium_percentile: float = 99.5,
+    high_percentile: float = 99.9,
+) -> FamilyModel:
+    """Fit one family's model on benign windows (already filtered to
+    >= MIN_WINDOW_EVENTS). Thresholds are percentiles of the training
+    distances -- a property of the baseline; held-out false-positive rates
+    come from scripts/eval_ml_model.py."""
+    if len(windows) < MIN_TRAIN_WINDOWS:
+        raise ValueError(f"{family}: only {len(windows)} benign windows -- not enough to model")
+    rows = [extract_features(family, w, vocabulary) for w in windows]
+    names = list(rows[0].keys())
+    raw = np.array([[r[n] for n in names] for r in rows], dtype=float)
+    logged = np.log1p(raw)
+    keep = (logged.var(axis=0) > MIN_TRAIN_VARIANCE) & ((raw != 0).mean(axis=0) >= MIN_TRAIN_SUPPORT)
+    if not keep.any():
+        raise ValueError(f"{family}: no feature has enough benign support")
+    kept = [n for n, k in zip(names, keep) if k]
+    dropped = [n for n, k in zip(names, keep) if not k]
+    covariance = LedoitWolf().fit(logged[:, keep])
+    distances = covariance.mahalanobis(logged[:, keep])
+    return FamilyModel(
+        family=family,
+        vocabulary=vocabulary,
+        feature_names=kept,
+        dropped_features=dropped,
+        seen_event_ids=sorted({e.event_id for w in windows for e in w}),
+        covariance=covariance,
+        baseline_median={n: float(np.median(raw[:, names.index(n)])) for n in kept},
+        threshold_medium=float(np.percentile(distances, medium_percentile)),
+        threshold_high=float(np.percentile(distances, high_percentile)),
+        train_windows=len(windows),
+        train_hosts=sorted(set(hosts)),
+    )
 
-        results = []
-        for dist in distances:
-            # Simple severity mapping based on derived thresholds
-            if dist >= self.threshold_high:
-                severity = "High"
-                # Map to [0.68, 1.0] with a soft ceiling
-                excess = dist - self.threshold_high
-                norm_score = min(1.0, 0.68 + (excess / self.threshold_high) * 0.32)
-            elif dist >= self.threshold_suspicious:
-                severity = "Medium"
-                # Map to [0.55, 0.68)
-                ratio = (dist - self.threshold_suspicious) / (
-                    self.threshold_high - self.threshold_suspicious
-                )
-                norm_score = 0.55 + ratio * 0.13
-            else:
-                severity = "Low"
-                # Map to [0.0, 0.55)
-                ratio = dist / self.threshold_suspicious
-                norm_score = ratio * 0.54
 
-            results.append({
-                "anomaly_score": float(norm_score),
-                "severity": severity,
-                "raw_distance": float(dist),
-            })
-
-        return results
+def new_bundle(families: dict[str, FamilyModel], training_source: str, notes: dict | None = None) -> AnomalyModelBundle:
+    return AnomalyModelBundle(
+        families=families,
+        sklearn_version=sklearn.__version__,
+        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        training_source=training_source,
+        notes=notes or {},
+    )

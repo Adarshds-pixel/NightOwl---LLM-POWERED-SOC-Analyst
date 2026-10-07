@@ -1,91 +1,66 @@
-"""Process-wide access to the trained anomaly detector.
+"""Process-wide access to the trained anomaly model bundle.
 
-The ingest path used to `joblib.load` the model on every request and wrap the
-whole ML phase in a bare `except Exception`. That combination hid a real
-deployment bug for weeks: the feature extractor lived in backend/scripts,
-which neither .dockerignore nor the Dockerfile's COPY list includes, so in any
-container build the import raised ModuleNotFoundError, the except swallowed
-it, and the ML layer simply never ran -- silently, on every upload.
-
-So: load once, and say plainly (once) whether the model is available.
+Loaded once, lazily. A missing, incompatible (different scikit-learn) or
+unreadable bundle is a normal, non-fatal state -- ingest keeps working
+without the ML layer -- but the reason is logged once and reported by
+GET /system/status, so "no ML alerts" is never mistaken for "nothing
+anomalous".
 """
 
 import logging
 import threading
 from pathlib import Path
 
-from app.ml.detector import NightOwlAnomalyDetector
+from app.ml.detector import AnomalyModelBundle, ModelCompatibilityError
 
 logger = logging.getLogger(__name__)
 
 MODEL_PATH = Path(__file__).resolve().parent / "models" / "anomaly_detector.joblib"
 
 _lock = threading.Lock()
-_detector: NightOwlAnomalyDetector | None = None
+_bundle: AnomalyModelBundle | None = None
+_status: str = "not loaded yet"
 _loaded = False
 
 
-def get_detector() -> NightOwlAnomalyDetector | None:
-    """The shared detector, or None if no usable model is on disk.
-
-    A missing or unreadable model is a normal, non-fatal state -- ingest keeps
-    working without the ML layer -- but it is logged once at WARNING so it is
-    visible rather than inferred from the absence of ML alerts.
-    """
-    global _detector, _loaded
-
+def get_detector() -> AnomalyModelBundle | None:
+    global _bundle, _status, _loaded
     if _loaded:
-        return _detector
-
+        return _bundle
     with _lock:
         if _loaded:
-            return _detector
+            return _bundle
         _loaded = True
-
         if not MODEL_PATH.exists():
-            logger.warning(
-                "ML anomaly detection disabled: no model at %s. "
-                "Train one with scripts/train_ml_model.py.",
-                MODEL_PATH,
-            )
+            _status = "no model file -- run scripts/train_ml_model.py"
+            logger.warning("ML anomaly layer disabled: %s", _status)
             return None
-
-        detector = NightOwlAnomalyDetector()
         try:
-            detector.load(str(MODEL_PATH))
-        except Exception:
-            logger.exception("ML anomaly detection disabled: failed to load %s", MODEL_PATH)
+            _bundle = AnomalyModelBundle.load(MODEL_PATH)
+        except ModelCompatibilityError as exc:
+            _status = str(exc)
+            logger.warning("ML anomaly layer disabled: %s", _status)
             return None
-
-        if detector.feature_names is None:
-            logger.warning(
-                "ML anomaly detection disabled: %s predates feature-name binding "
-                "and cannot be scored safely. Retrain with scripts/train_ml_model.py.",
-                MODEL_PATH,
-            )
+        except Exception as exc:  # noqa: BLE001 -- a corrupt file must not take ingest down
+            _status = f"model could not be loaded ({type(exc).__name__})"
+            logger.exception("ML anomaly layer disabled: failed to load %s", MODEL_PATH)
             return None
-
-        logger.info(
-            "ML anomaly detector loaded (%d features, thresholds %.1f/%.1f)",
-            len(detector.feature_names),
-            detector.threshold_suspicious,
-            detector.threshold_high,
-        )
-        _detector = detector
-        return _detector
-
-
-def reset_detector_cache() -> None:
-    """Drop the cached detector. For tests that swap the model on disk."""
-    global _detector, _loaded
-    with _lock:
-        _detector = None
-        _loaded = False
+        families = ", ".join(sorted(_bundle.families))
+        _status = f"loaded: models for {families} (trained {_bundle.created_at})"
+        logger.info("ML anomaly layer %s", _status)
+        return _bundle
 
 
 def get_detector_status() -> tuple[bool, str]:
     """(ready, human-readable detail) for GET /system/status."""
-    detector = get_detector()
-    if detector is None:
-        return False, "no usable model loaded -- see the backend log"
-    return True, f"model loaded ({len(detector.feature_names)} features)"
+    bundle = get_detector()
+    return bundle is not None, _status
+
+
+def reset_detector_cache() -> None:
+    """Drop the cached bundle. For tests that swap the model on disk."""
+    global _bundle, _status, _loaded
+    with _lock:
+        _bundle = None
+        _status = "not loaded yet"
+        _loaded = False

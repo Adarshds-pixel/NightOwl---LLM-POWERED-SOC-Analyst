@@ -59,8 +59,14 @@ def _as_aware(value: datetime) -> datetime:
 
 
 def find_or_create_incident(
-    db: Session, host: str, matched_at: datetime, match: RuleMatch, *, advisory: bool = False
-) -> Incident:
+    db: Session,
+    host: str,
+    matched_at: datetime,
+    match: RuleMatch,
+    *,
+    advisory: bool = False,
+    create: bool = True,
+) -> Incident | None:
     """Merges this match into the active incident for `host` whose activity
     span [created_at, last_activity_at] lies within GROUPING_WINDOW of
     `matched_at`, or creates a new incident. Does not commit -- the caller
@@ -77,8 +83,9 @@ def find_or_create_incident(
     while holding a critical one.
 
     `advisory=True` (the ML anomaly layer) attaches to an existing incident
-    without changing its title, severity or techniques, and only creates a
-    new incident when nothing else covers that host and time.
+    without changing its title, severity or techniques. `create=False`
+    returns None instead of opening a new incident when none covers that
+    host and time (the ML layer's default advisory mode).
     """
     last_activity = func.coalesce(Incident.last_activity_at, Incident.created_at)
     existing = db.scalars(
@@ -109,6 +116,9 @@ def find_or_create_incident(
         existing.severity = severity_service.higher_severity(existing.severity, match.level)
         existing.severity_score = max(existing.severity_score, match.score)
         return existing
+
+    if not create:
+        return None
 
     incident = Incident(
         title=_incident_title(match, host),
@@ -295,7 +305,11 @@ def build_incident_evidence(db: Session, incident: Incident) -> dict:
     if not alerts_with_events:
         return evidence
 
-    primary_alert, primary_event = alerts_with_events[0]
+    # The primary alert is the earliest RULE detection. An ML anomaly is
+    # stamped at its window start, so it can sort first -- it must never be
+    # what the explanation is built around while a real detection exists.
+    detections = [(a, e) for a, e in alerts_with_events if a.rule_id != ML_RULE_ID]
+    primary_alert, primary_event = (detections or alerts_with_events)[0]
     # Merges in the detectors that have no YAML file behind them the same way
     # get_incident_detail's own rules_by_id does -- a sequence's rule_id
     # (detection/sequences.py) and the ML layer's (app/ml/rule.py) were never
@@ -327,9 +341,15 @@ def build_incident_evidence(db: Session, incident: Incident) -> dict:
             for event in related
         ]
 
-    if len(alerts_with_events) > 1:
+    if len(detections) > 1:
         evidence["additional_alerts"] = (
-            f"{len(alerts_with_events) - 1} more alert(s) matched on this incident, not individually listed here"
+            f"{len(detections) - 1} more rule alert(s) matched on this incident, not individually listed here"
+        )
+    anomalies = [a for a, _e in alerts_with_events if a.rule_id == ML_RULE_ID]
+    if anomalies and detections:
+        evidence["supporting_anomalies"] = (
+            f"{len(anomalies)} statistical anomaly flag(s) from the ML layer overlap this incident "
+            "(supporting context only, not a detection)"
         )
 
     return evidence

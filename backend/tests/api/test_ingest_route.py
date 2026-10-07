@@ -53,6 +53,9 @@ def test_ingest_sysmon_demo_happy_path(api_client):
         "ai_opinion_id": None,
         "channels": ["Microsoft-Windows-Sysmon/Operational"],
         "providers": ["Microsoft-Windows-Sysmon"],
+        "ml_anomalies": 0,
+        "ml_anomaly_titles": [],
+        "ml_mode": "advisory",
         "event_id_breakdown": [
             {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 1, "count": 3, "covered": True},
             {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 11, "count": 1, "covered": True},
@@ -188,6 +191,9 @@ def test_ingest_skips_malformed_records_and_ingests_the_rest(api_client, monkeyp
         "ai_opinion_id": None,
         "channels": ["Microsoft-Windows-Sysmon/Operational"],
         "providers": [],
+        "ml_anomalies": 0,
+        "ml_anomaly_titles": [],
+        "ml_mode": "advisory",
         "event_id_breakdown": [
             {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 1, "count": 1, "covered": True},
             {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 11, "count": 1, "covered": True},

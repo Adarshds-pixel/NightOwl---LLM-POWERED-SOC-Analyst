@@ -121,6 +121,14 @@ class Settings(BaseSettings):
     login_rate_limit_per_minute: int = 5
 
 
+    # ML anomaly layer (app/ml/): "advisory" (default) records anomalies with
+    # their evidence and links them to an incident that already exists, but
+    # never opens an incident on its own; "alert" may open one; "off"
+    # disables scoring. Advisory is the default because, measured on the
+    # current 2-host benign baseline, the layer flags 1-4.5 benign windows
+    # per host-day (ML.md) -- too many to page anyone on.
+    ml_mode: str = "advisory"
+
     # Upload cap for POST /ingest, enforced on Content-Length before the body
     # is read (see core/upload_guard.py) and again while copying to disk.
     max_upload_bytes: int = 100 * 1024 * 1024

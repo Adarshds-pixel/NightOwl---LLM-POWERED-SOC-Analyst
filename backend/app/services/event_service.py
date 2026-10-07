@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.detection.engine import covered_event_ids
 from app.detection.rule_loader import get_loaded_rules
 from app.ingestion.normalizer import CHANNEL_PATTERNS
+from app.ml.rule import ML_RULE_ID
 from app.models.alert import Alert
 from app.models.event import Event
 from app.schemas.event import NormalizedEvent
@@ -251,6 +252,7 @@ def _filtered_alerts_stmt(
     end_date: datetime | None,
     severity: str | None,
     q: str | None,
+    kind: str | None = None,
 ):
     """Backs GET /alerts: one row per Alert (joined to its Event), never
     collapsed. This is deliberately a separate statement from
@@ -262,6 +264,11 @@ def _filtered_alerts_stmt(
     rules produces two rows here and one there, on purpose.
     """
     stmt = select(Alert, Event).join(Event, Alert.event_id == Event.id)
+    # "detection" = rule + sequence alerts, "ml" = ML anomaly records.
+    if kind == "detection":
+        stmt = stmt.where(Alert.rule_id != ML_RULE_ID)
+    elif kind == "ml":
+        stmt = stmt.where(Alert.rule_id == ML_RULE_ID)
     if host is not None:
         stmt = stmt.where(Event.host == host)
     if severity is not None:
@@ -291,6 +298,7 @@ def list_alert_rows(
     end_date: datetime | None = None,
     severity: str | None = None,
     q: str | None = None,
+    kind: str | None = None,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[tuple[Alert, Event]]:
@@ -299,7 +307,7 @@ def list_alert_rows(
     matched_at, not Event.timestamp, so it agrees with how an incident's own
     evidence list (`get_incident_alerts_with_events`) is already ordered.
     """
-    stmt = _filtered_alerts_stmt(host, start_date, end_date, severity, q).order_by(
+    stmt = _filtered_alerts_stmt(host, start_date, end_date, severity, q, kind).order_by(
         Alert.matched_at.desc(), Alert.id.desc()
     )
     if limit is not None:
@@ -314,13 +322,14 @@ def count_alert_rows(
     end_date: datetime | None = None,
     severity: str | None = None,
     q: str | None = None,
+    kind: str | None = None,
 ) -> int:
     """Total alerts matching the same filters as list_alert_rows, ignoring
     limit/offset -- lets GET /alerts report a page-independent `total` that
     always equals the sum of every incident's evidence-list length, since
     both read from the same un-collapsed Alert rows.
     """
-    subq = _filtered_alerts_stmt(host, start_date, end_date, severity, q).subquery()
+    subq = _filtered_alerts_stmt(host, start_date, end_date, severity, q, kind).subquery()
     return db.scalar(select(func.count()).select_from(subq)) or 0
 
 
