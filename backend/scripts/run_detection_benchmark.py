@@ -45,7 +45,7 @@ sys.path.insert(0, str(BACKEND))
 
 from app.detection.engine import evaluate_event  # noqa: E402
 from app.detection.rule_loader import load_rules  # noqa: E402
-from app.detection.sequences import detect_sequences  # noqa: E402
+from app.detection.sequences import SEQUENCE_PATTERNS, detect_sequences  # noqa: E402
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts  # noqa: E402
 from app.ingestion.normalizer import EventNormalizationError, normalize_event  # noqa: E402
 from app.services.ingest_service import ALERT_DEDUP_WINDOW, _alert_dedup_key  # noqa: E402
@@ -250,7 +250,7 @@ def _markdown(summary: dict, attack_rows: list[dict], benign_rows: list[dict]) -
         "only (the ML anomaly layer is evaluated separately in ML.md). All attack captures informed rule development,",
         "so these are development-set numbers, not a held-out estimate.",
         "",
-        f"* Rules loaded: {summary['rules_loaded']} (+ 3 sequence detectors)",
+        f"* Rules loaded: {summary['rules_loaded']} (+ {len(SEQUENCE_PATTERNS)} sequence detectors)",
         f"* Attack captures: {summary['attack_captures']}",
         f"  * raised any alert: **{summary['any_alert']}/{summary['attack_captures']}**",
         f"  * raised an alert with the correct ATT&CK technique: **{summary['correct_technique']}/{summary['attack_captures']}**",

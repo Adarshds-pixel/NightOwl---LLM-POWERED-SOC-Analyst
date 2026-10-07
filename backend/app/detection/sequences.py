@@ -1,20 +1,15 @@
-"""The small, exactly-3-pattern sequence engine (pending.md item 5 /
-final_plan.md Phase 5).
+"""Multi-event sequence detectors.
 
 `detection/engine.py::evaluate_event()` is deliberately single-event-scoped
-(see its own docstring) -- neither it nor a Sigma YAML rule can express "did
-event A, then event B, then event C happen together," or "did N different
-things happen from the same source within a window." This module is a
-small, hand-written, purpose-built detector for exactly the patterns real
-corpus fixtures structurally need that for -- not a general sequence DSL.
-Three so far: Process Herpaderping, an SMB share-enumeration probe, and a
-Kerberos password spray (added 2026-09-05: `kerberos_pwd_spray_4771.evtx`
-carries 9 real 4768s + 2 real 4771s, 10 distinct target usernames from one
-source IP within 23ms -- exactly the "future build_failure_matrix.py run
-surfaces a third sequence-dependent miss" trigger this module's own
-docstring said to wait for, not built speculatively ahead of it). If a
-future run surfaces a fourth, extend this file then, with the same
-real-field-verification discipline, not speculatively now.
+-- neither it nor a Sigma YAML rule can express "did event A, then event B,
+then event C happen together," or "did N different things happen from the
+same source within a window." This module is a small, hand-written detector
+for exactly the patterns real corpus fixtures need -- not a general sequence
+DSL. Eight patterns (see SEQUENCE_PATTERNS): Process Herpaderping, an SMB
+share-enumeration probe, Kerberos password spray, authentication brute
+force, remote SAM/LSA enumeration, mass process access, group self-add and
+bulk group-membership addition. Each was added only once a real capture
+needed it, with thresholds checked against the benign corpus.
 
 Scope, explicitly: each detector only looks within the current ingest
 batch (the same `records` one `POST /ingest` call parses), never a

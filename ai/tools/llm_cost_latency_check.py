@@ -3,7 +3,7 @@
 Roadmap task (docs/02_NightOwl_Handbook_Vol2_Roadmap.md, Phase 2 / Day 12):
 "measure token usage and response time per explanation, document."
 
-Unlike scripts/hallucination_spot_check.py (Day 10), this doesn't need the
+Unlike ai/tools/hallucination_spot_check.py, this doesn't need the
 real ingest -> detect -> group -> severity pipeline or Postgres -- it's
 purely measuring the RAG explain call's cost/latency, so it uses crafted
 incident dicts directly (same shape/precedent as the `if __name__ ==
@@ -25,8 +25,8 @@ Run for real from the repository root (requires a real Groq key -- see
     ./backend/venv/Scripts/python.exe ai/tools/llm_cost_latency_check.py
 
 Writes full per-call data to ai/tools/llm_cost_latency_output.json for
-reference. Results are summarised in docs/ARCHITECTURE.md section 7
-("Evaluation results").
+reference. Results are summarised in docs/DOCUMENTATION.md section 7
+("Evaluation").
 """
 
 import json

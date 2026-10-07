@@ -1,309 +1,102 @@
-# NightOwl — Unsupervised ML Integration
-
-## Ledoit-Wolf Mahalanobis anomaly detection: architecture, evaluation, and limits
-
-> **Purpose:** This document defines the unsupervised anomaly-detection layer that
-> supplements NightOwl's Sigma rules. It replaces earlier experimental concepts
-> (Isolation Forest, TF-IDF) and documents the evaluation methodology, the measured
-> results, and what this layer can and cannot be relied on to do.
->
-> **Revision note (2026-10-05):** the metrics in the previous version of this
-> document (Accuracy 97.80%, Precision 83.87%, Recall 61.90%, F1 71.23%) were
-> measured on the training set and are withdrawn. §4 explains what was wrong with
-> them and §5 reports host-held-out replacements. The honest numbers are
-> substantially worse. See `docs/DOCUMENTATION.md` §9 for the project's honesty
-> policy, which this correction applies.
-
----
-
-# 1. Executive summary
-
-NightOwl converts Windows Sysmon/EVTX telemetry into prioritized incidents through
-deterministic Sigma-style rules, multi-event sequence correlation, and RAG/LLM
-incident explanation.
-
-The ML layer adds unsupervised anomaly detection using **Ledoit-Wolf shrunk
-covariance + Mahalanobis distance**. It learns the covariance structure of normal
-Windows behaviour strictly from benign telemetry, evaluates 10-minute host
-behaviour windows, and flags windows whose distance exceeds a percentile of the
-benign baseline.
-
-**What the measurements support:** on a host the baseline actually covers, the
-layer is meaningfully better than chance at separating attack windows from normal
-ones (PR-AUC 0.77 against a 0.25 base rate on `Server002`), and at a strict
-threshold it is reasonably precise (85% precision at the 99.5th percentile on that
-host). Its **recall is low — about 13%**. It finds roughly one attack window in
-eight.
-
-**What the measurements do not support:** any claim that this layer is a detector
-in its own right. It is supplementary evidence of unusual host behaviour. Known
-threats and single-event Living-off-the-Land executions are caught by the Sigma
-rules and the sequence engine, which is where NightOwl's actual 50/61 (82.0%)
-detection rate comes from.
-
----
-
-# 2. Architecture
-
-## Algorithm
-
-**Ledoit-Wolf Mahalanobis distance** over `log1p`-transformed feature vectors.
-
-* **Why not Isolation Forest?** It suffered from the curse of dimensionality across
-  50+ dense volumetric features, producing unstable anomaly scoring and a high
-  false-positive rate.
-* **Why not TF-IDF over command lines?** Standard Windows background noise (Temp
-  paths, GUIDs) introduces extreme natural variance that swamps malicious strings.
-* **Why Ledoit-Wolf specifically?** Shrinkage keeps the covariance matrix
-  invertible across correlated, highly skewed behavioural features without
-  hand-tuning a regularization term.
-
-## Feature extraction
-
-`backend/app/ml/features.py` produces **70 features** per (host, 10-minute window):
-
-* **53 volumetric** — event-ID counts (Sysmon 1/3/11, Security 4624/4688/…),
-  per-minute rates, unique process/destination/user counts, command-line
-  statistics, ratios.
-* **8 basic heuristics** — service creation, account/group change, log cleared,
-  LSASS access, LOLBin usage, suspicious PowerShell, remote named pipe, admin
-  share access.
-* **9 advanced content-aware heuristics** — `exploit_tool_regex_match`,
-  `uac_bypass_registry_count`, `winrm_spawned_recon_count`,
-  `suspicious_service_imagepath_count`, `accessibility_hijack_count`,
-  `advanced_lolbin_count`, `db_failed_logon_count`, `domain_enumeration_count`,
-  `account_tampering_count`.
-
-This module lives under `app/`, not `scripts/`, because the live ingest path
-imports it. It previously lived in `backend/scripts/`, which neither
-`.dockerignore` nor the Dockerfile's `COPY` list includes — so in every container
-build the import raised `ModuleNotFoundError`, a bare `except Exception` swallowed
-it, and **the ML layer silently never ran in Docker at all.**
-
-## Only 28 of the 70 features are actually used
-
-`NightOwlAnomalyDetector.train()` drops any feature the benign corpus cannot
-support — constant, or non-zero in under 1% of windows — and records the survivors
-as the model's schema. On the current corpus that leaves **28 features**; 42 are
-dropped.
-
-This is not tuning. Mahalanobis distance is scale-free, so a feature the baseline
-never exercises gets only the shrinkage floor as its variance (≈4e-4 here), and its
-first ordinary value in production reads as an enormous deviation. Measured against
-the previous 70-feature model:
-
-| scenario | old 70-feature model | current 28-feature model |
-|---|---|---|
-| median benign window | 22.5 — Low | 20.2 — Low |
-| **normal host, 120 network connections** | **77,940 — High** | **193 — Low** |
-| **benign admin, 8 PowerShell script blocks** | **11,936 — High** | **64 — Low** |
-| noisy enumeration burst (400 processes) | 12,514 — High | 9,084 — High |
-
-The benign corpus contains almost no Sysmon EID 3: `unique_destination_count` is 0
-in all 1829 windows and `network_event_count` is non-zero in 6. The 70-feature
-model would therefore have fired `High` on essentially every 10-minute window of
-any host that browses the web. The dropped features are listed by
-`scripts/train_ml_model.py` on every run.
+# NightOwl ML anomaly layer
 
-**Cost of the cull:** 7 of the 9 advanced heuristics are among the dropped
-features, and they were the single strongest signal in the old model (a single
-firing added ~1181 to the distance, 2.7× the threshold). Recall falls as a result.
-That is the correct trade: those features only "worked" because the baseline never
-saw them fire, which is the same property that would make them fire on benign
-production hosts. Catching those specific executions is the Sigma rules' job.
+**Status: experimental, advisory by default.** The layer is wired end to end and its records carry their own evidence, but measured on the data available today it is not accurate enough to raise alerts. It therefore never opens or changes an incident and is never counted as a detection. Everything below is reproducible with `backend/scripts/train_ml_model.py` and `backend/scripts/eval_ml_model.py`.
 
-## Scoring
+## What it does
 
-Thresholds are the 99.5th (suspicious → Medium) and 99.9th (→ High) percentiles of
-the **training** distances. They describe the baseline's own spread. They are not a
-false-positive rate, and §4 is about what happens when they are mistaken for one.
+The unit is a **window**: all events of one log family (Security, Sysmon, PowerShell, System or Application) from one host within one 10-minute bucket. That is exactly what one uploaded EVTX file produces, since one file is one channel, so the model is trained on the same shape of data it scores.
 
----
+Per family, a window is described by:
+- its **composition**: counts of the family's 15 most common event ids in the benign baseline (the *vocabulary*, stored with the model) plus an "other" bucket;
+- **size and diversity**: total events and distinct event ids;
+- **behaviour counts** for that family:
 
-# 3. Dataset
+| Family | Behaviour counts |
+|---|---|
+| Security | failed logons, distinct logon accounts and sources, network/RDP logons, explicit-credential logons, account and group changes, distinct new processes |
+| Sysmon | process creations, distinct processes, distinct parent→child pairs, network connections, distinct destinations and ports, distinct processes accessed |
+| PowerShell | script block count and size |
+| System | service installs and state changes |
 
-| | windows | source |
-|---|---|---|
-| Benign | 1829 | `NightOwl-Benign-Dataset/` — 31 EVTX files, 2 hosts: `LAPTOP-5GVGMJ14` (952), `Server002` (877) |
-| Attack | 87 | `real_world_fixtures/detected/` (50 files) + `undetected/` (11 files) |
+Every feature is scoped to its family. Event ids are never compared across channels: Sysmon 1 is a process creation, System 1 is a clock change.
 
-## The `bits_openvpn.evtx` exclusion
+Each family gets a Ledoit-Wolf covariance model over `log1p` features. A window is scored by its Mahalanobis distance from the benign baseline:
+- **medium** beyond the 99.5th percentile of training distances;
+- **high** beyond the 99.9th percentile.
 
-One attack-folder capture contains 1,537 `Microsoft-Windows-Bits-Client` events
-from routine Windows Update / Google Update / OneDrive polling, with zero malicious
-events and no OpenVPN traces. The dataset pipeline labels every window in an attack
-capture `is_attack = 1`, so its 190 benign windows counted as false negatives. The
-model scored them correctly as benign; the label was wrong.
+Windows with fewer than 10 events are never scored. A handful of events is not "behaviour", and single-event attacks are the rules' job.
 
-Those 190 windows are excluded. This is a ground-truth correction, not a
-convenience — but it is an exclusion that improves the reported metric, so it is
-named explicitly as `MISLABELED_CAPTURES` in `scripts/eval_ml_model.py` rather than
-applied silently.
+Each flagged window is stored as an alert record (`rule_id = ml-anomaly-detector`) whose `details` hold:
+- the family, distance and thresholds;
+- the window bounds and event count;
+- the **top contributing features**, each with its value, the baseline median and its share of the distance (the distance is zᵀPz, so feature *i* contributes z_i(Pz)_i);
+- any event ids never seen in the baseline.
 
-## Baseline coverage is the limiting factor
+The console shows this under Alerts → "ML anomalies (experimental)" and in incident evidence, always labelled as not a detection.
 
-Two hosts is not a baseline. It is why 42 features have no support, why the two
-hosts disagree so sharply in §5, and why no number in this document should be
-expected to hold on a third machine.
+## Modes (`ML_MODE` in `.env`)
 
----
+| Mode | Behaviour |
+|---|---|
+| `advisory` (default) | Record anomalies with evidence. Link them to an incident that already covers the host and time. Never open or change an incident. |
+| `alert` | As advisory, but may open a new incident (still with no ATT&CK technique). |
+| `off` | No scoring. |
 
-# 4. What was wrong with the previous metrics
+In every mode anomalies are excluded from `rule_matches`, `alerts_created`, "alerting events" and every detection count, and are never chosen as the alert an incident explanation is built around.
 
-The previous §4 reported Accuracy 97.80%, Precision 83.87%, Recall 61.90%, F1
-71.23%, TN 1819 / FP 10.
+## Training data
 
-**The benign half of that evaluation was the training set.** `scratch_prod_eval.py`
-loaded its benign windows from `scripts/ml_features.csv` — the same file
-`train_ml_model.py` fits on. TN + FP = 1829 = that file's row count exactly.
+`sample_logs/real_world_fixtures/NightOwl-Benign-Dataset/`: 31 EVTX files from **two machines** (`LAPTOP-5GVGMJ14`, `SERVER002`). Overlapping exports are de-duplicated by (host, channel, EventRecordID).
 
-Since the threshold is the 99.5th percentile *of the training distances*, "10
-benign windows flagged out of 1829" (0.547%) is arithmetic, not a measurement. Any
-model trained this way produces that number. Refitting with 5-fold cross-validation
-gives an out-of-sample rate of **0.875% ± 0.27** on the same corpus, and the
-host-held-out protocols in §5 give 2.1–3.8%.
+| Family | Benign windows | Features fitted (dropped) | Thresholds medium / high |
+|---|---:|---:|---:|
+| Security | 531 | 17 (8) | 143.7 / 199.7 |
+| Sysmon | 762 | 7 (6) | 55.9 / 61.3 |
+| System | 227 | 20 (0) | 50.6 / 61.2 |
+| Application | 179 | 17 (1) | 55.9 / 98.8 |
+| PowerShell | 24 | not modelled (< 30 windows) | -- |
 
-Two further problems with those figures:
+A feature is dropped when it is non-zero in under 2% of benign windows: with no baseline variance, its first ordinary value would read as an enormous deviation. The bundle records the scikit-learn version it was trained with, and the loader refuses it under any other version.
 
-* **Accuracy was meaningless at that class ratio.** 1829 benign vs 87 attack means
-  a classifier that never fires scores **95.6%**. The reported 97.80% was 2.2
-  points above doing nothing.
-* **They no longer reproduced.** Re-running the same script today gives 87 attack
-  windows, TP 60 / FN 27, recall 68.97%, F1 76.43% — not 84 / 52 / 32 / 61.90% /
-  71.23%. This document was written 2026-09-28 18:18; `extract_ml_features.py` was
-  last edited at 18:49. The published numbers described a pre-final extractor, and
-  the "32 remaining false negatives" breakdown described a run that no longer
-  existed.
+## Held-out evaluation (`scripts/ml_eval_results.json`)
 
-Only **recall** in the old table was measured on genuinely unseen data.
+**A. Within-host temporal split (the deployment condition).** Each host's windows are split chronologically: train on the first 70%, test on the last 30%.
 
-### The previous explanation for the false negatives was also wrong
+| Family | Held-out benign windows | Flagged | ≈ false alerts per host-day |
+|---|---:|---:|---:|
+| Security | 161 | 5 | 4.5 |
+| System | 69 | 2 | 4.2 |
+| Application | 55 | 1 | 2.6 |
+| Sysmon | 229 | 2 | 1.3 |
 
-The old §5B attributed the stealth misses to covariance mathematics: "appending a
-Boolean heuristic does not guarantee an anomaly spike if the benign dataset has
-non-zero variance for that feature."
+**B. Leave one host out (transfer to an unseen machine).** This fails badly. For example:
+- Security windows from the laptop, scored by a server-only model: 44% flagged.
+- System windows: 42–70% flagged.
 
-The benign variance for those features was exactly **zero**, which made them
-extremely powerful rather than weak — a single firing moved the distance by ~1181
-against a 439 threshold. The misses were windows where the heuristic **did not
-fire**: extraction-logic gaps, not a mathematical ceiling. For example,
-`Discovery_Remote_System_NamedPipes_Sysmon_18` uses the pipes `\wkssvc` and
-`\browser`, while the extractor matched only `lsarpc|samr|svcctl|srvsvc`.
+**C. Unseen benign captures.** Data never used in training:
+- a separate benign laptop export: 27 of 314 windows flagged (8.6%);
+- the synthetic noise files: 5 of 5 flagged, because their volume is unlike anything in the baseline.
 
----
+**D. Attack captures.** Only 26 of 87 attack windows are large enough to score; 24 of those were flagged. That figure is **not** evidence of skill. Protocols B and C show the model flags almost any unfamiliar machine, and every attack capture comes from a machine outside the baseline.
 
-# 5. Measured results
+**Conclusion.** With two baseline hosts the layer cannot separate "attack" from "unfamiliar machine", and on a familiar machine it still produces 1–4.5 false windows per day. That is why the default mode is advisory.
 
-Produced by `backend/scripts/eval_ml_model.py`. Both protocols refit the model and
-re-derive the threshold inside each fold. Benign windows are never split randomly —
-consecutive 10-minute windows from one host are near-duplicates, so a random split
-leaks.
+## How to make it better
 
-## Protocol A — within-host temporal split (the deployment condition)
+The binding constraint is data, not the algorithm:
+1. Collect benign logs with `backend/scripts/collect_benign_logs.ps1`:
+   - at least 5 more machines, a mix of workstations and servers;
+   - 3+ normal working days each;
+   - Sysmon network (event 3) and image-load (event 7) events enabled.
+2. Retrain with `./venv/Scripts/python scripts/train_ml_model.py --extra-dir <folder>`.
+3. Re-run `scripts/eval_ml_model.py`.
+4. Switch `ML_MODE=alert` only if protocol A stays at or below about 1 false window per host-day and protocol C improves.
 
-Fit on each host's first 70% of windows by time; score its last 30% plus all 87
-attack windows. This is what deployment looks like: the baseline covers the host
-being monitored, and the question is whether its later windows read as normal.
+## History
 
-| threshold | Precision | Recall | F1 | benign FP rate |
-|---|---|---|---|---|
-| 99.0th pct | 52.83% | 16.09% | 24.67% | 4.55% |
-| **99.5th pct (shipped)** | **52.27%** | **13.22%** | **21.10%** | **3.82%** |
-| 99.9th pct | 59.46% | 12.64% | 20.85% | 2.73% |
+Two earlier versions were withdrawn.
+- **First version: one 70-feature model over windows merging every channel of a host.** It reported 97.8% accuracy and 83.9% precision. Those numbers were measured on its own training data, at a class ratio where a model that never fires already scores 95.6%. Under honest evaluation it reached about 52% precision at 13% recall.
+- **Its scoring shape.** Production then scored single-channel uploads, so one ordinary logon scored as a Medium anomaly, while a security-log clear, Mimikatz command lines and encoded PowerShell scored as normal.
+- **Its feature set.** Every attack-specific heuristic feature had already been dropped for lack of benign support.
 
-**PR-AUC 0.4931** against a 0.2403 random baseline — a 2.05× lift.
-
-The two hosts differ sharply, and the average hides it:
-
-| host | features fitted | PR-AUC (random) | Precision @99.5 | Recall @99.5 |
-|---|---|---|---|---|
-| `Server002` | 28 / 70 | **0.7701** (0.2479) | 84.62% | 12.64% |
-| `LAPTOP-5GVGMJ14` | 7 / 70 | 0.3325 (0.2332) | 38.71% | 13.79% |
-
-On the server the layer works: 3.1× lift over chance, 85% precision, 2 false
-positives in 264 held-out benign windows. On the laptop it barely beats chance —
-only 7 features survived the support test, because a single workstation generates
-too narrow a behavioural range to model.
-
-## Protocol B — host-held-out (transfer to an unseen machine)
-
-Fit on one host, score the other entirely. Pessimistic by design: in deployment the
-baseline would include the monitored host. Reported because it bounds how far a
-single-host baseline transfers.
-
-| threshold | Precision | Recall | F1 | benign FP rate |
-|---|---|---|---|---|
-| 99.0th pct | 5.99% | 20.11% | 9.23% | 30.02% |
-| **99.5th pct (shipped)** | **29.63%** | **9.20%** | **14.04%** | **2.08%** |
-| 99.9th pct | 42.42% | 8.05% | 13.53% | 1.04% |
-
-**PR-AUC 0.1464** against a 0.0869 random baseline — a 1.68× lift.
-
-A baseline from one machine does not describe a different kind of machine. At the
-99.0th percentile, a model fitted on the laptop flags 531 of Server002's 877
-windows.
-
-## Accuracy
-
-Deliberately not headlined. At these class ratios the majority-class baseline is
-75–96% depending on the fold, and accuracy tracks it almost exactly. The evaluation
-script prints it only with that baseline beside it.
-
-## Summary
-
-| | previous claim | measured (Protocol A, 99.5th) |
-|---|---|---|
-| Precision | 83.87% | 52.27% |
-| Recall | 61.90% | **13.22%** |
-| F1 | 71.23% | 21.10% |
-| Benign FP rate | 0.55% | 3.82% |
-| Accuracy | 97.80% | not quoted without its baseline |
-
----
-
-# 6. Limits and conclusion
-
-> **NightOwl is a hybrid Windows SOC platform. The ML layer is supplementary
-> evidence, not a detector.**
-
-What it provides: a signal that a 10-minute host window deviates from the host's
-established behavioural baseline — noisy enumeration, volumetric spikes, unusual
-process mix. At the shipped threshold it is right about half the time it fires, and
-it fires for roughly one attack window in eight.
-
-What it does not provide, and must not be described as providing:
-
-* **Technique attribution.** An anomaly score maps to no ATT&CK technique. ML
-  alerts carry `technique_id = None` deliberately (`app/ml/rule.py`); inventing one
-  would be exactly the fabricated confidence `docs/DOCUMENTATION.md` §9 forbids.
-* **Coverage of stealth execution.** Single-event Living-off-the-Land activity
-  generates too little volume to shift a Mahalanobis distance. This is the Sigma
-  rules' and the sequence engine's job, and they do it: 50/61 (82.0%) with 0 false
-  positives.
-* **Any guarantee on an unmodelled host.** See Protocol B.
-
-## Known work
-
-1. **Extend the benign corpus.** The binding constraint is two hosts and no network
-   telemetry. Captures containing Sysmon EID 3 and PowerShell 4104 would restore
-   the ~42 dropped features, most of the recall, and the advanced heuristics —
-   without the false-positive cliff that made them unusable before.
-2. **Per-host baselines.** Protocol B shows a shared model transfers poorly. One
-   model per monitored host, fitted on that host's own history, matches how the
-   layer actually performs best (`Server002`, PR-AUC 0.77).
-3. **Close the extraction gaps from §4.** Extend the named-pipe list (`wkssvc`,
-   `browser`, `atsvc`, `winreg`, `spoolss`) and audit the other advanced heuristics
-   against `scripts/32_fns_dump.txt`. These are cheap recall wins once the corpus
-   supports the features again.
-
-## Reproducing these numbers
-
-```bash
-cd backend
-./venv/Scripts/python.exe scripts/extract_ml_features.py   # rebuild the benign matrix
-./venv/Scripts/python.exe scripts/train_ml_model.py        # fit + report dropped features
-./venv/Scripts/python.exe scripts/eval_ml_model.py         # both protocols
-```
-
-Add `--rebuild` to `eval_ml_model.py` to re-parse the attack EVTX corpus rather
-than using the cached matrix.
+The current design addresses each of these; it does not yet fix the data.

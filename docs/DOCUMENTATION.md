@@ -1,148 +1,179 @@
 # NightOwl — Documentation
 
-Everything about how NightOwl is built, why, how to run and test it, and how it got here. This is the single reference document for the project — it replaces what used to be five separate files (`ARCHITECTURE.md`, `PROJECT_GUIDE.md`, `FRONTEND_KPI_AUDIT.md`, `final_plan.md`, `pending.md`), merged and curated into one place now that the project is complete.
+How NightOwl is built and why, how to run, deploy and test it, and how it got here. This is the single reference document for the project. The ML anomaly layer has its own file, [`ML.md`](../ML.md).
+
+Every figure quoted here comes from a script in `backend/scripts/` whose output is checked in next to it. When a figure here disagrees with that output, trust the output.
 
 ---
 
 ## 1. What NightOwl does
 
-NightOwl turns raw Windows Sysmon/EVTX telemetry into a small number of prioritised, explained incidents. It is not "a SOC platform that detects every attack" — no static EVTX analyzer can honestly promise that. It is an evidence-driven investigation platform that profiles Windows telemetry, detects known malicious behaviours, maps findings to MITRE ATT&CK, and uses grounded AI to explain what happened — while being explicit about what the available telemetry cannot determine.
+NightOwl turns Windows event-log exports (EVTX) into a small number of prioritised, explained incidents. It is not "a SOC platform that detects every attack", because no static EVTX analyser can honestly promise that. It is an evidence-driven investigation tool:
+- it profiles the uploaded telemetry;
+- it detects known malicious behaviours and maps them to MITRE ATT&CK;
+- it explains each incident with a retrieval-grounded LLM;
+- it says what the available telemetry cannot determine.
 
 ```
-EVTX upload
+EVTX upload (one file = one channel)
    |
    v
-Ingestion     evtx_reader -> normalizer -> NormalizedEvent   --> events table
+Ingestion     evtx_reader -> normalizer -> NormalizedEvent        --> events
+   |          (de-duplicated by host + channel + EventRecordID)
+   v
+Detection     59 Sigma-style YAML rules, per event
+              + 8 multi-event sequence detectors, per batch       --> alerts
+   |          severity = Sigma level + ATT&CK tactic weight
+   |          repeat matches (same rule/host/process, 60 s) fold into one alert
+   v
+Correlation   detections grouped per host, sliding 1 h window     --> incidents
    |
-   v
-Detection     45 Sigma-style YAML rules + a 3-pattern sequence
-              engine, evaluated per event / per batch          --> alerts table
-   |          severity = Sigma level + MITRE tactic weight
-   v
-Correlation   alerts grouped per host within a 1h window     --> incidents table
-   |          incident carries the union of technique ids
+   +--------  ML anomaly layer (advisory): unusual 10-min windows
+   |          recorded as evidence, never as detections           --> alerts (kind=ml)
    v
 AI layer      retrieve (ChromaDB) -> draft (LLM) -> self-critique (LLM)
-   |          returns explanation + confidence breakdown (Fact/
-   |          Inference/Uncertainty) + recommended response + sources
+   |          explanation + Fact/Inference/Uncertainty + response + sources
    v
-Console       React SOC UI over the REST API, behind a real admin login
+Console       React SOC UI over the REST API, behind an admin login
 ```
 
-Every number the console shows is derived from this pipeline. Nothing is simulated.
+Every number the console shows comes from this pipeline. Nothing is simulated.
 
 ---
 
 ## 2. Repository layout
 
 ```
-├── backend/        FastAPI service: API routes, detection engine, ingestion,
-│                   MITRE mapping, incident/severity services, DB models,
-│                   Alembic migrations, tests, and EVTX sample_logs
-├── frontend/       React + Vite + Tailwind SOC console
-├── ai/             AI layer: RAG knowledge base, ATT&CK dataset, vector
-│                   store, and the build/evaluation tooling
-├── docs/           This file, Postman collection, audits/
+├── backend/        FastAPI service: API routes, detection engine + rules, ingestion,
+│                   ATT&CK mapping, incident/severity services, RAG runtime (app/rag),
+│                   ML anomaly layer (app/ml), models, Alembic migrations, tests,
+│                   sample logs and measurement scripts
+├── frontend/       React + Vite + Tailwind SOC console (nginx in Docker)
+├── ai/             RAG knowledge base (playbooks), vector store, KB build tooling
+├── docs/           This file, Postman collection
+├── ML.md           ML anomaly layer: design, evaluation, limits
 └── docker-compose.yml
 ```
 
-The RAG *runtime code* lives in `backend/app/rag/` because the API service imports it directly (`app.rag.explain_service`); `ai/` holds the corpus, the vector store and the tooling that builds them. Splitting it into a separately installed package would buy indirection rather than clarity at this size.
+The RAG *runtime code* lives in `backend/app/rag/` because the API imports it directly. `ai/` holds the corpus, the vector store and the tooling that builds them.
 
-**Backend layering rule:** routes → services → models/db. Only the service layer talks to the database; routes compose services and own their Pydantic response models (file-local, no shared `schemas/` layer).
+**Backend layering rule:** routes → services → models/db. Only the service layer talks to the database. Routes compose services and own their Pydantic response models.
 
 ---
 
 ## 3. Data model
 
-PostgreSQL 16 (host port 5433), SQLAlchemy 2 declarative models, Alembic migrations.
+PostgreSQL 16, SQLAlchemy 2 declarative models, Alembic migrations (applied automatically by the Docker entrypoint).
 
 | Table | Key fields |
 |---|---|
-| `events` | `id`, `host`, `timestamp`, `event_id`, `process`, `parent_process`, `command_line`, `user`, `raw_json` |
-| `alerts` | `id`, `event_id` → events, `rule_id` (Sigma UUID), `matched_at`, `severity`, `incident_id` |
-| `incidents` | `id`, `title`, `status`, `severity`, `host`, `mitre_technique_ids` (JSON list), `created_at` |
+| `events` | `id`, `host` (upper-cased), `timestamp` (UTC), `event_id`, `channel`, `event_record_id`, `process`, `parent_process`, `command_line`, `user`, `raw_json` |
+| `alerts` | `id`, `event_id` → events, `rule_id`, `matched_at`, `severity`, `severity_score`, `incident_id`, `occurrence_count`, `last_matched_at`, `details` (JSON; ML evidence) |
+| `incidents` | `id`, `title`, `status`, `severity`, `severity_score`, `host`, `mitre_technique_ids` (JSON), `created_at`, `last_activity_at` |
 | `chat_messages` | `id`, `incident_id`, `role`, `content`, `created_at` |
 | `audit_log` | `id`, `entity_type`, `entity_id`, `action`, `actor`, `details`, `created_at` |
-| `ai_opinions` | `id`, `event_id` → events, `opinion_text`, `limitations`, `attack_candidate_ids`, `created_at` |
-| `rules` | Defined but unused — detection rules live as YAML files, not rows |
+| `ai_opinions` | `id`, `filename`, `created_at`, `status`, `assessment_label`, `summary`, `sample_event_ids`, `limitations`, `attack_candidate_ids`, `error` |
+| `admin_sessions` | `id`, `username`, `created_at`, `expires_at`, `revoked_at` |
 
-`raw_json` stores both the original record and the normalized view, so fields the normalizer does not promote to columns (Hashes, the network 5-tuple) are never lost.
+`raw_json` stores both the original record and the normalized view, so fields the normalizer does not promote to columns (Hashes, the network 5-tuple) are never lost. Over-long values are clipped to their column size instead of failing the whole file.
 
-**Severity vocabulary**, shared verbatim by the backend, the API and the UI: `informational | low | medium | high | critical`.
+The rule `rule_id` is either a Sigma rule UUID, a `sequence-*` id or `ml-anomaly-detector`. `app/detection/synthetic.py` resolves the last two, since they have no YAML file.
 
-**Session state** (admin login only, see §10) lives entirely in a signed cookie — there is no `sessions` or `users` table. A single admin account is configured via environment variables, not a database row.
+**Severity vocabulary**, shared by backend, API and UI: `informational | low | medium | high | critical`.
 
 ---
 
 ## 4. API surface
 
-All routes are mounted at root. `/health` is always public. Every other route sits behind `require_api_key` (an optional shared secret, off by default) **and** `require_session_auth` (the real admin login, always enforced — see §10).
+All routes are mounted at root. `/health` is public. Every other route requires a valid admin session **or** the `X-API-Key` header when `API_KEY` is set (for scripts and CI). State-changing requests must also carry the CSRF header (§10).
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/health` | Liveness only. Public, exempt from rate limiting. |
-| POST | `/auth/login` | Admin login — sets the session cookie |
-| POST | `/auth/logout` | Clears the session |
+| GET | `/health` | Liveness only. Public, exempt from rate limiting |
+| GET | `/system/status` | Readiness of the LLM key, knowledge base, rules, ML bundle, ATT&CK dataset; demo flag |
+| POST | `/auth/login` | Admin login; creates a server-side session |
+| POST | `/auth/logout` | Revokes the session |
 | GET | `/auth/me` | Current session's username, or 401 |
-| POST | `/ingest` | multipart `.evtx` upload; returns counts + created incident ids |
-| GET | `/mitre/techniques` | Full ATT&CK Enterprise catalog |
-| GET | `/incidents` | Filters: `severity`, `status`, `start_date`, `end_date`, `q`, `limit` (max 200), `offset` |
-| GET | `/incidents/{id}` | Incident + alerts + their events + resolved techniques |
-| PATCH | `/incidents/{id}/status` | open, investigating, resolved, closed; writes an audit row |
-| GET | `/incidents/{id}/audit` | Audit trail for one incident |
+| POST | `/ingest` | multipart `.evtx` upload (default cap 100 MB); counts, telemetry profile, incident ids, ML anomalies, AI opinion id |
+| GET | `/mitre/techniques` | ATT&CK Enterprise catalog |
+| GET | `/incidents` | `severity`, `status`, `start_date`, `end_date`, `q`, `limit` (≤200), `offset` |
+| GET | `/incidents/{id}` | Incident, alerts and events, resolved techniques |
+| PATCH | `/incidents/{id}/status` | open, investigating, resolved, closed; writes an audit row with the session user |
+| GET | `/incidents/{id}/audit` | Audit trail |
 | POST | `/incidents/{id}/explain` | RAG explanation + recommended response + source chunks |
-| POST/GET | `/incidents/{id}/chat` | Incident-scoped chat turn / history |
-| GET | `/ai-opinions/{id}` | Advisory LLM second-opinion on high-noise or uncovered events |
-| GET | `/events` | Raw timeline. Filters: `host`, `start_date`, `end_date`, `alert_only`, `q`, `limit`, `offset` |
+| POST/GET | `/incidents/{id}/chat` | Incident-scoped chat turn (≤4,000 chars) / history |
+| GET | `/alerts` | `host`, `start_date`, `end_date`, `severity`, `q`, `kind` (`detection` or `ml`), `limit`, `offset` |
+| GET | `/ai-opinions/{id}` | Advisory LLM second opinion on an upload |
+| GET | `/events` | `host`, `start_date`, `end_date`, `alert_only`, `severity`, `q`, `covered`, `limit`, `offset` |
 | GET | `/events/{id}` | One event including `raw_json` |
-| GET | `/rules`, `/rules/{rule_id}` | Loaded rule set + per-rule match counts and last-triggered |
-| POST | `/demo/reset` | Deletes every event/alert/incident/chat/audit row |
-| GET | `/demo/fixtures` | Lists the real-world fixtures the current rule set detects |
-| GET | `/demo/fixtures/{filename}` | Streams one fixture's raw bytes |
+| GET | `/rules`, `/rules/{rule_id}` | Sigma rules, sequence detectors and the ML entry (`kind`), with match counts |
+| POST | `/demo/reset` | Deletes all operational rows and clears the response cache |
+| GET | `/demo/fixtures` | Attack captures the current rules detect with the correct technique |
+| GET | `/demo/fixtures/{filename}` | Streams one fixture |
 
-The three `/demo/*` routes sit behind an additional `require_demo_mode` gate (`DEMO_MODE_ENABLED`, on by default) on top of the usual auth, since `/demo/reset` is destructive and the other two expose internal fixture paths.
+The `/demo/*` routes also need `DEMO_MODE_ENABLED=true`. `/docs` and `/openapi.json` exist only when `APP_ENV=local`.
 
-Error shape is uniform: `{"detail": "<string>"}`. `LLMProviderError` gives 503; anything unhandled gives 500; throttled gives 429.
-
-**No sorting parameters and no aggregate/stats endpoints** — list endpoints are hardcoded newest-first, and every dashboard figure is computed client-side from the pages the console already fetched.
-
-**No websocket or SSE.** Live data in the console is polling, deliberately: building a streaming transport purely so the UI could feel live would be backend scope with no other consumer.
+Error shape is uniform: `{"detail": ...}`. An LLM provider failure gives 503 with a sanitised reason, a throttled request gives 429, an oversized upload gives 413 and a missing CSRF header gives 403. Lists are newest-first with an `id` tiebreak. Dashboard aggregates are computed client-side. Live data is polled, not streamed.
 
 ---
 
 ## 5. Detection engine
 
-Rules are Sigma-style YAML files in `backend/app/detection/rules/` (**45** as of this writing), loaded once at first use and cached in-process.
+### Sigma-style rules
 
-- **pySigma is used for validation only.** Its design centres on backends that convert a rule into a target query language (Elasticsearch DSL, Splunk SPL) to run against an external log store; there is no official backend for evaluating a rule against a single in-memory dict, which is exactly what `POST /ingest` needs. So `SigmaRule.from_yaml()` validates structure (real errors, not decoration) and a small hand-rolled interpreter in `engine.py` evaluates the `detection` block parsed separately with `yaml.safe_load`.
-- **Supported subset:** named selections (AND across fields, OR across a value list), contains/startswith/endswith/exact modifiers, all case-insensitive, and a boolean condition string (and/or/not/parentheses) via a recursive-descent parser, not `eval()`, since rule files are treated as untrusted input.
-- **Not supported (by design, v1):** regex and glob modifiers, "1 of"/"all of" shorthand, named multi-condition rules.
-- **Rules match real Sysmon field names** (Image, CommandLine, DestinationIp) rather than an invented vocabulary, so they stay portable from public SigmaHQ sources. `NormalizedEvent.event_data` carries the full flattened EventData dict, so the engine sees every field without re-parsing XML.
-- **Channels covered:** Sysmon, Windows Security, and PowerShell/Operational (4104/4103 script-block logging).
+The rules are 59 YAML files in `backend/app/detection/rules/`, loaded once per process and cached. Restart the backend after you change a rule.
 
-**Severity scoring** (`services/severity_service.py`): calibrated v1.1 algorithm combining base Sigma level rank (1–5) with a tactic weight of strictly +1 for high-leverage tactics (`credential_access`, `lateral_movement`, `collection`, `command_and_control`, `exfiltration`, `impact`) and 0 for all other tactics; capped at critical. (Recalibrated from the legacy v1 0-to-3 tier on 2026-09-06 to prevent disproportionate over-escalation to High/Critical).
+- **pySigma validates; NightOwl evaluates.** pySigma converts rules into query languages for external log stores and has no backend for matching one in-memory event. So `SigmaRule.from_yaml()` validates each rule's structure and `engine.py` evaluates its `detection` block.
+- **Supported subset:**
+  - named selections (AND across fields, OR across a value list) and lists of selections;
+  - the modifiers `contains`, `startswith`, `endswith`, `re`, `cidr`, the flags `all` and `windash`, `*`/`?` wildcards and `null`;
+  - conditions with `and`/`or`/`not`, parentheses, `1 of`/`all of` over a name pattern or `them`.
 
-**Incident grouping** (`services/incident_service.py`): a match joins the most recent open incident for the same host within a 1-hour window, merging its technique id and raising severity to the higher of the two; otherwise a new incident is created.
+  Conditions are parsed by a recursive-descent parser, never `eval()`. Field matching is case-insensitive.
+- **Strict loading.** A rule is rejected at load time, never loaded half-working, when:
+  - it uses an unsupported modifier;
+  - its condition cannot be parsed or refers to an undefined selection;
+  - its logsource category is not scoped to known `(channel, event id)` pairs;
+  - its ATT&CK tactic tags do not belong to its technique in ATT&CK v19.2.
+- **Field names are the raw Windows/Sysmon ones** (Image, CommandLine, TargetUserName). SigmaHQ rules that stay inside the supported subset and a scoped category can be adapted. Others, such as those using aggregations, `near` or unsupported modifiers, need rewriting.
+- **Channel coverage** (rules per service): Sysmon 33, Security 20, PowerShell script-block 4104 3, System 2, Application 1. PowerShell module logging (4103) is not covered.
 
-**Coverage:** execution (encoded PowerShell, execution-policy bypass, LOLBin execution, mshta, certutil download, suspicious writes to public/temp), persistence (Run keys, IFEO debugger, scheduled tasks — both Sysmon-process-creation and native Security 4698, WMI event consumers, accessibility-tool hijack), privilege escalation & defense evasion (UAC bypass/disable, rogue named pipes, timestomping, LOLDriver loads, audit log cleared, audit policy weakened, unmanaged PowerShell engine loads), credential access (LSASS dumps via 2 different signals, SAM/SYSTEM/SECURITY hive dumps, DCSync, remote registry access), discovery (sensitive group/account enumeration, SAM privileged-group object access), lateral movement (RDP, admin share, WinRM, loopback-tunnelled RDP), command and control (LOLBin network connections), and 3 PowerShell-specific rules (LSASS dump via reflection, fake credential prompts, WebClient download cradles).
+### Sequence detectors
 
-**Two mechanisms sit outside the single-event Sigma engine entirely, both narrow and built only once real fixture data justified them:**
+`detection/sequences.py` holds 8 multi-event detectors. They run once per ingest batch and feed the same alert path:
 
-- **The sequence engine** (`detection/sequences.py`) hand-codes 3 multi-event correlations no single-event rule can express: Process Herpaderping (FileCreate → ProcessAccess → ImageLoad, chained via Sysmon `ProcessGuid`, T1055), an SMB share-enumeration probe (a `\srvsvc` PipeConnect corroborated by an inbound port-445 connection, T1135), and a Kerberos password spray (≥4 distinct `TargetUserName` values from one source IP within 60s, T1110.003). It runs once per ingest batch after the per-event rule loop, feeding the same alert/incident creation path a normal rule match uses.
-- **Advisory patterns** (`services/advisory_patterns.py`) are narrow event shapes too false-positive-prone for a deterministic rule (e.g. `\lsass`/`\srvsvc` named-pipe connects from `System`) but still worth a human second look — routed to the LLM advisory second-opinion mechanism instead, never creating an Alert/Incident of their own.
-- **The ML anomaly layer** (`app/ml/`) scores every 10-minute host window in an ingest batch with an unsupervised **Ledoit-Wolf shrunk-covariance Mahalanobis** model fitted only on benign telemetry (`NightOwl-Benign-Dataset`, 31 files, 1829 windows across `Server002` and `LAPTOP-5GVGMJ14`). Windows beyond the 99.5th percentile of the baseline become alerts under the built-in rule id `ml-anomaly-detector`, carrying **no ATT&CK technique** — an anomaly score maps to none, and inventing one would break §9. It is supplementary evidence, not a detector: measured held-out **recall is ~13% at ~52% precision** (PR-AUC 0.49 vs a 0.24 base rate). The 50/61 detection rate in §14 comes from the Sigma rules and the sequence engine, not from this layer. Only 28 of its 70 features are actually fitted — the rest have too little support in a two-host benign corpus to model safely. [`ML.md`](../ML.md) documents the architecture, the evaluation protocols, and the withdrawn earlier metrics in full.
+| Detector | Technique |
+|---|---|
+| Process Herpaderping: FileCreate → ProcessAccess → ImageLoad on one ProcessGuid | T1055 |
+| SMB share-enumeration probe | T1135 |
+| Kerberos password spray: failed pre-auth across many accounts from one source | T1110.003 |
+| Authentication brute force: repeated failures against one account | T1110 |
+| Remote SAM/LSA enumeration | T1087 |
+| Mass process access | T1057 |
+| Group self-add | T1098 |
+| Bulk group-membership addition | T1098 |
 
-**Verifying detection accuracy** — see §14.
+`SEQUENCE_PATTERNS` holds each detector's thresholds and rationale.
+
+### Severity, de-duplication and grouping
+
+- **Severity** (`services/severity_service.py`): the Sigma level rank (1–5), plus 1 if the rule is tagged with a high-leverage tactic (credential access, lateral movement, collection, command and control, exfiltration, impact), capped at critical.
+- **Alert de-duplication:** a repeat match of the same rule, host and process within 60 s increments `occurrence_count` on the existing alert instead of creating a new one.
+- **Incident grouping** (`services/incident_service.py`): a detection joins an *open* or *investigating* incident on the same host whose activity span lies within 1 hour of it. The window slides with `last_activity_at`. The incident takes the union of technique ids and the higher severity, and its title follows its most severe alert. Otherwise a new incident is opened. Ingest takes a per-host advisory lock, so two concurrent uploads for one host cannot open duplicate incidents.
+
+### Outside the rule engine
+
+- **Advisory patterns** (`services/advisory_patterns.py`) are event shapes too false-positive-prone to alert on, such as `System` connecting to `\lsass`/`\srvsvc`. They are routed to the AI second opinion and never create alerts.
+- **The ML anomaly layer** (`app/ml/`) has per-log-family models over 10-minute windows. It runs in **advisory mode** by default: it records anomalies with the features behind each one and links them to an existing incident, but never opens one and never counts as a detection. On a familiar machine it produces 1–4.5 false windows per host-day, and it does not transfer to unseen machines. Full design and evaluation: [`ML.md`](../ML.md).
 
 ---
 
 ## 6. MITRE ATT&CK mapping
 
-- Official STIX bundle (ATT&CK v19.2), downloaded on first use and cached at `ai/mitre/enterprise-attack.json`.
-- Per technique: id, name, description, tactics, is_deprecated, is_revoked.
-- **Two tactic vocabularies exist and must be normalised when joined.** The ATT&CK dataset returns hyphenated kill-chain phase names (`defense-evasion`), while this project's rule tags use underscores (`defense_evasion`).
-- **This dataset does not use "defense-evasion" as a tactic string at all** — it's split into `stealth` (general case) and `defense-impairment` (tool/log tampering specifically). The frontend's `TACTIC_ORDER` includes both, mapped to "Defense Evasion" and "Defense Impairment" respectively — a real gap found and fixed during frontend QA (see §16).
-- **Invalid technique tags are warn-only, never rule-rejecting.** A bad tag is a metadata problem; the rule's detection logic still works and should keep firing.
+- ATT&CK Enterprise **v19.2** ships as a trimmed index at `backend/app/mitre/data/enterprise_attack_v19_2.json.gz`. Nothing is downloaded at runtime. `rebuild_index()` regenerates it from a full STIX bundle.
+- Per technique: id, name, description, tactics, deprecated/revoked flags.
+- ATT&CK v19 has no `defense-evasion` tactic. It is split into `stealth` and `defense-impairment`. Rule tags use the underscore form (`attack.defense_impairment`), and the frontend's tactic order includes both.
+- **Tags must be consistent.** A technique id that does not exist, or a tactic tag that does not belong to the rule's technique, rejects the rule at load (§5).
 
 ---
 
@@ -150,38 +181,56 @@ Rules are Sigma-style YAML files in `backend/app/detection/rules/` (**45** as of
 
 ### Corpus and retrieval
 
-`ai/tools/build_kb.py` chunks MITRE technique descriptions (skipping deprecated/revoked ones) plus hand-written playbooks in `ai/knowledge_base/playbooks/`, embeds them with sentence-transformers `all-MiniLM-L6-v2`, and writes a single collection into `ai/vector_store/` (~1,900 chunks, 800 chars with 100-char overlap). Retrieval is top-k (k=5) with an optional technique-id filter.
+`ai/tools/build_kb.py` chunks the ATT&CK technique descriptions (skipping deprecated and revoked ones) and the playbooks in `ai/knowledge_base/playbooks/`. Chunks are 800 characters with 100 characters of overlap. They are embedded with sentence-transformers `all-MiniLM-L6-v2` into one ChromaDB collection in `ai/vector_store/`.
+
+Retrieval is top-k (k=5), filtered to the incident's techniques *and their parent techniques* (T1003.001 also retrieves T1003). An empty knowledge base is logged and reported by `/system/status`.
 
 ### Generation
 
-`rag/explain_service.py` runs **retrieve, draft, self-critique**: one LLM call produces the explanation from the incident context plus retrieved chunks, and a second call checks that draft against both the chunks and the incident context. Flagged claims are appended as a confidence-check block. Every explanation also carries a mechanical **FACT / INFERENCE / UNCERTAINTY** breakdown, extracted from a required 4th section in the prompt (`extract_confidence_breakdown()`).
+`rag/explain_service.py` runs **retrieve, draft, self-critique**. One LLM call drafts the explanation from the incident evidence and the retrieved chunks. A second call checks the draft against both, and any flagged claims are appended as a confidence-check block. Every explanation carries a **FACT / INFERENCE / UNCERTAINTY** breakdown parsed from a required section.
 
-Chat (`rag/chat_service.py`) is a single call per turn, no critique pass — a real back-and-forth where the user can immediately challenge a wrong answer, and a second call would double the free-tier cost of every turn.
+Chat (`rag/chat_service.py`) is one call per turn without a critique pass. A turn is stored only after the LLM answers, so a failed call leaves no orphan message.
 
-### What the model can see
+### Prompt safety
 
-`services/incident_service.py::build_incident_evidence()` pulls the incident's first alert's real process, parent process, command line, user, matched rule title, detection method (Sigma rule vs. sequence correlation), and up to 5 nearby related events into both the explain and chat prompts — not just `{title, severity, host, technique_id}`. Bounded to one alert's detail so a rule that fired dozens of times doesn't balloon the prompt.
+All log-derived text is untrusted. Process names, command lines, users and similar fields are truncated and placed inside fences marked with a random per-request nonce (`rag/safety.py`). The system prompt tells the model to treat fenced text as data, never as instructions.
 
-### Provider, timeouts, caching
+The AI second opinion's verdict is read only from a strict heading line. Any ATT&CK id in model output that does not exist in the dataset is annotated as unverified.
 
-- **Groq, exclusively.** The call is abstracted behind `rag/llm_client.py`; there is no automatic fallback to any other provider — a Groq outage surfaces as a clean 503, not a silent swap. (Gemini was supported earlier and removed once its free tier proved structurally unreliable — hard 20-req/day quota plus server-side overload, both observed live.)
-- Two caches: a route-level cache (`rag/cache.py`, on by default, keyed on incident id, TTL 900s) and a prompt-hash cache in `llm_client` (off by default, for manual testing without spending quota).
-- Chat history sent to the LLM is bounded to the most recent 10 messages; the full conversation is still stored and returned via the API.
-- One retry with a 2s delay; `LLMProviderError` surfaces as 503 with the provider's own message.
+### What the model sees
 
-### Evaluation results (measured, not assumed)
+`incident_service.build_incident_evidence()` builds the evidence from:
+- the incident's primary *detection* alert: process, parent, command line, user, rule title and method;
+- up to 5 nearby events on both sides of it;
+- any ML anomalies, listed separately as supporting statistics.
 
-**Retrieval quality** (10 queries): 9/10 returned the correct playbook/technique document in the top 3. The one failure was a corpus vocabulary gap (a query about "beaconing" under-retrieved the C2 playbook, which never uses that word).
+An ML record is never chosen as the primary alert.
 
-**Hallucination spot-check** (10 crafted incidents): found and fixed 2 issues — the critique prompt not seeing the incident context it was supposed to check the draft against, and a draft importing a detail (`-enc` flag) from a playbook rather than the actual incident. Both prompts now require any stated technical detail to be literally present in the incident context.
+### Provider, caching, failure
 
-**Cost/latency** (Groq `openai/gpt-oss-120b`, 5 incidents × 2 calls): ~4–8 seconds and 2,000–3,000 total tokens per explanation. Each `/explain` costs *two* provider requests, which is why the response cache is on by default.
+- **Groq only**, behind `rag/llm_client.py`. There is no silent fallback, so an outage surfaces as a 503 carrying a sanitised reason. Provider error bodies are not echoed.
+- **Route-level response cache:** on by default with a 900 s TTL. It is keyed on the incident id *and* its evidence (alert count and latest alert), so new detections invalidate it. Demo reset clears it.
+- **Optional prompt-hash cache** in `llm_client`, off by default.
+- **Bounded history:** chat sends the last 10 messages.
+- **Retries:** one retry, on retryable errors only.
+
+### Evaluation (measured, not assumed)
+
+**Retrieval quality** (10 queries): 9 out of 10 returned the correct playbook or technique in the top 3. The miss was a vocabulary gap: "beaconing" never appears in the C2 playbook.
+
+**Hallucination spot-check** (`ai/tools/hallucination_spot_check.py`, 10 crafted incidents) found two issues, both fixed:
+- the critique pass could not see the incident evidence;
+- a draft imported an `-enc` flag from a playbook into an incident that had none.
+
+The script runs against an in-memory database and never writes to the real one.
+
+**Cost and latency** (Groq `openai/gpt-oss-120b`): about 4–8 s and 2,000–3,000 tokens per explanation. Each `/explain` makes two provider calls.
 
 ---
 
 ## 8. Frontend
 
-React 19 + Vite + TypeScript + Tailwind v4 (CSS-first `@theme`), react-router 7, Recharts, Motion, lucide-react. Linted with oxlint.
+React 19 + Vite + TypeScript + Tailwind v4 (CSS-first `@theme`), react-router 7, Recharts, Motion and lucide-react, linted with oxlint.
 
 ### Structure
 
@@ -189,7 +238,7 @@ React 19 + Vite + TypeScript + Tailwind v4 (CSS-first `@theme`), react-router 7,
 src/
   api/          One fetch client mirroring every backend response model
   components/   ui/ design system + feature folders (dashboard, incidents,
-                chat, logs, rules, search, notifications, brand)
+                alerts, chat, logs, rules, search, notifications, brand)
   context/      Auth, preferences, health, incidents snapshot, MITRE catalog, toasts
   hooks/        One data hook per screen concern
   lib/          Tokens, aggregations, filtering, formatting, navigation, polling
@@ -199,201 +248,227 @@ src/
 
 ### Design system
 
-All colour, type, spacing, radius, shadow and glow values are CSS custom properties in `src/index.css`, mirrored for chart libraries in `src/lib/tokens.ts`. No component contains a raw hex value.
+All colour, type, spacing, radius, shadow and glow values are CSS custom properties in `src/index.css`. They are mirrored for chart libraries in `src/lib/tokens.ts`, and no component contains a raw hex value. Colour-varying utilities are literal strings in lookup maps (`components/ui/accent.ts`, `lib/severity.ts`), because Tailwind's JIT cannot see class names built with template literals.
 
-Tailwind's JIT only sees complete class names in source, so every colour-varying utility is a literal string in a lookup map (`components/ui/accent.ts`, `lib/severity.ts`) — a class built with a template literal produces no CSS at all.
-
-**Accent channels** (`components/ui/accent.ts`) tint a card/panel by the part of the app it belongs to: `primary` (blue-violet) for general/technical surfaces, `violet` for AI/RAG surfaces, `magenta` for telemetry/live-feed surfaces (Live Log Stream, KPI row, Pipeline Health), amber/red echoing severity, `green` reserved for genuine success states only. This is why, for example, the Dashboard's live-data panels glow pink/magenta while a settings or connection panel glows blue — it's a deliberate "which channel does this belong to" signal, not an inconsistency.
+Accent channels tint a surface by the part of the app it belongs to:
+- `primary` for general and technical surfaces;
+- `violet` for AI/RAG surfaces;
+- `magenta` for telemetry surfaces;
+- amber and red echo severity;
+- `green` is reserved for real success states.
 
 ### Pages
 
-Overview, Incidents, Incident detail, AI Assistant, MITRE ATT&CK, Alerts, Logs, Rules Engine, Reports, Settings, Demo Mode, Login. Global command palette (Ctrl/Cmd+K) searches incidents, techniques, rules, events and navigation.
+Overview, Incidents, Incident detail, AI Assistant, MITRE ATT&CK, Alerts (Detections and *ML anomalies, experimental* in separate views), Logs, Rules Engine, Reports, Settings (with live `/system/status`), Demo Mode and Login. A global command palette (Ctrl/Cmd+K) searches incidents, techniques, rules, events and navigation.
 
-### Data flow and request budget
+### Data flow
 
-The incidents snapshot and MITRE catalog are fetched once into context and shared; everything else is per-screen hooks. Because the API has no aggregate endpoints, all dashboard figures are computed in `lib/aggregations.ts` from those cached pages. Three background pollers exist (health, live log stream, incident snapshot) — they pause when the tab is hidden, back off exponentially when throttled, and the API client de-duplicates in-flight GETs.
+The incidents snapshot and the MITRE catalog are fetched once into context. Everything else comes from per-screen hooks. Dashboard figures are computed in `lib/aggregations.ts`, anchored to the dataset's own latest timestamp rather than "now".
+
+Background pollers pause while the tab is hidden and back off when throttled. The client de-duplicates in-flight GETs and sends the CSRF header on every mutation. Signing out resets every session-scoped provider and module cache.
+
+Event labels are channel-aware: Sysmon names are shown only for Sysmon events, because Security 1 and System 1 mean different things.
 
 ---
 
 ## 9. Honesty policy
 
-The design references this console was built against included panels a system like this cannot truthfully populate. Rather than fabricate them, each was replaced by something the data supports:
+Panels that a system like this cannot truthfully populate were replaced by something the data supports:
 
-| Reference panel | What NightOwl shows | Why |
+| Typical SOC panel | What NightOwl shows | Why |
 |---|---|---|
-| World threat map with attack arcs | Host activity graph (hosts linked by shared techniques) | No geolocation data is ingested |
-| System health: CPU/memory/disk/network | Pipeline health: API latency, rules loaded, events ingested, alerting rate | No host-telemetry collection exists; `/health` is a liveness probe |
-| Assets monitored | Hosts affected (distinct hosts with an incident) | No asset inventory, only hosts that have sent telemetry |
-| Percentage change "from yesterday" | Real 24h-over-24h delta, or an explicit "not enough history to compare" | Computed from ingested timestamps only when a comparable window exists |
-| Signed-in user with avatar, email and role | Real single-admin session (username, sign-out) | One real admin account with a signed session cookie — see §10. No email, avatar, or multi-user roles, because none exist |
-| Alert status workflow | Parent incident status | Alerts have no independent status; the incident is where status lives |
-| Log storage and retention | Ingest summary (events stored, alerting, hosts, time span) | No retention policy to report |
-| Enable/disable rule toggles | Read-only enabled state with an explanation | Rules are version-controlled files; no endpoint edits them at runtime |
-| Threat intelligence feed | Not present at all | No feed is integrated |
-| "Live" incident feed for a demo | Demo Mode (§11): a real fixture pushed through the genuine ingest → explain → chat pipeline | Nothing is generated or scripted-in-time |
+| World threat map | Host activity graph (hosts linked by shared techniques) | No geolocation data is ingested |
+| Host CPU/memory/disk | Pipeline health: API latency, rules loaded, events ingested, alerting-event rate | No host telemetry; `/health` is liveness only |
+| Assets monitored | Hosts affected | No asset inventory |
+| "% from yesterday" | Real 24 h-over-24 h delta, or "not enough history" | Computed only when a comparable window exists |
+| User profile, roles | Single-admin session (username, sign-out) | One admin account (§10) |
+| Alert status workflow | Parent incident status | Status lives on the incident |
+| Rule enable/disable toggles | Read-only state | Rules are version-controlled files |
+| Threat-intel feed | Not present | None is integrated |
+| "Live" demo feed | Demo Mode: a real capture through the real pipeline (§11) | Nothing is scripted in time |
+| "AI detected" | ML anomalies labelled *experimental, not a detection* | The model is not accurate enough to assert attacks (ML.md) |
 
-Confidence figures follow the same rule: the UI shows retrieval similarity scores and the model's own self-critique result, never an invented confidence percentage.
+Confidence is never an invented percentage. The UI shows retrieval similarity scores, the self-critique result and, for ML anomalies, the actual distance, thresholds and contributing features.
 
 ---
 
-## 10. Authentication
+## 10. Authentication and security model
 
-NightOwl has **exactly one admin account** — no registration, no roles, no password reset (no infrastructure for it exists). This is a deliberate scope decision, not a gap.
+NightOwl has **one admin account**: no registration, no roles, no password reset. This is a deliberate scope decision.
 
-- **Session**: Starlette's `SessionMiddleware` issues a signed, HttpOnly, `SameSite=Lax` cookie (`itsdangerous`-backed). There is no server-side session store — the signed cookie *is* the state. Default lifetime 12 hours.
-- **Credential**: `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` (a bcrypt hash, never plaintext) in the repo-root `.env`. Empty by default, so a fresh clone has login disabled until configured.
-- **Enforcement is backend-side.** `require_session_auth` (`app/core/auth.py`) is attached to every feature router alongside the pre-existing `require_api_key`. The frontend's route guards (`RequireAuth`, `RedirectIfAuthenticated`) are a UX convenience only — a request with no valid session cookie is rejected by the API regardless of what the UI shows.
-- **Brute-force protection**: a separate, much smaller rate-limit bucket (5 attempts/minute by default) scoped to `POST /auth/login` only, independent of the general API rate limiter.
-- **No username enumeration**: a wrong username and a wrong password return the identical `401 {"detail": "Invalid credentials."}` — the login handler compares against a fixed dummy bcrypt hash when the username doesn't match, so response shape/timing don't disclose which field was wrong.
-- This coexists with, and is completely independent of, the older shared `X-API-Key` header mechanism (`require_api_key`, off by default) — two separate gates, never merged.
+**Login and sessions**
+- **Credential:** `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH`, a bcrypt hash, never plaintext. Passwords longer than 72 bytes are rejected with 401, not a 500.
+- **Session:** a signed, HttpOnly, `SameSite=Lax` cookie (`Secure` outside local) that references a row in `admin_sessions`. Logout sets `revoked_at`, so a copied cookie stops working immediately. The default lifetime is 12 h.
+- **Startup checks:** outside `APP_ENV=local` the backend refuses to start when:
+  - `SESSION_SECRET_KEY` is missing or shorter than 32 characters;
+  - `ADMIN_PASSWORD_HASH` is missing.
 
-To generate a password hash: `./venv/Scripts/python.exe -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt()).decode())"` from `backend/`.
+  In local mode a random secret is generated per process.
+
+**Request protection**
+- **CSRF:** every state-changing request must carry `X-NightOwl-Request: 1`. A cross-site form cannot set a custom header, and a cross-origin script cannot without a CORS preflight, which only the configured origins pass.
+- **Brute force:** failed logins are throttled per client (5 per minute by default). Successful logins do not count against the limit.
+- **No username enumeration:** a wrong username and a wrong password return the identical 401. The handler checks a dummy hash, so timing matches as well.
+- **Enforcement is in the backend.** Frontend route guards are only a UX convenience.
+
+**Other safeguards**
+- **Upload guard:** a pure-ASGI middleware rejects an oversized body by `Content-Length` and by a running byte count, before any route reads it.
+- **Rate limiting:** a per-IP token bucket (300 per minute) with `/health` exempt. Client IPs are taken from proxy headers only from `TRUSTED_PROXIES`.
+- **Exports:** CSV cells starting with `= + - @` are neutralised against formula injection.
+
+To generate a password hash, run this from `backend/`:
+
+`./venv/Scripts/python -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt()).decode())"`
 
 ---
 
 ## 11. Demo Mode
 
-Demo Mode is a one-shot, client-driven walkthrough, not a server-side simulation. As of 2026-09-08 it draws from the **real-world fixture corpus**, not a small bundled synthetic pool:
+Demo Mode is a client-driven walkthrough over the real pipeline:
 
-1. `GET /demo/fixtures` (`app/api/routes_demo.py`) lists every real-world fixture the *current* rule set detects — sourced live from `backend/scripts/build_failure_matrix.py`'s own `failure_matrix.json` output, so this list can never drift from the real detection ground truth. Undetected fixtures are never listed here.
-2. The frontend picks one fixture via a **shuffle-bag** (`lib/constants.ts::nextDemoFixture`) — every fixture in the current pool is shown exactly once before any repeat, and the reshuffle boundary is nudged so the fixture just shown can never immediately repeat on the next click.
-3. `GET /demo/fixtures/{filename}` streams the real EVTX bytes; the frontend wraps them in a real `File` and drives the exact same sequence a person would trigger by hand: `POST /ingest`, then `POST /incidents/{id}/explain`, then `POST /incidents/{id}/chat` with one scripted question. Every stage awaits a real backend round trip.
+1. `GET /demo/fixtures` lists the attack captures the current rules detect **with the correct technique**. The list is read from `backend/scripts/failure_matrix.json`, the output of `build_failure_matrix.py`, so it cannot drift from measured results.
+2. The frontend picks one from a shuffle-bag: every fixture is shown once before any repeats, and the same one never appears twice in a row.
+3. It downloads the fixture and runs the same sequence a person would: `POST /ingest`, then `POST /incidents/{id}/explain`, then one `POST /incidents/{id}/chat` question.
 
-**Reset is total, not scoped.** `POST /demo/reset` deletes every row from all operational tables so fixtures can be re-ingested from a clean slate. Nothing distinguishes a demo-ingested row from a manually uploaded one, by design.
+`POST /demo/reset` deletes all operational rows (events, alerts, incidents, chat, audit, AI opinions) and clears the response cache. Fixtures keep their real timestamps; nothing is rebased.
 
-**No rebased or simulated time.** A fixture is ingested once, at real ingest time, and the resulting incident is exactly what `POST /ingest` on that file would produce for any user. (An earlier server-side "live replay" that rewrote timestamps onto a compressed wall-clock schedule was built, then removed — see §17's decision log.)
+The Docker image includes the fixtures and `failure_matrix.json`, so Demo Mode works in a container.
 
 ---
 
-## 12. Setup and running
+## 12. Setup, deployment and configuration
 
-### Prerequisites
+### Docker (recommended, also the production path)
 
-- **Python 3.10+** with a virtualenv at `backend/venv`.
-- **Node 20+** for the frontend.
-- **Docker Desktop** running, for PostgreSQL (`docker info` must succeed). Only the database needs it.
-- Repo-root `.env`, copied from `.env.example` and filled in with a free-tier Groq key plus admin login credentials (§10).
+```bash
+cp .env.example .env
+# set APP_ENV=production, ADMIN_PASSWORD_HASH, SESSION_SECRET_KEY (32+ chars),
+# POSTGRES_PASSWORD, GROQ_API_KEY, CORS_ALLOW_ORIGINS
+docker compose up --build -d
+```
 
-### Windows setup issues that cost real time
+- **db:** PostgreSQL 16, bound to `127.0.0.1:5433` only, with a named volume. Compose refuses to start without `POSTGRES_PASSWORD`.
+- **backend:** the entrypoint runs `alembic upgrade head` and builds the knowledge base on first start (this needs network access once; set `NIGHTOWL_BUILD_KB=0` to skip). It then starts uvicorn. The knowledge base and the model cache live in named volumes, and a healthcheck polls `/health`.
+- **frontend:** a production build served by nginx with security headers, on http://localhost:5173.
+
+For a public deployment, put a TLS-terminating reverse proxy in front, set `CORS_ALLOW_ORIGINS` to its origin and `TRUSTED_PROXIES` to its address.
+
+### Local development
+
+```bash
+cp .env.example .env                       # APP_ENV=local
+docker compose up -d db
+
+cd backend
+python -m venv venv
+SETUPTOOLS_USE_DISTUTILS=stdlib ./venv/Scripts/python -m pip install -r requirements-dev.txt
+./venv/Scripts/python -m alembic upgrade head
+./venv/Scripts/python ../ai/tools/build_kb.py      # once
+./venv/Scripts/python -m uvicorn app.main:app --port 8000
+
+cd ../frontend && npm ci && npm run dev            # http://localhost:5173
+```
+
+API docs are at http://127.0.0.1:8000/docs (local only). The backend runs without `--reload`, so restart it after changing Python code, a rule or `.env`.
+
+### Windows setup issues
 
 | Symptom | Fix |
 |---|---|
-| `SSLError: CERTIFICATE_VERIFY_FAILED` reaching GitHub/HuggingFace | Corporate/AV TLS interception. `pip install pip-system-certs` once per venv. |
-| `pip install -r requirements.txt` fails building `hexdump` | A python-evtx sub-dependency vs. setuptools/distutils conflict. Install with `SETUPTOOLS_USE_DISTUTILS=stdlib` set. |
-| `ModuleNotFoundError` in an otherwise working venv | requirements.txt gained a dependency after the venv was created — re-run install after every pull. |
+| `SSLError: CERTIFICATE_VERIFY_FAILED` reaching GitHub/HuggingFace | Corporate/AV TLS interception. `pip install pip-system-certs` in the venv |
+| `pip install` fails building `hexdump` | Set `SETUPTOOLS_USE_DISTUTILS=stdlib` |
+| `ModuleNotFoundError` after a pull | Re-run `pip install -r requirements-dev.txt` |
 
-### Running the stack
-
-```bash
-# 1. Database
-docker compose up -d db                 # PostgreSQL 16 on host port 5433
-
-# 2. Backend
-cd backend
-python -m venv venv
-SETUPTOOLS_USE_DISTUTILS=stdlib ./venv/Scripts/python.exe -m pip install -r requirements.txt
-./venv/Scripts/python.exe -m alembic upgrade head
-./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
-
-# 3. Frontend
-cd frontend
-npm install
-npm run dev                             # http://localhost:5173
-```
-
-API docs at http://127.0.0.1:8000/docs. **No `--reload`** on the backend command above by design (matches every documented workflow) — a change to `app/*.py` (not a Sigma YAML rule, which is re-parsed from disk every request) needs a manual restart to take effect.
-
-**Rebuilding the knowledge base** (only after editing playbooks, or on a fresh clone): `python ai/tools/build_kb.py` from the repo root. First run downloads model weights and the ATT&CK bundle.
-
-`docker compose up` brings up PostgreSQL, the backend, and a production frontend build served via nginx; for day-to-day frontend development, run the Vite dev server instead.
-
-### Environment variables
-
-Everything lives in the repo-root `.env`; see `.env.example` for the annotated template.
+### Environment variables (repo-root `.env`, annotated in `.env.example`)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | postgres on 5433 | SQLAlchemy connection string |
-| `GROQ_API_KEY` | empty | Groq credential; missing key gives a 503, not a crash |
+| `APP_ENV` | `local` | `local` relaxes the startup checks, enables `/docs`, non-Secure cookie |
+| `DATABASE_URL` | postgres on 5433 | SQLAlchemy URL (Compose sets it for the container) |
+| `POSTGRES_PASSWORD` | — (required by Compose) | Database password |
+| `GROQ_API_KEY` | empty | Missing key → explain/chat return 503; the rest works |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Model override |
-| `LLM_TIMEOUT_SECONDS` | 30 | Per-call provider timeout |
-| `RESPONSE_CACHE_ENABLED` | true | Route-level explain/chat cache |
-| `API_KEY` | empty (auth disabled) | Optional shared secret checked as the `X-API-Key` header, alongside real login |
-| `ADMIN_USERNAME` | `admin` | The one admin account's username |
-| `ADMIN_PASSWORD_HASH` | empty (login disabled) | A bcrypt hash — never the plaintext password |
-| `SESSION_SECRET_KEY` | empty | Signs the session cookie — treat like any other credential |
-| `SESSION_MAX_AGE_SECONDS` | 43200 (12h) | Session cookie lifetime |
-| `LOGIN_RATE_LIMIT_PER_MINUTE` | 5 | Failed-login throttle, `POST /auth/login` only |
-| `RATE_LIMIT_PER_MINUTE` | 300 | General per-IP token bucket; 0 disables it. `/health` exempt |
-| `CORS_ALLOW_ORIGINS` | localhost:5173 | Add any other origin the console is served from |
-| `DEMO_MODE_ENABLED` | true | Gates all `/demo/*` routes |
+| `LLM_TIMEOUT_SECONDS` | 30 | Per-call timeout |
+| `RESPONSE_CACHE_ENABLED` / `_TTL_SECONDS` | true / 900 | Explain/chat route cache |
+| `ADMIN_USERNAME` | `admin` | Admin account name |
+| `ADMIN_PASSWORD_HASH` | empty | bcrypt hash; required outside local |
+| `SESSION_SECRET_KEY` | empty | ≥32 chars; required outside local |
+| `SESSION_MAX_AGE_SECONDS` | 43200 | Session lifetime |
+| `API_KEY` | empty | Optional `X-API-Key` for scripts/CI |
+| `LOGIN_RATE_LIMIT_PER_MINUTE` | 5 | Failed-login throttle |
+| `RATE_LIMIT_PER_MINUTE` | 300 | General per-IP limit; 0 disables |
+| `TRUSTED_PROXIES` | empty | Proxies whose forwarded-for header is trusted |
+| `CORS_ALLOW_ORIGINS` | localhost:5173 | Allowed console origins |
+| `MAX_UPLOAD_BYTES` | 104857600 | Upload cap |
+| `ML_MODE` | `advisory` | `advisory`, `alert` or `off` (ML.md) |
+| `DEMO_MODE_ENABLED` | true | Gates `/demo/*` |
 
-Frontend variables live in `frontend/.env.local` (`VITE_API_BASE_URL`, `VITE_API_KEY`) and are baked into the bundle at build time.
+The frontend has one build-time variable, `VITE_API_BASE_URL`. No secret is ever baked into the bundle.
 
 ---
 
 ## 13. Testing
 
 ```bash
-cd backend && ./venv/Scripts/python.exe -m pytest -q     # 630 passed, 1 skipped (631 total tests)
-cd frontend && npx tsc -b && npm run build && npm run lint
+cd backend
+./venv/Scripts/python -m pytest                  # 740 offline tests
+./venv/Scripts/python -m pytest -m integration   # 5 tests: real KB/embeddings, Postgres
+cd ../frontend && npx tsc -b && npm run lint && npm run build
 ```
 
-The backend suite runs fully offline against in-memory SQLite: the shared `api_client` fixture in `tests/conftest.py` wires the real FastAPI app to a fresh database per test with `get_db`/`require_session_auth` overrides, so route tests exercise real HTTP behaviour without Postgres or a real login. `tests/api/test_auth_routes.py` is the one file that deliberately does **not** use that override, so session auth is genuinely exercised somewhere.
+The default run excludes tests marked `integration` and runs against in-memory SQLite. The shared `api_client` fixture wires the real FastAPI app to a fresh database per test. `tests/api/test_auth_routes.py` and the security tests deliberately exercise the real session, CSRF and upload-guard paths instead of overriding them. CI (`.github/workflows`) runs both the backend suite and the frontend checks.
 
-Tests mirror the app package layout (`tests/api`, `tests/detection`, `tests/services`, `tests/ingestion`, `tests/mitre`, `tests/rag`, `tests/core`). A few checks need network or a live database and are excluded from the offline path (RAG integration tests, anything touching Postgres or a real LLM call).
+### Manual end-to-end check
 
-### Manual end-to-end verification
-
-1. Start the database, backend and frontend as above.
-2. Log in at `/login` with the configured admin credentials.
-3. Upload `backend/sample_logs/sysmon_demo.evtx` from the Overview or Logs page — this fixture trips several loaded rules.
-4. Confirm incidents appear with severities and technique ids, and Alerts/Logs/MITRE/Rules all populate.
-5. Open an incident, run the AI analysis, confirm the explanation returns with source chunks, self-critique, and a Fact/Inference/Uncertainty breakdown.
-6. Ask a follow-up in chat; confirm it answers and the audit trail records it.
-7. Sign out; confirm every protected page redirects to `/login` and direct URL access is blocked.
-8. `/demo` runs the whole ingest → explain → chat sequence end to end against a real detected fixture, with terminal narration.
+1. `docker compose up --build`, then open http://localhost:5173 and sign in.
+2. Settings → System status: every component is ready (the LLM shows not ready without a Groq key).
+3. Demo Mode → run: an attack capture is ingested, an incident appears, the explanation and a chat answer return.
+4. Upload a capture from `backend/sample_logs/real_world_fixtures/detected/` on the Overview or Logs page. Incidents, Alerts, Logs, MITRE and Rules populate.
+5. Open the incident and run the AI analysis. Sources, self-critique and the Fact/Inference/Uncertainty breakdown appear.
+6. Change the incident status and check the audit trail shows the admin user.
+7. Sign out. Every page redirects to `/login`, and the old cookie is rejected by the API.
 
 ---
 
-## 14. Verifying detection accuracy
+## 14. Measuring detection accuracy
 
-`backend/sample_logs/real_world_fixtures/` holds real, independently-sourced EVTX captures, split into three directories:
+`backend/sample_logs/real_world_fixtures/` holds real, independently sourced EVTX captures:
+- **`detected/`** (52) and **`undetected/`** (9): attack captures, split by the current rules' results. The split is an *output* of `build_failure_matrix.py`, which rescans both folders every run.
+- **`NightOwl-Benign-Dataset/`** (31 EVTX + `manifest.json`): real workstation and server captures, used as the false-positive corpus and as the ML baseline.
 
-- **`detected/`** (50 files) — real attack captures the *current* rule set successfully detects.
-- **`undetected/`** (11 files) — real attack captures it does not yet detect, each with a real, documented reason (see `failure_matrix.md`).
-- **`NightOwl-Benign-Dataset/`** (31 files, cataloged in `manifest.json`) — real-workstation captures deduplicated to remove redundant byte-for-byte copies across System, Application, Security, and Sysmon channels. Contains baseline from `LAPTOP-5GVGMJ14` and 5 massive event logs from `Server002` to provide hundreds of 10-minute behavioral windows for ML extraction:
-  - `system_baseline.evtx`, `system_final_session.evtx`
-  - `application_session_early.evtx`, `application_session_mid1.evtx`, `application_session_mid2.evtx`, `application_session_late.evtx`
-  - `security_window_01.evtx` through `security_window_10.evtx`
-  - `sysmon_window_01.evtx` through `sysmon_window_10.evtx`
-- Plus 5 synthetic `demo_fixtures/noise_*.evtx` clean slices (Sysmon-only, verified clean at generation time).
-
-The `detected`/`undetected` split is itself this script's own **output**, recorded as a filesystem location — both benchmark scripts below scan the full corpus (both directories together) every run and re-derive the split from scratch, they never treat the current layout as an input filter:
+The expected techniques per capture are in `backend/scripts/fixture_ground_truth.json`.
 
 ```bash
 cd backend
-./venv/Scripts/python.exe scripts/run_detection_benchmark.py    # fast: aggregate recall/FP count only
-./venv/Scripts/python.exe scripts/build_failure_matrix.py       # slower: full per-fixture breakdown + writes
-                                                                 # scripts/failure_matrix.json/.md
+./venv/Scripts/python scripts/run_detection_benchmark.py   # → benchmark_results.md/.json
+./venv/Scripts/python scripts/build_failure_matrix.py      # → failure_matrix.md/.json
 ```
 
-**Current state** (re-run the scripts above for the up-to-date number): **50/61 detected (82.0%), 0 false positives** across all 8 clean fixtures. Every miss in `failure_matrix.md` is hand-classified (`channel_provider_gap`, `rule_missing`, `rule_too_narrow`, `insufficient_telemetry`, etc.) with the real field values checked, not a guessed reason — read that file before adding a new rule for a miss.
+**Current results** (rules and sequence detectors; the ML layer is disabled in both scripts):
 
-Three rules-adjacent mechanisms live outside `app/detection/rules/`: `app/detection/sequences.py` (the 3-pattern multi-event correlator, §5), `app/ml/` (the anomaly layer, §5), and `app/services/advisory_patterns.py` (LLM second-opinion patterns). The first two file real alerts under rule ids that have no YAML file, so `app/detection/synthetic.py` merges both into the `rules_by_id` lookup that `routes_alerts.py`/`routes_events.py`/`routes_incidents.py`/`incident_service.py` use to resolve an alert's title/technique — without it those alerts render as "Unknown rule". Note the benchmark numbers above are the **Sigma + sequence** rate; `run_detection_benchmark.py` does not score the ML layer, which is evaluated separately by `scripts/eval_ml_model.py`.
+| | |
+|---|---|
+| Attack captures detected with the correct ATT&CK technique | **52/60** |
+| Attack captures raising any alert | 54/60 |
+| False-positive alerts on 40 benign captures (316,874 events) | **5**, all System 104 log clears on one benign machine |
 
-### Verifying a specific behaviour quickly
+The failure matrix lists 61 captures because it also counts `bits_openvpn.evtx`. That capture is mislabelled: it contains only routine BITS traffic, so the benchmark scores it as benign.
+
+These are **development-set figures**: every attack capture informed rule development. Each miss in `failure_matrix.md` is classified (`channel_provider_gap`, `rule_missing`, `insufficient_telemetry`, `ambiguous_behavior`, ...) from the real field values.
+
+### Quick API checks
 
 ```bash
 curl http://127.0.0.1:8000/health
-curl -c cookies.txt -X POST http://127.0.0.1:8000/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"..."}'
-curl -b cookies.txt "http://127.0.0.1:8000/incidents?limit=2"
-curl -b cookies.txt "http://127.0.0.1:8000/events?alert_only=true&limit=3"
-curl -b cookies.txt http://127.0.0.1:8000/rules | head -c 400
-curl -b cookies.txt -X POST http://127.0.0.1:8000/incidents/1/explain      # costs 2 LLM requests
+curl -c c.txt -X POST http://127.0.0.1:8000/auth/login -H "Content-Type: application/json" \
+     -H "X-NightOwl-Request: 1" -d '{"username":"admin","password":"..."}'
+curl -b c.txt "http://127.0.0.1:8000/incidents?limit=2"
+curl -b c.txt "http://127.0.0.1:8000/alerts?kind=ml&limit=3"
+curl -b c.txt http://127.0.0.1:8000/system/status
+curl -b c.txt -H "X-NightOwl-Request: 1" -X POST http://127.0.0.1:8000/incidents/1/explain   # 2 LLM calls
 ```
 
-A Postman collection covering every endpoint is in `docs/postman/`.
+A Postman collection is in `docs/postman/`.
 
 ---
 
@@ -401,90 +476,94 @@ A Postman collection covering every endpoint is in `docs/postman/`.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `failed to connect to the docker API` | Docker Desktop is not running | Launch it, wait ~20s, retry |
-| `pg_isready` never succeeds, or port 5433 in use | Another Postgres owns the port, or the container needs more time | `docker compose ps`, `docker compose logs db` |
-| First run of RAG tests or `build_kb.py` takes 1–2 minutes | sentence-transformers/ATT&CK bundle downloading | Expected once; later runs use local caches |
-| Port 8000 still bound after stopping uvicorn | A reloader child process survived | `netstat -ano \| findstr :8000` then `taskkill /F /PID <pid>` |
-| `POST /ingest` returns 500 with `psycopg2.OperationalError ... port 5433` | No live Postgres | Start the database |
-| `POST /incidents/{id}/explain` returns 503 with rate-limit text | Groq's free-tier quota exhausted (each explain costs two requests) | Wait for the reset, or use a different `GROQ_API_KEY`. No automatic fallback provider |
-| Login always returns "Invalid credentials." even with the right password | `ADMIN_PASSWORD_HASH` in `.env` wasn't actually updated, or the backend wasn't restarted after editing `.env` | Confirm the hash in `.env` matches what you generated, then restart uvicorn — env vars are read at process startup, not live-reloaded |
-| A backend Python change doesn't seem to take effect | No `--reload` — a new Sigma YAML rule is re-parsed from disk every request, but anything in `app/*.py` needs a process restart | `netstat -ano \| findstr :8000`, `taskkill /F /PID <pid>`, restart uvicorn |
-| Any test using `tmp_path` fails with `PermissionError: [WinError 5]` | Broken Windows temp-directory ACL | Handled automatically by `tests/conftest.py`, which redirects `--basetemp` |
-| `ChatGroq(timeout=...)` appears to do nothing | The field is `request_timeout`, not `timeout` | Use `request_timeout` |
+| Backend exits at start with a settings error | Outside local mode without a valid `SESSION_SECRET_KEY`/`ADMIN_PASSWORD_HASH` | Set both, or `APP_ENV=local` for development |
+| `docker compose up` complains about `POSTGRES_PASSWORD` | Not set in `.env` | Set it |
+| `failed to connect to the docker API` | Docker Desktop is not running | Start it and retry |
+| First container start is slow | Knowledge-base build downloads the embedding model | Expected once; it's cached in a volume |
+| Every POST returns 403 | Client isn't sending `X-NightOwl-Request` | Add the header (the console does) |
+| Login returns 429 | Too many failed attempts | Wait a minute |
+| Explain returns 503 | No `GROQ_API_KEY`, or the Groq free-tier quota is exhausted | Set a key or wait for the reset |
+| ML status "not ready" | Model bundle missing, or trained under a different scikit-learn | `scripts/train_ml_model.py` in the backend venv |
+| A rule change has no effect | Rules are cached per process | Restart the backend |
+| `tmp_path` tests fail with `WinError 5` | Broken Windows temp ACL | Handled by `tests/conftest.py` (`--basetemp`) |
 
-### Field note: capturing real Sysmon telemetry
-
-Network-connection events (Sysmon Event ID 3) could not be captured on the primary dev laptop: McAfee's WFP-based firewall blocks Sysmon's network-monitoring driver. The workaround was to capture on a clean VM with a minimal ProcessCreate + NetworkConnect + FileCreate configuration.
+**Field note:** Sysmon network events (ID 3) could not be captured on the primary dev laptop, because McAfee's WFP firewall blocks Sysmon's network driver. Capture on a clean VM instead.
 
 ---
 
 ## 16. Frontend data-integrity notes
 
-A full KPI/chart audit (2026-09-08) cross-referenced every stat card, donut, and chart across all 10 pages against direct database/API ground-truth queries. Ground truth confirmed at audit time: 32,646 events · 170 alerts · 45 incidents · severities 15/23/4/3 (critical/high/medium/low) · 45 loaded rules · 28 distinct MITRE techniques observed. Nearly every number matched exactly. Real bugs found and fixed along the way (all since resolved):
-
-- **Historical-timestamp display**: `formatRelativeTime`/`formatDuration` now cap at 30 days and fall back to absolute dates, instead of showing "47,000 hours ago" for old fixture data.
-- **Dashboard/Logs/Reports time-window bugs**: several charts and `buildReport()` were anchoring "recent activity" windows to `Date.now()` instead of the dataset's own latest timestamp — meaningless against fixture data with old timestamps. Fixed via `lib/aggregations.ts::activityAnchorMs()`, which anchors to real dataset time everywhere.
-- **Mislabeling**: "Detection rate"/"Detection ring" renamed to "Alerting event rate"/"Alerting" where the number actually measures alert generation, not ground-truth detection accuracy (that number lives in `failure_matrix.md`, §14).
-- **Capped severity tallies**: Incidents/Dashboard severity breakdowns were tallying a client-side array capped at 1,000 rows instead of using dedicated ground-truth queries — fixed by adding `totalHigh`/`totalMedium`/`totalLow` (alongside the existing `totalCritical`) to the incidents snapshot, each backed by its own `GET /incidents?severity=X&limit=1` count query.
-- **Missing tactics**: see §6 — `stealth`/`defense-impairment` were entirely absent from the frontend's tactic vocabulary, silently hiding every technique whose only real tactic was Defense Evasion from every tactic-based view.
-- **MITRE donut silently capped at top 6 tactics** with no "Other" bucket, undercounting the total the moment a corpus produced a 7th active tactic. Fixed with the same top-6-plus-"Other" convention used elsewhere.
+A KPI and chart audit cross-checked every figure in the console against direct database queries. Bugs it found, all fixed:
+- **Old timestamps:** relative times on old fixture data no longer read "47,000 hours ago"; they fall back to absolute dates after 30 days.
+- **Time windows:** charts and reports anchor "recent" windows to the dataset's latest timestamp, not `Date.now()`.
+- **Labels:** "Detection rate" is renamed "Alerting event rate". Real detection accuracy is in §14.
+- **Severity totals:** these come from count queries, not from a client array capped at 1,000.
+- **Tactics:** the tactic vocabulary includes `stealth`/`defense-impairment`; the MITRE donut has an "Other" bucket.
+- **Sorting:** severity sorts by rank, not alphabetically, and the Incidents sort covers the whole dataset.
+- **ML anomalies:** they are kept out of detection counts and alerting-event flags everywhere.
 
 ---
 
 ## 17. Decision log
 
-One entry per significant decision. Every one names its alternative and whether it is reversible.
+**Groq-only LLM.** Gemini's free tier proved unreliable (a 20-request daily quota and overloads). Gemini support was removed rather than kept as a silent fallback.
 
-**LLM provider: Groq-only (2026-09-06, superseding an earlier Gemini/Groq dual setup).** Gemini's free tier proved structurally unreliable (hard 20-req/day quota, separate server-side overload). The dual-provider branch was fully removed rather than left dormant. No automatic fallback exists or is planned. Reversible via git history, but re-adding support means re-adding the whole branch.
+**pySigma for validation, own evaluator for matching.** No pySigma backend evaluates in-memory events (§5).
 
-**pySigma for validation, own evaluator for matching.** See §5. Reversible: only `rule_loader` and `engine` know about it.
+**Strict rule loading.** A rule that would silently never match, or that carries a wrong tactic, is worse than a rule that refuses to load.
 
-**Rules match raw Sysmon field names, not a normalized schema.** Portability from public Sigma sources beats an invented vocabulary. Reversible: `event_data` is additive.
+**Severity = Sigma level + tactic weight.** Only high-leverage tactics add weight, so medium rules stay medium.
 
-**Severity combines Sigma level with MITRE tactic weight.** Both read from the rule's own tags; rules with no tactic tag contribute zero weight.
+**Server-side sessions over a cookie-only session.** Logout has to actually revoke access.
 
-**Structured logging is a 30-line stdlib JSON formatter**, not structlog/python-json-logger — the requirement was structured logs, not an observability stack.
+**Demo Mode from the measured corpus.** The fixture list comes from `failure_matrix.json`, so it uses one source of truth and only correctly detected captures.
 
-**Rate limiting is a per-IP token bucket, `/health` exempt, 300/min ceiling.** A single dashboard paint legitimately costs about a dozen requests; the original 60/min throttled ordinary use.
+**A live replay was built, then removed.** Rebasing timestamps onto a wall-clock schedule added a second code path for a "live" feel that a real upload already gives.
 
-**Reports and Settings are client-side by design.** No reports table, no settings endpoint — Reports generates its document live from API data, Settings stores genuinely local browser preferences.
+**ML rebuilt and demoted to advisory (2026-10).** The first ML version reported 97.8% accuracy measured on its own training data, scored windows shaped unlike real uploads, and alerted on a single logon. It was rebuilt per log family on upload-shaped windows and evaluated honestly. It is still too noisy to assert attacks, so it records evidence and never opens incidents by default. See ML.md.
 
-**Live SOC replay was built, then removed in favour of one-shot Demo Mode.** A server-side thread that rewrote real captures onto a compressed wall-clock schedule worked, but was a second, parallel demo code path carrying its own bug class for a "live" feel a straightforward real upload already delivers honestly. Reversible: recoverable from git history, and the shared `ingest_records()` path was never coupled to it.
+**ATT&CK index vendored.** The runtime never needs network access, and tests are deterministic.
 
-**Single-admin session auth, not multi-user/RBAC (2026-09-08).** NightOwl has one operator; building account management, roles, or team features for a single-admin deployment would be unused complexity. Real, backend-enforced login (signed HttpOnly cookie) was still built — "no accounts" does not mean "no real authentication." See §10.
-
-**Demo Mode rebuilt to draw from the real-world fixture corpus instead of a small bundled synthetic pool (2026-09-08).** The earlier pool was 7 hand-sliced/generated fixtures committed into the frontend's static bundle (~16MB). Replaced with `GET /demo/fixtures`, sourced live from the same `failure_matrix.json` this project's own detection-accuracy tracking already produces — one source of truth instead of two, and every fixture Demo Mode can show is provably one the current rule set actually detects. The tooling that built the old synthetic pool (`build_demo_evtx_fixtures.py`, `generate_missing_rule_events.ps1`) was removed as dead code once nothing referenced it any more.
-
-**Real-world fixture corpus split into `detected/`/`undetected/`/`benign/` (2026-09-08, previously `malicious/`/`benign/`).** Makes which fixtures the current rule set catches visible directly in the repository's own file layout, not just in a generated report. Both benchmark scripts still scan the full corpus every run and treat the split as their own output, never as an input filter — a rule change that flips a fixture's status is picked up automatically the next time `build_failure_matrix.py` runs and re-sorts it.
+**Single admin, no RBAC.** NightOwl has one operator.
 
 ---
 
-## 18. Vision and deliberate scope boundaries
+## 18. Scope boundaries
 
-NightOwl's original planning document (`final_plan.md`, now folded into this history) laid out an 18-phase long-term vision. Phases actually built are documented throughout this file. A few were deliberately **not** built, and stay that way on purpose — building ahead of real evidence is exactly the mistake this project corrected twice during development (see the KPI/timestamp bugs in §16, both caused by earlier code that assumed "now" instead of checking the data):
+Not built, on purpose:
+- an evidence graph and multi-host campaign correlation, because no capture in the corpus shows cross-host activity;
+- a real-time pipeline (agents, Kafka, websockets): NightOwl analyses uploaded EVTX;
+- threat-intel feeds, geo maps and host telemetry (§9);
+- multiple users, RBAC, OAuth and password reset.
 
-- **Evidence graph** (relating incidents/hosts/accounts visually) — every incident in the real corpus is single-host with no demonstrated need for a relationship model. Both of its prerequisites (evidence-first alerts, the investigation timeline) already shipped; this is blocked on a real graph-shaped need showing up in a future failure-matrix run, not before.
-- **Multi-host campaign correlation** — zero fixtures in the corpus currently show cross-host activity. If ever built: never correlate on shared username/IP alone, require multiple meaningful signals.
-- **Real-time architecture (Kafka/Redis/WebSockets)** — explicitly not worth building for an EVTX upload system ahead of a real need for it.
-- **Threat-intel feeds, a geographic attack map, host CPU/memory/disk telemetry** — nothing in the system could honestly populate them (§9).
-- **User registration, multiple users, RBAC, OAuth/social login, email verification, password reset** — a single-admin deployment doesn't need them; see §10 and its decision-log entry.
+**Detection accuracy history** (measured each time):
 
-**Detection accuracy timeline** (each step measured against the real fixture corpus, never estimated): 3/32 (9.4%) → 18/32 Sysmon-coverage pass → 24/32 Security-channel pass → 26/39 after the corpus grew → 31/39 after 4 evidence-driven rules → 33/39 after the sequence engine → 47/54 after the corpus grew again plus 6 new rules (including PowerShell-channel support) → 50/61 after the corpus grew a final time plus 2 more rules. Rule count grew alongside it: 15 → 33 → 39 → 41 → 43 → **45**. Throughout, false positives held at **0** across a growing clean corpus (5 synthetic → 8, once real Security, PowerShell, and Sysmon-only clean captures were added). A second-pass deep audit (2026-09-08) reviewed every one of the 11 remaining misses' real field values and found zero further rules were justified — each is either genuinely inconclusive or has real evidence with too few samples to safely generalize, below this project's own ≥3-sample bar for threshold-based rules.
+| Stage | Detected |
+|---|---|
+| First rules | 3/32 |
+| Sysmon coverage pass | 18/32 |
+| Security-channel pass | 24/32 |
+| Corpus grew | 26/39 |
+| Sequence detectors added | 33/39 |
+| Corpus grew again | 50/61 |
+| 2026-10 audit | 52/60 |
+
+The 2026-10 audit changed how detection is scored. A capture now counts only when the alert carries the *correct technique*, and the clean corpus became the 40-capture benign set. Under that scoring the earlier 50/61 was 38/60 with 42 false-positive alerts. Rule fixes and 14 new rules brought it to 52/60 with 5 false positives.
 
 ---
 
 ## 19. Working conventions
 
-- **Commits** follow Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `style:`), one line, describing the behaviour change rather than the file touched.
-- **Layering** is enforced by review: routes compose services, services own database access, models stay dumb.
-- **Comments explain why, not what.** Every non-obvious decision carries the reasoning and the alternative that was rejected — §17 is the long form of the same habit.
-- **Tests mirror the package they cover.**
-- **Nothing that cannot be backed by real data ships to the UI.** If a panel cannot be populated honestly, it is replaced by one that can (§9).
-- **Free-tier only.** No paid API is used anywhere, which is why LLM quota management (caching, two-call awareness) is a design concern rather than an afterthought.
-- **Measure before building.** Every detection rule in this project was added because a real fixture proved a real gap — never speculatively. Re-run `run_detection_benchmark.py`/`build_failure_matrix.py` after any detection-affecting change; that number, not a document, is the source of truth.
+- **Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, ...), one line, describing the behaviour change.
+- **Layering:** routes → services → models.
+- **Comments:** they explain why, not what.
+- **Tests:** they mirror the package they cover. Every fixed bug gets a regression test.
+- **The UI:** nothing reaches it that real data can't back (§9).
+- **Free tier only.**
+- **Measure before building:** re-run the benchmark and the failure matrix after any detection change, and the ML evaluation after any ML change. Those outputs, not this document, are the source of truth.
 
 ---
 
 ## 20. Team
 
-A 4-person team, working as two rotating pairs across backend, AI/RAG, and frontend tracks, swapping tracks in the frontend phase so everyone touches at least two of the three layers. Built AI-assisted over a 30-day roadmap (compressed to 26).
+A 4-person team working as two rotating pairs across the backend, AI/RAG and frontend tracks, built with AI assistance over a 30-day roadmap.

@@ -1,32 +1,28 @@
 {
   "info": {
-    "name": "NightOwl -- Day 3-13 API",
-    "description": "Every NightOwl backend endpoint that exists through both pairs' Day 13 milestones -- Pair 1's Backend + Detection core complete plus production hardening (X-API-Key auth, GET /incidents pagination, rate limiting), and Pair 2's AI/RAG core complete plus LLM robustness/caching, audit log, and the incident chat endpoint. Set the api_key variable if your server has API_KEY configured, otherwise leave it blank. Import this alongside NightOwl.postman_environment.json and select the \"NightOwl Local\" environment. See docs/05_NightOwl_Manual_Testing_Guide.md Section 21 for the full step-by-step walkthrough, required setup per request, and expected responses, and Section 22.7 for the Day 13 auth/pagination/rate-limit walkthrough.",
+    "name": "NightOwl API",
+    "description": "Every NightOwl endpoint. Run Auth > Login first (set admin_username/admin_password in the environment); Postman keeps the session cookie. Alternatively set api_key when the server has API_KEY configured. A collection-level pre-request script adds the X-NightOwl-Request CSRF header that every POST/PATCH needs, and X-API-Key when api_key is set. See docs/DOCUMENTATION.md section 4.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "variable": [
+  "event": [
     {
-      "key": "base_url",
-      "value": "http://127.0.0.1:8000",
-      "type": "string"
-    },
-    {
-      "key": "incident_id",
-      "value": "1",
-      "type": "string"
-    },
-    {
-      "key": "api_key",
-      "value": "",
-      "type": "string"
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'X-NightOwl-Request', value: '1' });",
+          "const apiKey = pm.variables.get('api_key');",
+          "if (apiKey) { pm.request.headers.upsert({ key: 'X-API-Key', value: apiKey }); }"
+        ]
+      }
     }
   ],
   "item": [
     {
-      "name": "Health",
+      "name": "Health & status",
       "item": [
         {
-          "name": "Health Check",
+          "name": "Health (public)",
           "request": {
             "method": "GET",
             "header": [],
@@ -39,7 +35,97 @@
                 "health"
               ]
             },
-            "description": "No DB needed. Expected: HTTP 200, {\"status\":\"ok\"}."
+            "description": "Liveness only; no auth."
+          },
+          "response": []
+        },
+        {
+          "name": "System status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/system/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "system",
+                "status"
+              ]
+            },
+            "description": "Readiness of LLM key, knowledge base, rules, ML bundle, ATT&CK dataset."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Sets the session cookie. Postman keeps it for the following requests.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{admin_username}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revokes the server-side session; the old cookie stops working."
           },
           "response": []
         }
@@ -49,26 +135,10 @@
       "name": "Ingest",
       "item": [
         {
-          "name": "Ingest - Happy Path (sysmon_demo.evtx)",
+          "name": "Upload EVTX",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "file",
-                  "type": "file",
-                  "src": [],
-                  "description": "Select data/sample_logs/sysmon_demo.evtx from the repo."
-                }
-              ]
-            },
+            "header": [],
             "url": {
               "raw": "{{base_url}}/ingest",
               "host": [
@@ -78,20 +148,7 @@
                 "ingest"
               ]
             },
-            "description": "Needs live Postgres (docker compose up -d db + alembic upgrade head). Expected: HTTP 200 with records_read/events_ingested/rule_matches/alerts_created/incident_ids fields. Without Postgres running, the Day 12 error handler now returns a clean HTTP 500 {\"detail\":\"internal server error\"} instead of a raw traceback -- see guide Section 19.6."
-          },
-          "response": []
-        },
-        {
-          "name": "Ingest - Wrong File Type (expect 400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
+            "description": "Returns counts, telemetry profile, incident ids, ml_anomalies.",
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -99,117 +156,10 @@
                   "key": "file",
                   "type": "file",
                   "src": [],
-                  "description": "Select any non-.evtx file, e.g. README.md."
+                  "description": "Pick an .evtx, e.g. backend/sample_logs/real_world_fixtures/detected/*.evtx"
                 }
               ]
-            },
-            "url": {
-              "raw": "{{base_url}}/ingest",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "ingest"
-              ]
-            },
-            "description": "No DB needed -- this is pure validation before any DB call. Expected: HTTP 400, detail starts with \"unsupported file type: expected '.evtx'\"."
-          },
-          "response": []
-        },
-        {
-          "name": "Ingest - Empty File (expect 400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "file",
-                  "type": "file",
-                  "src": [],
-                  "description": "Select a 0-byte file named anything.evtx (create one with: New-Item empty.evtx -ItemType File)."
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{base_url}}/ingest",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "ingest"
-              ]
-            },
-            "description": "No DB needed. Expected: HTTP 400, detail: \"uploaded file is empty\"."
-          },
-          "response": []
-        },
-        {
-          "name": "Ingest - Malformed EVTX (expect 400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "file",
-                  "type": "file",
-                  "src": [],
-                  "description": "Select a file with a .evtx extension but garbage content (e.g. rename a .txt with a few random bytes to garbage.evtx)."
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{base_url}}/ingest",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "ingest"
-              ]
-            },
-            "description": "No DB needed -- fails during EVTX parsing before any DB call. Expected: HTTP 400, detail starts with \"failed to parse EVTX file:\"."
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "MITRE",
-      "item": [
-        {
-          "name": "List MITRE Techniques",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/mitre/techniques",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "mitre",
-                "techniques"
-              ]
-            },
-            "description": "No DB needed (reads the cached local MITRE dataset). Expected: HTTP 200, {\"techniques\":[...],\"count\":858}."
+            }
           },
           "response": []
         }
@@ -219,40 +169,12 @@
       "name": "Incidents",
       "item": [
         {
-          "name": "List Incidents - All",
+          "name": "List",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
+            "header": [],
             "url": {
-              "raw": "{{base_url}}/incidents",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "incidents"
-              ]
-            },
-            "description": "Needs live Postgres. Expected: HTTP 200, {\"incidents\":[...],\"count\":N}, newest first."
-          },
-          "response": []
-        },
-        {
-          "name": "List Incidents - Paginated (limit=1, offset=0)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/incidents?limit=1&offset=0",
+              "raw": "{{base_url}}/incidents?limit=50&offset=0",
               "host": [
                 "{{base_url}}"
               ],
@@ -260,52 +182,27 @@
                 "incidents"
               ],
               "query": [
-                { "key": "limit", "value": "1" },
-                { "key": "offset", "value": "0" }
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
               ]
             },
-            "description": "Day 13 pagination. Needs live Postgres with more than one incident. Expected: HTTP 200, {\"incidents\":[...1 item...],\"count\":1,\"total\":N,\"limit\":1,\"offset\":0} -- total is the grand match count across all pages, count is just this page's size. Bump offset to 1, 2, ... to page through the rest; total stays the same each time."
+            "description": ""
           },
           "response": []
         },
         {
-          "name": "List Incidents - Limit Above Cap (expect 422)",
+          "name": "List - filtered",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
+            "header": [],
             "url": {
-              "raw": "{{base_url}}/incidents?limit=500",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "incidents"
-              ],
-              "query": [
-                { "key": "limit", "value": "500" }
-              ]
-            },
-            "description": "Day 13 pagination validation. No DB call reached -- FastAPI/pydantic rejects limit>200 before the route body runs. Expected: HTTP 422 with a validation error detail. Try offset=-1 instead of limit=500 for the negative-offset case -- same 422 behavior."
-          },
-          "response": []
-        },
-        {
-          "name": "List Incidents - Filter by Severity",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/incidents?severity=high",
+              "raw": "{{base_url}}/incidents?severity=high&status=open",
               "host": [
                 "{{base_url}}"
               ],
@@ -316,85 +213,22 @@
                 {
                   "key": "severity",
                   "value": "high"
-                }
-              ]
-            },
-            "description": "Needs live Postgres. Edit the severity value to match a real incident (informational/low/medium/high/critical). Expected: HTTP 200, count reflects only matching-severity incidents."
-          },
-          "response": []
-        },
-        {
-          "name": "List Incidents - Filter by Status",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/incidents?status=open",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "incidents"
-              ],
-              "query": [
+                },
                 {
                   "key": "status",
                   "value": "open"
                 }
               ]
             },
-            "description": "Needs live Postgres. Expected: HTTP 200, count reflects only matching-status incidents."
+            "description": ""
           },
           "response": []
         },
         {
-          "name": "List Incidents - Filter by Date Range",
+          "name": "Detail",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/incidents?start_date=2026-01-01T00:00:00Z&end_date=2026-12-31T23:59:59Z",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "incidents"
-              ],
-              "query": [
-                {
-                  "key": "start_date",
-                  "value": "2026-01-01T00:00:00Z"
-                },
-                {
-                  "key": "end_date",
-                  "value": "2026-12-31T23:59:59Z"
-                }
-              ]
-            },
-            "description": "Needs live Postgres. ISO-8601 datetimes, filters on Incident.created_at. Expected: HTTP 200."
-          },
-          "response": []
-        },
-        {
-          "name": "Get Incident Detail",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
+            "header": [],
             "url": {
               "raw": "{{base_url}}/incidents/{{incident_id}}",
               "host": [
@@ -405,49 +239,64 @@
                 "{{incident_id}}"
               ]
             },
-            "description": "Needs live Postgres, and incident_id must be a real id (from an earlier Ingest or List Incidents response -- update the incident_id collection/environment variable). Expected: HTTP 200 with id/title/status/severity/host/created_at/mitre_technique_ids/techniques[]/alerts[] (each alert nests its event)."
+            "description": ""
           },
           "response": []
         },
         {
-          "name": "Get Incident Detail - 404",
+          "name": "Update status",
           "request": {
-            "method": "GET",
+            "method": "PATCH",
             "header": [
               {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
+                "key": "Content-Type",
+                "value": "application/json"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/incidents/999999",
+              "raw": "{{base_url}}/incidents/{{incident_id}}/status",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "incidents",
-                "999999"
+                "{{incident_id}}",
+                "status"
               ]
             },
-            "description": "Needs live Postgres (a reachable DB is required to determine the id doesn't exist). Expected: HTTP 404, {\"detail\":\"incident 999999 not found\"}."
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"investigating\"\n}"
+            }
           },
           "response": []
-        }
-      ]
-    },
-    {
-      "name": "Explain",
-      "item": [
+        },
         {
-          "name": "Explain Incident",
+          "name": "Audit trail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/incidents/{{incident_id}}/audit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "{{incident_id}}",
+                "audit"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Explain (2 LLM calls)",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              }
-            ],
+            "header": [],
             "url": {
               "raw": "{{base_url}}/incidents/{{incident_id}}/explain",
               "host": [
@@ -459,38 +308,20 @@
                 "explain"
               ]
             },
-            "description": "Needs live Postgres, a real incident_id, and a real GROQ_API_KEY in backend .env (2 live Groq calls per request -- mind the free-tier daily quota, see guide Section 17.3/Troubleshooting). Expected: HTTP 200 with explanation/recommended_response/sources[]."
+            "description": ""
           },
           "response": []
-        }
-      ]
-    },
-    {
-      "name": "Chat",
-      "item": [
+        },
         {
-          "name": "Chat With Incident",
+          "name": "Chat - send",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"message\": \"Why was this flagged?\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
             "url": {
               "raw": "{{base_url}}/incidents/{{incident_id}}/chat",
               "host": [
@@ -502,73 +333,282 @@
                 "chat"
               ]
             },
-            "description": "Needs live Postgres, a real incident_id, and a real GROQ_API_KEY in backend .env (1 live LLM call per request -- mind the free-tier daily quota, see guide Section 21). Each call persists both the user message and the assistant reply as chat_messages rows, so retrieval scoped to this incident's context sees prior turns on the next call. Expected: HTTP 200 with incident_id/role (\"assistant\")/content/sources[]."
-          },
-          "response": []
-        },
-        {
-          "name": "Chat With Incident - 404",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-API-Key",
-                "value": "{{api_key}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"message\": \"hello\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/incidents/999999/chat",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "incidents",
-                "999999",
-                "chat"
-              ]
-            },
-            "description": "Needs live Postgres (a reachable DB is required to determine the id doesn't exist). Expected: HTTP 404, {\"detail\":\"incident 999999 not found\"}."
+              "raw": "{\n  \"message\": \"What should I check first?\"\n}"
+            }
           },
           "response": []
         },
         {
-          "name": "Get Chat History",
+          "name": "Chat - history",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{base_url}}/incidents/{{incident_id}}/chat",
-              "host": ["{{base_url}}"],
-              "path": ["incidents", "{{incident_id}}", "chat"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "{{incident_id}}",
+                "chat"
+              ]
             },
-            "description": "Day 12. Needs live Postgres and a real incident_id. No LLM call -- pure read of persisted chat_messages rows. Expected: HTTP 200 with incident_id/messages[] (each {id, role, content, created_at}, oldest first)/count. A brand-new incident with no chat turns yet returns HTTP 200 with messages: [] and count: 0, not a 404."
+            "description": ""
           },
           "response": []
-        },
+        }
+      ]
+    },
+    {
+      "name": "Alerts & events",
+      "item": [
         {
-          "name": "Get Chat History - 404",
+          "name": "Alerts - detections",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/incidents/999999/chat",
-              "host": ["{{base_url}}"],
-              "path": ["incidents", "999999", "chat"]
+              "raw": "{{base_url}}/alerts?kind=detection&limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "detection"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
             },
-            "description": "Day 12. Needs live Postgres (a reachable DB is required to determine the id doesn't exist). Expected: HTTP 404, {\"detail\":\"incident 999999 not found\"}."
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Alerts - ML anomalies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/alerts?kind=ml&limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "ml"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/events?alert_only=true&limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "alert_only",
+                  "value": "true"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Event detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/events/{{event_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events",
+                "{{event_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "AI opinion",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ai-opinions/{{opinion_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-opinions",
+                "{{opinion_id}}"
+              ]
+            },
+            "description": "Id comes from the ingest response (ai_opinion_id)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reference",
+      "item": [
+        {
+          "name": "Rules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rules"
+              ]
+            },
+            "description": "Sigma rules, sequence detectors and the ML entry (kind)."
+          },
+          "response": []
+        },
+        {
+          "name": "Rule detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rules/{{rule_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rules",
+                "{{rule_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "ATT&CK techniques",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/mitre/techniques",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mitre",
+                "techniques"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Demo (DEMO_MODE_ENABLED)",
+      "item": [
+        {
+          "name": "Fixtures",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/demo/fixtures",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "demo",
+                "fixtures"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Fixture download",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/demo/fixtures/{{fixture}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "demo",
+                "fixtures",
+                "{{fixture}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Reset (destructive)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/demo/reset",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "demo",
+                "reset"
+              ]
+            },
+            "description": "Deletes every event, alert, incident, chat, audit and AI-opinion row."
           },
           "response": []
         }

@@ -1,87 +1,101 @@
-# NightOwl — AI-Powered Security Operations Center
+# NightOwl — Explainable Windows Threat Detection for the SOC
 
-NightOwl turns raw Windows Sysmon/EVTX telemetry into a small number of prioritized, explained incidents. It applies Sigma-style detection rules mapped to MITRE ATT&CK techniques, enriches each match with a Retrieval-Augmented Generation (RAG) LLM layer, and surfaces everything in a React SOC console — so a junior analyst can go from "Event ID 1, `powershell -enc ...`" to "this is obfuscated PowerShell execution (T1059.001) — isolate the host, capture memory, check the parent process chain" without needing years of SOC experience.
+NightOwl turns Windows event-log exports (EVTX: Sysmon, Security, PowerShell, System, Application) into a small number of prioritized, explained incidents. Sigma-style rules and multi-event sequence detectors find the activity and map it to MITRE ATT&CK; a retrieval-grounded LLM explains each incident in plain English with its sources; a React SOC console shows all of it — so a junior analyst can go from "Event ID 1, `powershell -e JAB...`" to "this is encoded PowerShell execution (T1059.001) — here is why it was flagged and what to check next".
 
-This is a final-year major project built by a team of 4, AI-assisted, over a 30-day roadmap.
+A final-year major project built by a team of 4, AI-assisted.
 
 ## Features
-- Batch ingestion of Sysmon EVTX log files
-- Rule-based detection engine (45 Sigma-style YAML rules + a 3-pattern behavioral sequence engine, `pySigma`-validated) across Sysmon, Security, and PowerShell/Operational channels
-- Automatic MITRE ATT&CK technique mapping + severity scoring
-- Incident grouping, status workflow, and a backend audit trail
-- RAG pipeline (ChromaDB + LangChain + LLM) generating grounded, plain-English incident explanations and recommended responses
-- **Unsupervised ML anomaly layer** — a Ledoit-Wolf Mahalanobis model scores each 10-minute host window against a benign baseline and raises supplementary "this host is behaving unusually" alerts. Deliberately scoped as *evidence*, not detection: measured held-out recall is ~13% at ~52% precision, and the detection rate below comes from the Sigma rules, not this layer. See [`ML.md`](ML.md)
-- **Self-critique reasoning chain** — the LLM checks its own draft explanation against the retrieved sources before returning it, instead of a single-shot prompt
-- **Source-attribution UI** — every explanation shows the exact knowledge-base chunks + similarity scores it was grounded in
-- **Real admin authentication** — single-admin login, backend-enforced signed session cookie, no accounts/roles beyond the one operator
-- SOC console: overview dashboard, incident queue and investigation view, AI assistant, MITRE ATT&CK coverage, alerts, log explorer, rules engine, reports and settings
-- Demo Mode: one-click, real ingest → explain → chat walkthrough against a rotating real-world attack sample
-- Runs entirely on **free-tier tools** (Groq free tier for the LLM; everything else is open-source/self-hosted) — **$0 to build and run**
+- EVTX upload (up to 100 MB) with per-file telemetry profiling: which channels and event types were in the file, and which of them any rule can evaluate
+- **Detection:** 59 Sigma-style YAML rules + 8 multi-event sequence detectors (brute force, Kerberos password spray, group-membership abuse, SAM/LSA enumeration, mass process access, Process Herpaderping, SMB share enumeration). Rules are validated at load time — an unscoped rule, an unsupported modifier, an unparseable condition or an ATT&CK tag that does not belong to the rule's technique is rejected, not silently loaded
+- ATT&CK v19.2 technique mapping (dataset bundled — no network needed) and tactic-weighted severity
+- Incident grouping per host with a sliding one-hour window, status workflow, alert de-duplication, audit trail
+- RAG explanations and incident chat (ChromaDB + sentence-transformers + Groq), with a self-critique pass, source attribution, prompt-injection containment for log content and flagging of any ATT&CK id the model invents
+- An advisory "second opinion" on telemetry no rule covers
+- **Experimental ML anomaly layer** — per-log-family models flag unusual 10-minute windows and record which features drove the score. It is supporting evidence only (advisory mode): it never opens or changes an incident and is never counted as a detection. See [`ML.md`](ML.md) for why
+- SOC console: overview, incidents, investigation view and timeline, AI assistant, MITRE ATT&CK matrix, alerts (detections and ML anomalies kept apart), logs, rules, reports, settings with live system status, Demo Mode
+- Single-admin authentication: bcrypt password, signed session cookie backed by a revocable server-side session, CSRF header check, failed-login throttling
+- Free-tier only: Groq for the LLM, everything else open source and self-hosted
+
+## Measured results
+
+All numbers are produced by scripts in `backend/scripts/` and checked into the repo next to them — re-run a script to refresh them.
+
+| What | Result | Source |
+|---|---|---|
+| Attack captures detected **with the correct ATT&CK technique** | **52 / 60** (86.7%) | `run_detection_benchmark.py` → `benchmark_results.md` |
+| Attack captures raising any alert | 54 / 60 | same |
+| False-positive alerts on 40 benign captures (316,874 events) | **5** — all real event-log clears on the benign machine | same |
+| ML anomaly layer, held-out benign windows flagged | 1–4.5 per host-day (deployment protocol) | `eval_ml_model.py` → `ml_eval_results.json` |
+| Backend tests | 740 offline + 5 integration | `pytest` / `pytest -m integration` |
+
+Caveat on the detection numbers: every attack capture in the corpus informed rule development at some point, so these are development-set figures, not a held-out estimate. The 8 misses and why are listed in `backend/scripts/failure_matrix.md`.
 
 ## Repository structure
 
-Three layers, one directory each.
-
 ```
-├── backend/        FastAPI service: API routes, detection engine, ingestion,
-│                   MITRE mapping, incident/severity services, the ML
-│                   anomaly layer (app/ml/), DB models, Alembic migrations,
-│                   tests, and EVTX sample_logs
-├── frontend/       React + Vite + Tailwind SOC console
-├── ai/             AI layer: RAG knowledge base, ATT&CK dataset, vector
-│                   store, and the build/evaluation tooling
-├── docs/           DOCUMENTATION.md, Postman collection, audits/
+├── backend/        FastAPI service: API, detection engine + rules, ingestion,
+│                   ATT&CK mapping, incident/severity services, RAG runtime,
+│                   ML anomaly layer (app/ml/), models, Alembic migrations,
+│                   tests, sample logs and the measurement scripts
+├── frontend/       React + Vite + Tailwind SOC console (served by nginx in Docker)
+├── ai/             RAG knowledge base (playbooks), vector store, KB build tooling
+├── docs/           DOCUMENTATION.md, Postman collection
+├── ML.md           The ML anomaly layer: design, evaluation, limits
 └── docker-compose.yml
 ```
 
-The RAG *runtime code* lives in `backend/app/rag/` because the API service imports it directly; `ai/` holds the corpus, the vector store and the tooling that builds them. [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md) explains that split.
-
-## Quick start
+## Quick start (Docker — recommended)
 
 ```bash
-cp .env.example .env      # add a free-tier Groq API key, admin username/password hash, session secret
-docker compose up -d db   # PostgreSQL on host port 5433
+cp .env.example .env
+# Fill in: ADMIN_PASSWORD_HASH (bcrypt), SESSION_SECRET_KEY (32+ chars),
+#          POSTGRES_PASSWORD, GROQ_API_KEY (free key from console.groq.com)
+python -c "import bcrypt; print(bcrypt.hashpw(b'choose-a-password', bcrypt.gensalt()).decode())"
+python -c "import secrets; print(secrets.token_hex(32))"
 
-cd backend
-python -m venv venv && ./venv/Scripts/python.exe -m pip install -r requirements.txt
-./venv/Scripts/python.exe -m alembic upgrade head
-./venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
-
-cd ../frontend
-npm install && npm run dev
+docker compose up --build
 ```
 
-Then open http://localhost:5173. The API serves docs at http://127.0.0.1:8000/docs.
+Open http://localhost:5173 and sign in. On first start the backend applies database migrations and builds the knowledge base (this needs network access once, to download the embedding model). The backend refuses to start outside `APP_ENV=local` with a missing or short session secret or password hash.
 
-To (re)build the knowledge base the AI layer retrieves from, run `python ai/tools/build_kb.py` from the repository root.
+## Local development
 
-`docker compose up` brings up PostgreSQL, the backend, and a production frontend build served via nginx (`http://localhost:5173`); for day-to-day frontend development, run the Vite dev server instead (`cd frontend && npm run dev`).
+```bash
+cp .env.example .env                     # APP_ENV=local
+docker compose up -d db                  # PostgreSQL on 127.0.0.1:5433
+
+cd backend
+python -m venv venv && ./venv/Scripts/python -m pip install -r requirements-dev.txt
+./venv/Scripts/python -m alembic upgrade head
+./venv/Scripts/python ../ai/tools/build_kb.py          # once
+./venv/Scripts/python -m uvicorn app.main:app --port 8000
+
+cd ../frontend && npm ci && npm run dev                # http://localhost:5173
+```
+
+Tests: `cd backend && ./venv/Scripts/python -m pytest` (offline) and `-m integration` (needs the knowledge base and model downloads). Frontend: `npx tsc -b && npm run lint && npm run build`.
 
 ## Tech stack
 | Layer | Technology |
 |---|---|
-| Backend | FastAPI, SQLAlchemy, Alembic |
-| Database | PostgreSQL |
-| Detection | Sigma-style YAML rules (`pySigma`) + 3-pattern sequence engine |
-| Anomaly detection | scikit-learn (Ledoit-Wolf covariance + Mahalanobis distance) |
-| ATT&CK mapping | MITRE ATT&CK (official STIX/JSON dataset) |
-| AI / RAG | LangChain, ChromaDB, Sentence Transformers, Groq |
+| Backend | FastAPI, SQLAlchemy 2, Alembic, PostgreSQL 16 |
+| Detection | Sigma-style YAML rules (validated with pySigma, evaluated by NightOwl's engine) + Python sequence detectors |
+| ATT&CK | MITRE ATT&CK Enterprise v19.2 (bundled index) |
+| AI / RAG | LangChain, ChromaDB, sentence-transformers, Groq |
+| Anomaly detection | scikit-learn (Ledoit-Wolf covariance, Mahalanobis distance) |
 | Frontend | React 19, Vite, Tailwind CSS v4, Recharts |
-| Deployment | Docker Compose |
+| Deployment | Docker Compose (Postgres, backend, nginx frontend) |
 
-## Status
-
-**Complete.** Backend, detection, AI/RAG, real admin authentication, and the frontend console are built and working end to end: a real admin login gates every protected route, EVTX upload creates real incidents, the explain and chat endpoints answer from the knowledge base with source attribution, and the console renders all of it from live API data. The backend test suite is 631 tests. Detection accuracy is tracked against a real-world EVTX corpus (`backend/scripts/run_detection_benchmark.py`), not just synthetic fixtures — currently 50/61 (82.0%) with 0 false positives; this number moves if the corpus or rule set changes, so treat it as a snapshot and re-run the script for the current figure. See `docs/DOCUMENTATION.md` and `backend/scripts/failure_matrix.md` (the generated, always-current source of truth) for the full breakdown. That figure measures the Sigma rules and the sequence engine only; the ML anomaly layer is evaluated separately and far more modestly — see [`ML.md`](ML.md).
-
-Deliberately **not** implemented, because nothing in the system could honestly back them, or because they don't fit a single-admin deployment: threat-intel feeds, a geographic attack map, host CPU/memory/disk telemetry, and multi-user accounts/RBAC. Where a design reference called for one of those, the UI shows a real equivalent instead.
+## Known limits
+- Batch EVTX upload only — there is no live agent or streaming collector.
+- The ML layer is trained on two benign machines; it stays advisory until a broader baseline is collected (`backend/scripts/collect_benign_logs.ps1`, then `train_ml_model.py --extra-dir ...`).
+- Rules are tuned on a 60-capture public corpus; expect tuning (allow-lists) on a new environment.
+- Single admin account; no RBAC or multi-tenancy.
 
 ## Documentation
-
-- [`ML.md`](ML.md) — the ML anomaly layer: architecture, the two held-out evaluation protocols and their measured results, why 42 of 70 features are not fitted, and the withdrawn earlier metrics.
-- [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md) — the single reference document: pipeline, data model, API surface, detection engine, AI layer with its evaluation results, authentication, Demo Mode, frontend design system, the honesty policy, setup/running/testing/troubleshooting, and the full decision log + engineering history.
-
-## Team
-A 4-person team, working as two rotating pairs across backend, AI/RAG, and frontend tracks, swapping in the frontend phase so everyone touches at least two of the three layers.
+- [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md) — architecture, data model, API, detection engine, AI layer, security model, deployment, testing.
+- [`ML.md`](ML.md) — the ML anomaly layer.
+- `backend/scripts/benchmark_results.md`, `failure_matrix.md`, `ml_eval_results.json` — generated measurements.
 
 ## License
 See [`LICENSE`](LICENSE).

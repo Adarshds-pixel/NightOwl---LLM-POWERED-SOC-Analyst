@@ -12,7 +12,7 @@ rather than importing the SDK directly elsewhere, so:
     any failure. No automatic fallback to another provider on failure --
     a provider outage is a clean, visible error, not a silent swap.
 
-Groq-only as of 2026-09-06 (see docs/ARCHITECTURE.md's decision log): this
+Groq-only as of 2026-09-06 (see docs/DOCUMENTATION.md's decision log): this
 project previously supported Gemini as an alternate provider behind
 `settings.llm_provider`, removed once Gemini's free tier proved
 structurally unreliable for this project's call volume (a hard 20-req/day
