@@ -56,7 +56,22 @@ from app.ingestion.normalizer import (  # noqa: E402
     normalize_event,
 )
 from app.models.incident import Incident  # noqa: E402
+from app.services import ingest_service  # noqa: E402
 from app.services.ingest_service import ingest_records  # noqa: E402
+
+# This matrix measures the rules + sequence detectors only. The ML anomaly
+# layer is evaluated separately (scripts/eval_ml_model.py, ML.md); letting it
+# run here would count anomaly alerts as rule detections.
+ingest_service.get_detector = lambda: None
+
+_GROUND_TRUTH = json.loads(
+    (Path(__file__).resolve().parent / "fixture_ground_truth.json").read_text(encoding="utf-8")
+)["fixtures"]
+
+
+def _correct_technique(name: str, techniques) -> bool:
+    expected = {t.split(".")[0] for t in _GROUND_TRUTH.get(name, {}).get("expected", [])}
+    return any(t and t.split(".")[0] in expected for t in techniques)
 
 SAMPLE_LOGS = Path(__file__).resolve().parents[1] / "sample_logs"
 # real_world_fixtures/ splits into detected/, undetected/ and benign/
@@ -90,180 +105,46 @@ FAILURE_CATEGORIES: dict[int, str] = {
 # verification, not an assumption -- main() cross-checks it against this
 # run's own miss set and flags any mismatch instead of silently trusting it.
 KNOWN_MISS_CLASSIFICATION: dict[str, dict[str, object]] = {
-    "CA_PetiPotam_etw_rpc_efsr_5_6.evtx": {
+    'CA_PetiPotam_etw_rpc_efsr_5_6.evtx': {
         "categories": [2],
         "reason": (
-            "ETW/RPC channel (System.Channel is empty/None on these records, not "
-            "Sysmon or Security) -- PetiPotam/EFSRPC coercion telemetry isn't in "
-            "either currently-covered channel."
+            "ETW/RPC channel (System.Channel is empty/None on these records, not Sysmon or Security) -- PetiPotam/EFSRPC coercion telemetry isn't in either currently-covered channel."
         ),
     },
-    "bits_openvpn.evtx": {
+    'bits_openvpn.evtx': {
         "categories": [2],
-        "reason": "Bits-Client/Operational channel, not Sysmon or Security.",
+        "reason": (
+            'Mislabeled capture: 1,537 routine Bits-Client events (Windows/Google Update, OneDrive polling) and no malicious or OpenVPN activity. Nothing to detect; run_detection_benchmark.py scores it as a benign file.'
+        ),
     },
-    "MSSQL_multiple_failed_logon_EventID_18456.evtx": {
-        "categories": [2],
-        "reason": "Application channel (MSSQLSERVER provider), not Sysmon or Security.",
-    },
-    "rogue_msi_url_1040_1042.evtx": {
-        "categories": [2],
-        "reason": "Application channel (MsiInstaller provider), not Sysmon or Security.",
-    },
-    # LM_5145_Remote_FileCopy.evtx (5145 admin-share payload write) and
-    # DE_RDP_Tunneling_4624.evtx (4624 loopback-tunneled RDP logon) were
-    # classified here and closed 2026-09 by admin_share_payload_write.yml
-    # and rdp_logon_via_loopback_tunnel.yml respectively, after pulling
-    # each file's full real field distribution rather than trusting the
-    # filename or a single sampled record (see pending.md item 3) --
-    # removed from this table since they're hits now, not misses.
-    # DE_ProcessHerpaderping_Sysmon_11_10_1_7.evtx (FileCreate+ProcessAccess+
-    # ImageLoad chain) and discovery_enum_shares_target_sysmon_3_18.evtx
-    # (NetworkConnection+PipeConnect to \srvsvc) were classified here and
-    # closed 2026-09 by the sequence engine
-    # (detection/sequences.py, see pending.md item 5) -- removed from this
-    # table since they're hits now, not misses.
-    # 4799_remote_local_groups_enumeration.evtx, discovery_local_user_or_
-    # group_windows_security_4799_4798.evtx (4798/4799 coverage gap) and
-    # discovery_UEFI_Settings_rweverything_sysmon_6.evtx (Sysmon 6 coverage
-    # gap) were classified here and closed 2026-09 by
-    # sensitive_group_account_enumeration.yml and
-    # known_abusable_driver_loaded.yml respectively (see pending.md item 3)
-    # -- removed from this table since they're hits now, not misses.
-    "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx": {
+    'Discovery_Remote_System_NamedPipes_Sysmon_18.evtx': {
         "categories": [6],
         "reason": (
-            "Event ID 18 (pipe connect) IS covered (pipe_event category), but "
-            "the only loaded pipe_event rule targets spoolss specifically. "
-            "Confirmed real content: PipeName=\\lsass, Image=System -- a "
-            "remote SMB named-pipe connection to \\lsass, not \\spoolss. No "
-            "rule exists for this pattern; writing one needs care since "
-            "System connecting to \\lsass/\\srvsvc over SMB is also fairly "
-            "common legitimate traffic -- likely needs a remote-vs-local or "
-            "frequency signal to stay low-noise, not a blanket PipeName match."
+            'Event ID 18 (pipe connect) IS covered (pipe_event category), but the only loaded pipe_event rule targets spoolss specifically. Confirmed real content: PipeName=\\lsass, Image=System -- a remote SMB named-pipe connection to \\lsass, not \\spoolss. No rule exists for this pattern; writing one needs care since System connecting to \\lsass/\\srvsvc over SMB is also fairly common legitimate traffic -- likely needs a remote-vs-local or frequency signal to stay low-noise, not a blanket PipeName match.'
         ),
     },
-    "discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx": {
+    'discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx': {
         "categories": [6],
         "reason": (
-            "Same gap as Discovery_Remote_System_NamedPipes_Sysmon_18.evtx. "
-            "Confirmed real content: PipeName=\\srvsvc, Image=System -- "
-            "PowerView's Invoke-UserHunter NetSessionEnum technique connects "
-            "to \\srvsvc, not \\spoolss."
+            "Same gap as Discovery_Remote_System_NamedPipes_Sysmon_18.evtx. Confirmed real content: PipeName=\\srvsvc, Image=System -- PowerView's Invoke-UserHunter NetSessionEnum technique connects to \\srvsvc, not \\spoolss."
         ),
     },
-    # DE_Fake_ComputerAccount_4720.evtx, Network_Service_Guest_added_to_
-    # admins_4732.evtx, temp_scheduled_task_4698_4699.evtx, and the 3 real
-    # PowerShell 4104 samples (exec_emotet_ps_4104.evtx,
-    # Powershell_4104_MiniDumpWriteDump_Lsass.evtx,
-    # phish_windows_credentials_powershell_scriptblockLog_4104.evtx) were
-    # classified here and closed 2026-09-05 by computer_account_created.yml,
-    # low_privilege_account_added_to_admins.yml,
-    # hidden_scheduled_task_created.yml, and the 3 new PowerShell/
-    # Operational-channel rules respectively (see pending.md) -- removed
-    # from this table since they're hits now, not misses.
-    "CA_4624_4625_LogonType2_LogonProc_chrome.evtx": {
+    'CA_4624_4625_LogonType2_LogonProc_chrome.evtx': {
         "categories": [10],
         "reason": (
-            "Real content read directly: 3 successful LogonType 2 (interactive) "
-            "logons via chrome.exe as the logon process, plus exactly 1 failed "
-            "logon (4625) -- 4 events total. 4624/4625 are fully covered event "
-            "IDs (no channel/parser gap), but this file's own signal is too "
-            "thin to justify a rule: 1 failure is not a brute-force pattern "
-            "(the project's own Kerberos-spray rule requires 4 distinct targets "
-            "in a window, well below the real spray sample's 10, specifically "
-            "to avoid firing on normal single mistypes), and nothing about the "
-            "3 successful logons is anomalous on its own. Writing a rule here "
-            "would mean inventing a threshold with no real population of "
-            "logon-failure samples to calibrate or benign-test it against -- "
-            "exactly the overfitting this project's own discipline avoids. Not "
-            "pursued this pass; revisit if a real, higher-volume failed-logon "
-            "sample is ever added."
+            "Real content read directly: 3 successful LogonType 2 (interactive) logons via chrome.exe as the logon process, plus exactly 1 failed logon (4625) -- 4 events total. 4624/4625 are fully covered event IDs (no channel/parser gap), but this file's own signal is too thin to justify a rule: 1 failure is not a brute-force pattern (the project's own Kerberos-spray rule requires 4 distinct targets in a window, well below the real spray sample's 10, specifically to avoid firing on normal single mistypes), and nothing about the 3 successful logons is anomalous on its own. Writing a rule here would mean inventing a threshold with no real population of logon-failure samples to calibrate or benign-test it against -- exactly the overfitting this project's own discipline avoids. Not pursued this pass; revisit if a real, higher-volume failed-logon sample is ever added."
         ),
     },
-    # -- 2026-09-06 pass: 7 new real-world fixtures added for 4697/4728/4756/
-    # 7045 (previously zero real samples anywhere in the corpus). Two new
-    # rules landed (kernel_driver_service_installed.yml,
-    # sensitive_domain_group_membership_change.yml) -- both deliberately
-    # narrow, evidence-bounded rules, not blanket-event-ID rules, so most
-    # of these new fixtures remain correctly, honestly uncovered. The 5th
-    # new fixture (ID4728-4756-Member added to sensitive domain groups.evtx)
-    # is NOT in this dict -- it correctly flips to a real HIT via the new
-    # sensitive-group rule.
-    "ID4697-MSF payload deployed via service.evtx": {
-        "categories": [7],
+    'Sysmon_UACME_32.evtx': {
+        "categories": [6],
         "reason": (
-            "Real content read directly: ServiceType 0x00000010 (ordinary "
-            "user-mode/own-process service), not the kernel-driver value "
-            "(0x00000001) kernel_driver_service_installed.yml is scoped to. "
-            "4697 IS covered as an event id/category (the new rule maps it), "
-            "so this is rule_too_narrow, not a coverage gap -- the rule was "
-            "deliberately scoped to the one real invariant this project's 4 "
-            "real 4697 samples actually share (only 1 of 4 is a kernel "
-            "driver); ServiceName/ServiceFileName are fully attacker-chosen "
-            "in all 4 samples and not safe to key a rule on, and no real "
-            "benign-4697 sample exists anywhere in the corpus to bound a "
-            "broader rule's false-positive rate against. Not pursued further "
-            "this pass -- see the rule file's own description."
+            "UACME method 32 (UIPI bypass via an osk.exe DLL hijack). The only observable steps are explorer.exe writing OskSupport.dll to Temp, consent.exe prompts and cmd.exe launching a copy of osk.exe from 'C:\\Program Files\\Windows Media Player\\'. No generalisable single-event or sequence signature without overfitting to this sample; previously 'detected' only by the over-broad Temp-write rule, with the wrong technique."
         ),
     },
-    "ID4728-Massive account group membership change.evtx": {
-        "categories": [7],
+    'discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx': {
+        "categories": [11],
         "reason": (
-            "Real content read directly: 11x4728, same actor adding the same "
-            "member to 11 GENERIC groups (Group01..Group11, non-privileged "
-            "sequential RIDs) -- 4728 IS covered (the new rule maps it), so "
-            "this is rule_too_narrow/requires_sequence, not a coverage gap. "
-            "This file's real signal is pure VOLUME (11 adds by one subject "
-            "in one capture), not any single group's identity -- structurally "
-            "different from the sensitive-group pattern the new rule "
-            "targets, and correctly does not match it (none of these 11 "
-            "groups are sensitive). Building a volume/threshold rule here "
-            "would mean calibrating against exactly one real sample with no "
-            "benign-volume baseline -- the same overfitting risk this "
-            "project's sequence engine discipline explicitly avoids (extend "
-            "only on a 3rd real sequence-dependent miss, not speculatively). "
-            "This is the 1st such sample seen. Not pursued this pass."
-        ),
-    },
-    "ID4728-Member adding to a group by the same account.evtx": {
-        "categories": [7],
-        "reason": (
-            "Real content read directly: 1x4728, MemberSid == SubjectUserSid "
-            "(a self-add: the account added itself to a group) targeting "
-            "Group02, a GENERIC non-sensitive group. 4728 IS covered, so "
-            "this is rule_too_narrow, not a coverage gap. Self-add-to-own-"
-            "group is a real, generalizable behavioral indicator (self-"
-            "service privilege grab) independent of which group -- but this "
-            "is the only real sample of it, and it happens to target a "
-            "non-sensitive group, so it doesn't establish 'self-add is "
-            "independently suspicious' with this project's usual rigor (a "
-            "real population, not a 1-file case -- the same bar that kept "
-            "the samaccount_spoofing file's anomalous ServiceName from "
-            "becoming a rule). Flagged, not acted on, pending a second real "
-            "sample."
-        ),
-    },
-    "ID7045-4697-SMBexec service registration.evtx": {
-        "categories": [7],
-        "reason": (
-            "Real content read directly: this file's own 4697 record has "
-            "ServiceType 0x00000010 (ordinary), so it doesn't match "
-            "kernel_driver_service_installed.yml for the same reason as the "
-            "MSF-payload file above (both 4697 and 7045 are now covered "
-            "event ids/categories, so this is rule_too_narrow, not a "
-            "coverage gap). This file's own 7045 (System channel, Service "
-            "Control Manager) record was the only real System-channel "
-            "sample anywhere in the corpus -- normalizer.py's "
-            "CHANNEL_TOKEN_SUBSTRINGS gained a 'system' entry this pass so "
-            "it's no longer silently misrouted through the Sysmon dispatch "
-            "table, but no rule alerts on 7045 alone: a single real sample, "
-            "1:1-paired with this same file's own 4697, isn't enough to "
-            "justify either a standalone 7045 rule (underfitting risk, same "
-            "as raw 4697) or 4697+7045 correlation logic (would overfit to "
-            "the one file that happens to have both). Parsed, normalized, "
-            "and correctly reported as covered-but-not-matched -- not "
-            "silently treated as unsupported."
+            "9 Sysmon network events: PowerShell querying LDAP (389) on a DC and System making SMB (445) connections to two hosts. That volume is indistinguishable from a normal domain member; previously 'detected' only by the PowerShell-network rule (removed: it fired on all PowerShell traffic), with the wrong technique."
         ),
     },
 }
@@ -291,6 +172,10 @@ class FixtureRecord:
     incident_ids: list[int]
     mitre_technique_ids: list[str]
     detected: bool
+    # An alert carrying a technique from the capture's documented scenario
+    # (fixture_ground_truth.json) -- an alert from an unrelated rule, e.g. the
+    # sample author clearing the log, does not count.
+    correct_technique: bool = False
     classification_codes: list[int] = field(default_factory=list)
     classification_labels: list[str] = field(default_factory=list)
     reason: str = ""
@@ -499,6 +384,7 @@ def analyze_fixture(path: Path, rules: list[LoadedRule]) -> FixtureRecord:
         incident_ids=outcome.incident_ids,
         mitre_technique_ids=sorted(mitre_ids),
         detected=detected,
+        correct_technique=_correct_technique(path.name, matched_techniques | mitre_ids),
         classification_codes=codes,
         classification_labels=[FAILURE_CATEGORIES[c] for c in codes],
         reason=reason,
@@ -508,12 +394,14 @@ def analyze_fixture(path: Path, rules: list[LoadedRule]) -> FixtureRecord:
 
 def _write_markdown(records: list[FixtureRecord], out_path: Path) -> None:
     lines = [
-        "# NightOwl 61-fixture failure/capability matrix",
+        f"# NightOwl {len(records)}-fixture failure/capability matrix",
         "",
-        f"Generated by `scripts/build_failure_matrix.py`. Diagnostic only -- "
-        f"observes the real pipeline's output, changes nothing.",
+        "Generated by `scripts/build_failure_matrix.py` -- do not edit by hand. Rules + sequence detectors only; "
+        "the ML anomaly layer is disabled here and evaluated separately (ML.md).",
         "",
-        f"**{sum(1 for r in records if r.detected)}/{len(records)} detected.**",
+        f"**{sum(1 for r in records if r.correct_technique)}/{len(records)} detected with the correct ATT&CK "
+        f"technique; {sum(1 for r in records if r.detected)}/{len(records)} raised any alert** "
+        "(the mislabeled bits_openvpn capture counts as an attack here; run_detection_benchmark.py scores it as benign).",
         "",
         "| Fixture | Behavior (from filename) | Channel(s) | Event IDs | Parsed | "
         "Normalized | Covered/Uncovered | Rules matched | Alerts | Incidents | "
@@ -521,7 +409,7 @@ def _write_markdown(records: list[FixtureRecord], out_path: Path) -> None:
         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in sorted(records, key=lambda x: (x.detected, x.name)):
-        status = "HIT" if r.detected else "MISS"
+        status = "HIT" if r.correct_technique else "WRONG-TECHNIQUE" if r.detected else "MISS"
         classification = ", ".join(r.classification_labels) or "--"
         lines.append(
             "| {name} | {behavior} | {channels} | {eids} | {parsed} | {norm}/{skip} "

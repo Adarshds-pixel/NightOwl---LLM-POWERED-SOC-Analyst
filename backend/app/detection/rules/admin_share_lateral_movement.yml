@@ -5,6 +5,10 @@ description: >
   Detects net.exe/net1.exe being used to connect to a remote host's
   administrative share (ADMIN$/IPC$), a common step for lateral movement
   and remote tool deployment (e.g. PsExec-style tooling).
+
+  Matches net.exe / net1.exe exactly (`contains: net.exe` also matched
+  dotnet.exe) and every admin share including drive shares such as C$,
+  which the previous version missed.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
@@ -17,14 +21,10 @@ logsource:
   service: sysmon
 detection:
   selection_image:
-    Image|contains:
-      - net.exe
-      - net1.exe
-  selection_share:
-    CommandLine|contains: '\\'
+    Image|endswith:
+      - '\net.exe'
+      - '\net1.exe'
   selection_admin_share:
-    CommandLine|contains:
-      - 'admin$'
-      - 'ipc$'
-  condition: selection_image and selection_share and selection_admin_share
+    CommandLine|re: '(?i)\\\\[^\\\s]+\\(admin|ipc|[a-z])\$'
+  condition: selection_image and selection_admin_share
 level: medium

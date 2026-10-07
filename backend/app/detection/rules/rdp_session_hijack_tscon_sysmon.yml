@@ -1,0 +1,28 @@
+title: RDP Session Hijacking via tscon (Sysmon)
+id: a4d1c8e2-5b7f-4e39-8c06-7f2b9d4e1a63
+status: experimental
+description: >
+  Detects `tscon <session> /dest:<console>` -- connecting someone else's
+  RDP session to the attacker's console, which, run as SYSTEM, needs no
+  password (RDP session hijacking). It appears either as a direct
+  tscon.exe process or inside a service/scheduled-task command used to
+  get SYSTEM. Verified against real content: ID4688-4697 RDP hijack via
+  service creation.evtx (`sc create ... binpath= "cmd.exe /k tscon 2
+  /dest:rdp-tcp#5"`).
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1563/002/
+tags:
+  - attack.lateral_movement
+  - attack.t1563.002
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection:
+    CommandLine|contains|all:
+      - 'tscon'
+      - '/dest:'
+  condition: selection
+level: high

@@ -1,12 +1,16 @@
-title: Rogue Spoolss Named Pipe (SeImpersonate Privilege Escalation)
+title: Rogue Named Pipe with a Nested \pipe\ Path (PrintSpoofer / Potato)
 id: 01a199bd-19b8-46ac-a89a-ece738b3a5e5
 status: experimental
 description: >
-  Detects a named pipe ending in "spoolss" created or connected to by a
-  process other than the real print spooler service (spoolsv.exe) --
-  the signature of PrintSpoofer/RottenPotato-family SeImpersonate abuse,
-  where a rogue pipe impersonating the spooler's is used to coerce a
-  SYSTEM-privileged connection.
+  Detects a named pipe whose name itself contains a nested `\pipe\` path
+  (e.g. `\<GUID>\pipe\spoolss`). PrintSpoofer and the Potato family
+  create such a pipe so that a privileged service connecting to what it
+  believes is its own pipe actually lands on the attacker's, letting them
+  impersonate SYSTEM (SeImpersonatePrivilege abuse, T1134.001). The
+  previous version matched any pipe ending in \spoolss, so every ordinary
+  print client connecting to the real spooler pipe alerted. Verified
+  against real content:
+  privesc_seimpersonate_tosys_spoolsv_sysmon_17_18.evtx.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
@@ -18,9 +22,9 @@ logsource:
   category: pipe_event
   service: sysmon
 detection:
-  selection_pipe:
-    PipeName|endswith: '\spoolss'
+  selection:
+    PipeName|contains: '\pipe\'
   filter_legit:
     Image|endswith: '\spoolsv.exe'
-  condition: selection_pipe and not filter_legit
+  condition: selection and not filter_legit
 level: high

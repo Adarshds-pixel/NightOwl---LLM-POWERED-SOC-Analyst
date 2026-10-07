@@ -8,13 +8,18 @@ description: >
   into other processes, so this is a strong process-injection indicator
   (e.g. unmanaged PowerShell/CLR injection, or a webshell pivoting to
   in-memory execution).
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
   - https://attack.mitre.org/techniques/T1055/
 tags:
-  - attack.defense_evasion
   - attack.privilege_escalation
+  - attack.stealth
   - attack.t1055
 logsource:
   category: create_remote_thread

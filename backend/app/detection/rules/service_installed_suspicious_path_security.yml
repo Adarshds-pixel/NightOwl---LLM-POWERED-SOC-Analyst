@@ -1,0 +1,50 @@
+title: Service Installed with a Shell or Script Command as Its Binary (Security 4697)
+id: 5b0f3d0c-7f2e-4c1e-9a43-2f6c0e8b1d11
+status: experimental
+description: >
+  Detects a newly installed Windows service whose binary path is a shell
+  command, script host or LOLBin, or runs from a user-writable or
+  loopback admin-share location. Legitimate services point at an
+  installed executable; a service whose 'binary' is `%COMSPEC% /c ...` is
+  how remote-execution tools (Impacket smbexec, PsExec-style payload
+  staging, Metasploit service payloads) and session hijacking (`tscon`)
+  get code running as SYSTEM. Verified against real content:
+  ID7045-4697-SMBexec service registration.evtx and ID4688-4697 RDP
+  hijack via service creation.evtx.
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1543/003/
+  - https://attack.mitre.org/techniques/T1569/002/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1543.003
+logsource:
+  category: service_installed_security
+  service: security
+detection:
+  selection:
+    ServiceFileName|contains:
+      - '%COMSPEC%'
+      - 'cmd.exe /c'
+      - 'cmd /c'
+      - 'cmd.exe /k'
+      - 'cmd /k'
+      - 'cmd.exe /q'
+      - 'powershell'
+      - 'pwsh'
+      - 'mshta'
+      - 'rundll32'
+      - 'regsvr32'
+      - 'wscript'
+      - 'cscript'
+      - '\\127.0.0.1\'
+      - '\ADMIN$\'
+      - '\Users\Public\'
+      - '\AppData\'
+      - '\Windows\Temp\'
+      - '%TEMP%'
+      - 'tscon'
+  condition: selection
+level: high

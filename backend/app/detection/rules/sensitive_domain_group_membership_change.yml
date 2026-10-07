@@ -30,6 +30,9 @@ description: >
   but this is the only real sample and it doesn't combine with a sensitive
   target, so it's not built as its own rule here either. Both remain
   documented, evidence-limited gaps rather than forced rules.
+
+  Covers Domain Controllers (-516), Group Policy Creator Owners (-520)
+  and Key Admins (-526) as well.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-06
 references:
@@ -45,8 +48,11 @@ detection:
   selection:
     TargetSid|endswith:
       - '-512'
+      - '-516'
       - '-518'
       - '-519'
+      - '-520'
+      - '-526'
       - '-527'
   condition: selection
 level: critical

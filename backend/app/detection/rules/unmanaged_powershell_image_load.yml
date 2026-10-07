@@ -30,13 +30,22 @@ description: >
   PowerShell host exists in this project's corpus to bound this rule's
   false-positive rate beyond the exclusion filter below -- flagged, not
   hidden.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
+
+  Legitimate PowerShell hosts beyond the console are excluded:
+  wsmprovhost.exe (every PowerShell remoting session), Server Manager,
+  MMC snap-ins, the troubleshooting host, the SCCM agent, Visual Studio
+  and the Exchange shell.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-07
 references:
   - https://attack.mitre.org/techniques/T1059/001/
 tags:
   - attack.execution
-  - attack.defense_evasion
   - attack.t1059.001
 logsource:
   category: image_load
@@ -49,5 +58,12 @@ detection:
       - '\powershell.exe'
       - '\pwsh.exe'
       - '\powershell_ise.exe'
+      - '\wsmprovhost.exe'
+      - '\ServerManager.exe'
+      - '\mmc.exe'
+      - '\sdiagnhost.exe'
+      - '\CcmExec.exe'
+      - '\devenv.exe'
+      - '\Microsoft.Exchange.Management.Shell.exe'
   condition: selection_dll and not filter_legit_host
 level: high

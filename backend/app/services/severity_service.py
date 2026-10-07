@@ -60,7 +60,11 @@ _TACTIC_WEIGHT: dict[str, int] = {
     "execution": 0,
     "persistence": 0,
     "privilege_escalation": 0,
+    # ATT&CK v19 split defense-evasion into stealth + defense-impairment;
+    # the old name is kept so a stale tag still resolves to the same weight.
     "defense_evasion": 0,
+    "stealth": 0,
+    "defense_impairment": 0,
     "discovery": 0,
     "credential_access": 1,
     "lateral_movement": 1,

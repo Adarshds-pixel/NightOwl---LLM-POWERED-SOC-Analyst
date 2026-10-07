@@ -6,12 +6,20 @@ description: >
   its -a flag to launch another program. This LOLBin technique runs a
   target executable as a child of a trusted Microsoft-signed binary, which
   can bypass application allowlisting rules keyed on the parent process.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
+
+  Level low: the Program Compatibility Assistant legitimately runs
+  `pcalua -a <installer>`; this is a lead, not a verdict.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
   - https://attack.mitre.org/techniques/T1218/
 tags:
-  - attack.defense_evasion
+  - attack.stealth
   - attack.t1218
 logsource:
   category: process_creation
@@ -21,4 +29,4 @@ detection:
     Image|endswith: '\pcalua.exe'
     CommandLine|contains: '-a '
   condition: selection
-level: medium
+level: low

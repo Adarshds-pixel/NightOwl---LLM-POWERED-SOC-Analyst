@@ -20,6 +20,9 @@ description: >
   prone than the standard `<Hidden>true</Hidden>` element), whose
   `TaskContent` contains `<Hidden>true</Hidden>` and an action that pipes
   `tasklist` output to a file under `%windir%\Temp`.
+
+  Matches `<Hidden>1</Hidden>` too -- xs:boolean accepts 1, and the
+  previous literal `true` match was evaded by it.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-05
 references:
@@ -33,6 +36,6 @@ logsource:
   service: security
 detection:
   selection:
-    TaskContent|contains: '<Hidden>true</Hidden>'
+    TaskContent|re: '(?i)<Hidden>\s*(true|1)\s*</Hidden>'
   condition: selection
 level: medium

@@ -5,6 +5,12 @@ description: >
   Detects an outbound network connection to the standard RDP port (3389),
   which can indicate an attacker moving laterally to another host via
   Remote Desktop.
+
+  Only outbound connections (Initiated=true) count. The previous version
+  also matched every INBOUND RDP session to the host, i.e. any server
+  anyone ever remoted into. An outbound RDP connection is still often
+  legitimate administration, so the level is low (escalated one step by
+  the lateral-movement tactic).
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
@@ -18,5 +24,10 @@ logsource:
 detection:
   selection:
     DestinationPort: 3389
-  condition: selection
-level: medium
+    Initiated: 'true'
+  filter_loopback:
+    DestinationIp|cidr:
+      - '127.0.0.0/8'
+      - '::1/128'
+  condition: selection and not filter_loopback
+level: low

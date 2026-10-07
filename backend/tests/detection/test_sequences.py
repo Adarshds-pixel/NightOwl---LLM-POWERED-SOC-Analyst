@@ -283,7 +283,8 @@ def test_kerberos_password_spray_handles_ipv4_mapped_ipv6_source():
         ("svc-02", "0x00000006", 4768),
     ]
     rows = _kerberos_spray_rows(usernames=usernames)
-    mapped_row = _kerberos_row("normal", "0x00000000", ip="::ffff:172.16.66.1", timestamp=BASE_TIME + timedelta(milliseconds=3))
+    # A 4th distinct FAILED account, arriving in the mapped-IPv6 form.
+    mapped_row = _kerberos_row("normal", "0x00000006", ip="::ffff:172.16.66.1", timestamp=BASE_TIME + timedelta(milliseconds=3))
 
     assert detect_sequences(rows + [mapped_row]) != []
 

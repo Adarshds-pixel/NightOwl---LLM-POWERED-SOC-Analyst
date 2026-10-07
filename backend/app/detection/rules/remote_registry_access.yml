@@ -1,4 +1,4 @@
-title: Remote Registry Access via winreg Named Pipe
+title: Remote Registry Access over IPC$ (winreg)
 id: 1e6b8a34-9f27-4c60-a3d5-2b7e4f9c8d15
 status: experimental
 description: >
@@ -31,15 +31,21 @@ description: >
   registry hive files being staged for exfiltration -- corroborating
   evidence for why this capture is a real detection, not a reason to key
   the rule's own condition on those specific filenames.
+
+  Mapped to T1012 (Query Registry). A winreg connection shows a remote
+  client opening this host's registry -- which credential-dumping tools
+  do to read SAM/SECURITY hives (T1003.002), but which PsLoggedOn,
+  vulnerability scanners and management agents also do routinely. It was
+  previously tagged T1003.002 plus lateral movement, which over-stated
+  what the event proves and inflated its severity to critical.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-06
 references:
+  - https://attack.mitre.org/techniques/T1012/
   - https://attack.mitre.org/techniques/T1003/002/
-  - https://attack.mitre.org/techniques/T1021/002/
 tags:
-  - attack.credential_access
-  - attack.lateral_movement
-  - attack.t1003.002
+  - attack.discovery
+  - attack.t1012
 logsource:
   category: remote_registry_access
   service: security
@@ -48,4 +54,4 @@ detection:
     ShareName|contains: 'IPC$'
     RelativeTargetName: winreg
   condition: selection
-level: high
+level: medium

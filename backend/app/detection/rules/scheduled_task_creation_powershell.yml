@@ -1,10 +1,12 @@
-title: Suspicious Scheduled Task via PowerShell Cmdlet
+title: Scheduled Task Created with a Suspicious Action (PowerShell)
 id: 7f2a4c19-8e3b-4d6a-a1c7-5f9b2e8d4a63
 status: experimental
 description: >
-  Detects PowerShell's ScheduledTasks cmdlets being used to register a new
-  scheduled task -- the script-based equivalent of schtasks.exe /create,
-  also used for persistence.
+  Detects PowerShell's ScheduledTasks cmdlets creating a task whose
+  action points at a user-writable location, a script host / LOLBin,
+  encoded or downloaded content. Only inline command lines are visible to
+  this rule; a task created from a script file (-File x.ps1) is covered
+  by script block logging instead.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
@@ -18,10 +20,30 @@ logsource:
   category: process_creation
   service: sysmon
 detection:
-  selection:
-    Image|contains: powershell.exe
+  selection_create:
+    Image|endswith:
+      - '\powershell.exe'
+      - '\pwsh.exe'
     CommandLine|contains:
       - 'Register-ScheduledTask'
       - 'New-ScheduledTaskAction'
-  condition: selection
+  selection_action:
+    CommandLine|contains:
+      - '\AppData\'
+      - '\Users\Public\'
+      - '\Temp\'
+      - '-enc'
+      - 'IEX'
+      - 'cmd /c'
+      - 'cmd.exe /c'
+      - 'mshta'
+      - 'rundll32'
+      - 'regsvr32'
+      - 'wscript'
+      - 'cscript'
+      - 'certutil'
+      - 'bitsadmin'
+      - 'http://'
+      - 'https://'
+  condition: selection_create and selection_action
 level: medium

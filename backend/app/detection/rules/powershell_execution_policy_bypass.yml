@@ -21,6 +21,11 @@ description: >
   profile script is pointless overhead in a non-interactive context, so
   keeping it in this selection made the rule fire on routine automation
   far more often than on real execution-policy abuse.
+
+  Now matches every accepted spelling (-ep, -ex, -exec, -ExecutionPolicy,
+  with `-` or `/` and space or colon) and pwsh. Level lowered to low:
+  editors, management agents and installers pass this flag routinely, so
+  on its own it is context, not evidence.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-18
 references:
@@ -32,10 +37,14 @@ logsource:
   category: process_creation
   service: sysmon
 detection:
-  selection:
-    Image|contains: powershell.exe
-    CommandLine|contains:
-      - '-ExecutionPolicy Bypass'
-      - '-ep bypass'
-  condition: selection
-level: medium
+  selection_image:
+    - Image|endswith:
+        - '\powershell.exe'
+        - '\pwsh.exe'
+    - OriginalFileName:
+        - 'PowerShell.EXE'
+        - 'pwsh.dll'
+  selection_bypass:
+    CommandLine|re: '(?i)\s[-/\u2013](ep|ex[a-z]*)[\s:]+(bypass|unrestricted)\b'
+  condition: selection_image and selection_bypass
+level: low

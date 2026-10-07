@@ -33,6 +33,15 @@ description: >
   never fires legitimately anywhere (`Net.WebClient` does occasionally
   appear in legitimate install/update scripts), so level stays `medium`,
   not `high`, but this is no longer an untested rule.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
+
+  Requires a download method or a URL (including the `'h'+'ttp'` concatenation obfuscated loaders use) with the WebClient object, or
+  Invoke-WebRequest / Invoke-RestMethod combined with Invoke-Expression
+  -- the cradle shape -- rather than any mention of WebClient.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-05
 references:
@@ -40,13 +49,27 @@ references:
   - https://attack.mitre.org/techniques/T1059/001/
 tags:
   - attack.command_and_control
-  - attack.execution
   - attack.t1105
 logsource:
   category: script_block_logging
   service: powershell
 detection:
-  selection:
-    ScriptBlockText|contains: WebClient
-  condition: selection
+  selection_webclient:
+    ScriptBlockText|contains: 'WebClient'
+  selection_webclient_download:
+    ScriptBlockText|contains:
+      - 'Download'
+      - 'OpenRead'
+      - 'ttp'
+  selection_iwr:
+    ScriptBlockText|contains:
+      - 'Invoke-WebRequest'
+      - 'Invoke-RestMethod'
+      - 'iwr '
+      - 'irm '
+  selection_exec:
+    ScriptBlockText|contains:
+      - 'Invoke-Expression'
+      - 'IEX'
+  condition: (selection_webclient and selection_webclient_download) or (selection_iwr and selection_exec)
 level: medium

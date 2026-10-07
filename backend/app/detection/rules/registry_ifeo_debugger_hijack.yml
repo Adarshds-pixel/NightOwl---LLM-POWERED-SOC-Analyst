@@ -6,6 +6,14 @@ description: >
   Options (IFEO) key, which redirects execution of the target binary to
   an attacker-controlled program instead -- used for persistence and
   defense evasion.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
+
+  Process Explorer's 'Replace Task Manager' option legitimately sets an
+  IFEO Debugger for taskmgr.exe and is excluded.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
@@ -13,7 +21,6 @@ references:
 tags:
   - attack.persistence
   - attack.privilege_escalation
-  - attack.defense_evasion
   - attack.t1546.012
 logsource:
   category: registry_event
@@ -22,5 +29,8 @@ detection:
   selection:
     TargetObject|contains: '\Image File Execution Options\'
     TargetObject|endswith: '\Debugger'
-  condition: selection
+  filter_process_explorer:
+    TargetObject|contains: '\taskmgr.exe\'
+    Details|contains: 'procexp'
+  condition: selection and not filter_process_explorer
 level: high

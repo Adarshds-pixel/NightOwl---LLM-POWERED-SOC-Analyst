@@ -14,6 +14,9 @@ description: >
   lateral movement -- scoping to this named-target list, rather than any
   net1.exe invocation, keeps routine account administration (checking an
   arbitrary non-privileged group or user) from tripping this rule.
+
+  Also covers PowerShell (Get-LocalGroupMember) and WMIC callers, not
+  only net1.exe.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
@@ -27,15 +30,20 @@ logsource:
   service: security
 detection:
   selection:
-    CallerProcessName|endswith: net1.exe
+    CallerProcessName|endswith:
+      - '\net.exe'
+      - '\net1.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+      - '\wmic.exe'
     TargetUserName:
-      - Administrators
-      - Administrator
-      - Domain Admins
-      - Enterprise Admins
-      - Schema Admins
-      - Backup Operators
-      - Account Operators
-      - Remote Desktop Users
+      - 'Administrators'
+      - 'Administrator'
+      - 'Domain Admins'
+      - 'Enterprise Admins'
+      - 'Schema Admins'
+      - 'Backup Operators'
+      - 'Account Operators'
+      - 'Remote Desktop Users'
   condition: selection
 level: low

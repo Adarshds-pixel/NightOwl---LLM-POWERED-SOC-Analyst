@@ -1,16 +1,15 @@
-title: LSASS Handle Access via Security Auditing
+title: LSASS Process Handle with Memory Read Access (Security Audit)
 id: 6d2b8f43-1e9c-4a7d-8b3f-2c6e9a1d4f75
 status: experimental
 description: >
-  Detects a handle being opened to lsass.exe via Windows Security object-
-  access auditing (Event ID 4656/4663), the Security-channel counterpart
-  to Sysmon's process-access detection -- catches the same credential-
-  dumping behavior on hosts where Sysmon isn't installed but object-access
-  auditing is enabled. `ObjectName` is matched directly rather than
-  aliased onto Sysmon's TargetImage/GrantedAccess vocabulary: Security's
-  AccessMask uses different raw values than Sysmon's, so reusing that
-  rule's access-mask filter would silently fail to match real Security
-  events.
+  Detects Security events 4656/4663 where a process obtains a handle to
+  the lsass.exe PROCESS (not the file) with memory-read access. System
+  processes and Defender are excluded, except script hosts and rundll32,
+  which live in System32 but are how dumping scripts reach LSASS. The
+  previous version matched any 4663 whose object name ended in lsass.exe
+  -- including AV scans and backups touching the lsass.exe FILE. Verified
+  against real content: CA_hashdump_4663_4656_lsass_access.evtx
+  (cscript.exe, 0x1f3fff / 0x10).
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
@@ -23,6 +22,19 @@ logsource:
   service: security
 detection:
   selection:
+    ObjectType: 'Process'
     ObjectName|endswith: '\lsass.exe'
-  condition: selection
+    AccessMask|re: '(?i)^0x0*(10|1010|1410|1438|143a|1f0fff|1f3fff|1fffff)$'
+  filter_system:
+    ProcessName|startswith:
+      - 'C:\Windows\System32\'
+      - 'C:\ProgramData\Microsoft\Windows Defender\'
+      - 'C:\Program Files\Windows Defender'
+  filter_script_hosts_in_system32:
+    ProcessName|endswith:
+      - '\cscript.exe'
+      - '\wscript.exe'
+      - '\powershell.exe'
+      - '\rundll32.exe'
+  condition: selection and not (filter_system and not filter_script_hosts_in_system32)
 level: high

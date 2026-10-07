@@ -1,4 +1,4 @@
-title: Suspicious Executable Written to Public or Temp Directory
+title: Executable Content Written to Temp/Public by a Script Host or Office App
 id: 6f3b8d21-9a1c-4e5f-8b2d-3c7a1e9f5d84
 status: experimental
 description: >
@@ -6,6 +6,11 @@ description: >
   a world-writable or commonly-abused staging directory (Users\Public or
   the current user's AppData\Local\Temp), a common drop location for
   tooling staged before execution.
+
+  Now requires the writer to be a script host, LOLBin downloader or
+  Office application. The previous version matched any executable written
+  to Temp -- every installer, and PowerShell itself, which writes
+  `__PSScriptPolicyTest_*.ps1` on every launch.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-18
 references:
@@ -17,14 +22,36 @@ logsource:
   category: file_event
   service: sysmon
 detection:
-  selection:
+  selection_target:
     TargetFilename|contains:
       - '\Users\Public\'
       - '\AppData\Local\Temp\'
+      - '\Windows\Temp\'
     TargetFilename|endswith:
       - '.exe'
       - '.dll'
       - '.ps1'
       - '.bat'
-  condition: selection
+      - '.vbs'
+      - '.hta'
+      - '.scr'
+  selection_writer:
+    Image|endswith:
+      - '\powershell.exe'
+      - '\pwsh.exe'
+      - '\cmd.exe'
+      - '\wscript.exe'
+      - '\cscript.exe'
+      - '\mshta.exe'
+      - '\rundll32.exe'
+      - '\regsvr32.exe'
+      - '\certutil.exe'
+      - '\bitsadmin.exe'
+      - '\winword.exe'
+      - '\excel.exe'
+      - '\powerpnt.exe'
+      - '\outlook.exe'
+  filter_ps_policy_test:
+    TargetFilename|contains: '__PSScriptPolicyTest_'
+  condition: selection_target and selection_writer and not filter_ps_policy_test
 level: medium

@@ -14,14 +14,22 @@ description: >
   Source for the seed list: the community-maintained loldrivers.io
   catalogue. This list is intentionally small and will miss any
   BYOVD driver not on it -- it is a floor, not a complete BYOVD defense.
+
+  Mapped to T1068 (Exploitation for Privilege Escalation): a
+  Bring-Your-Own-Vulnerable-Driver load gives kernel-level access; it was
+  previously tagged T1014 (Rootkit), which describes hiding, not this.
+  Matching is by file name, so a renamed driver evades it, and these
+  drivers also ship with legitimate tools (RTCore64 with MSI Afterburner,
+  WinRing0 with fan/RGB utilities) -- treat a hit as a lead to verify,
+  not a verdict.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
+  - https://attack.mitre.org/techniques/T1068/
   - https://www.loldrivers.io/
-  - https://attack.mitre.org/techniques/T1014/
 tags:
-  - attack.defense_evasion
-  - attack.t1014
+  - attack.privilege_escalation
+  - attack.t1068
 logsource:
   category: driver_load
   service: sysmon
@@ -51,4 +59,4 @@ detection:
       # read/write; used by the BlackByte ransomware BYOVD chain.
       - RTCore64.sys
   condition: selection
-level: high
+level: medium

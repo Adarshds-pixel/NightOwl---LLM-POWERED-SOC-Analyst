@@ -6,12 +6,16 @@ description: >
   Software\Microsoft\Windows\CurrentVersion\Policies\System being set to 0,
   which turns UAC off system-wide -- a common privilege-escalation /
   defense-evasion step before running further unelevated-looking payloads.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
   - https://attack.mitre.org/techniques/T1548/002/
 tags:
-  - attack.defense_evasion
   - attack.privilege_escalation
   - attack.t1548.002
 logsource:

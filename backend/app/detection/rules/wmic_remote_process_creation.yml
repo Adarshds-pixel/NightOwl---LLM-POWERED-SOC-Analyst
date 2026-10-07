@@ -1,0 +1,25 @@
+title: Remote Command Execution via WMIC /node
+id: b19e4c03-6f2a-4d8b-95e7-3a0c8f1d6e47
+status: experimental
+description: >
+  Detects wmic.exe started with `/node:` (targeting another host) and
+  `process call create` -- remote command execution over WMI.
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1047/
+tags:
+  - attack.execution
+  - attack.t1047
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection:
+    Image|endswith: '\wmic.exe'
+    CommandLine|contains|all:
+      - 'node:'
+      - 'process'
+      - 'create'
+  condition: selection
+level: medium

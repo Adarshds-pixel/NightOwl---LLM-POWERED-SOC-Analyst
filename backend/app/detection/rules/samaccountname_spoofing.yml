@@ -1,0 +1,29 @@
+title: Computer Account Renamed Without Its Trailing $ (sAMAccountName Spoofing)
+id: 9b3e1d58-7a2c-4f69-8e04-5c1b6a9f2d37
+status: experimental
+description: >
+  Detects Security event 4781 where an account whose old name ended in
+  `$` (a computer account) is renamed to a name without it. This is the
+  core step of the noPac attack (CVE-2021-42278/42287): a machine account
+  is renamed to match a domain controller's name so the KDC issues the
+  attacker a ticket for the DC. Legitimate computer renames keep the `$`.
+  Verified against real content:
+  samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_securitylogs.evtx.
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1068/
+  - https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42278
+tags:
+  - attack.privilege_escalation
+  - attack.t1068
+logsource:
+  category: account_renamed
+  service: security
+detection:
+  selection:
+    OldTargetUserName|endswith: '$'
+  filter_still_machine_name:
+    NewTargetUserName|endswith: '$'
+  condition: selection and not filter_still_machine_name
+level: high

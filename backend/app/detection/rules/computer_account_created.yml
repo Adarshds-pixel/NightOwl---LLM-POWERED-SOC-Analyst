@@ -1,23 +1,16 @@
-title: Computer Account Created
+title: User Account Created with a Computer-Style ($) Name
 id: 8c2e6a41-4f9b-4d3e-a17c-6b5d9e2f0a13
 status: experimental
 description: >
-  Detects Windows Security Event ID 4720 (a user account was created)
-  where the new account's SAM name ends in "$" -- the Windows convention
-  for a computer/machine account, as opposed to a human user account.
-  Computer accounts are usually created automatically by domain-join
-  (a machine joining the domain, or an admin pre-staging one) rather than
-  by a live logon session; an unexpected one is a well-precedented
-  precursor to machine-account-quota abuse (creating a rogue computer
-  account to use in relayed authentication / delegation attacks, e.g.
-  the "noPac"/sAMAccountName-spoofing family) -- worth a SOC review even
-  without further corroborating evidence, since this single event alone
-  can't distinguish routine domain-join provisioning from abuse. Level is
-  `medium`, not `high`, for exactly that reason. Verified against real
-  content: `DE_Fake_ComputerAccount_4720.evtx`, 2 records, both
-  `SamAccountName: '$'` (an anonymized/redacted capture -- the real
-  account name itself isn't recoverable from this sample, only that it
-  is a computer-account-shaped name).
+  Detects Security event 4720 (a USER account was created) whose name
+  ends in `$` -- the suffix Windows reserves for computer accounts. A
+  user account dressed up as a machine account hides among the hundreds
+  of real ones in AD consoles and in `net user` output. Real computer
+  accounts are created with event 4741 (see
+  computer_account_created_by_user.yml); this rule was previously titled
+  'Computer Account Created', which described a different event. Verified
+  against real content: DE_Fake_ComputerAccount_4720.evtx (an anonymised
+  capture whose account name is literally `$`).
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-05
 references:
@@ -27,7 +20,7 @@ tags:
   - attack.persistence
   - attack.t1136.002
 logsource:
-  category: computer_account_created
+  category: user_account_created
   service: security
 detection:
   selection:

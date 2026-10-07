@@ -9,12 +9,22 @@ description: >
   done in the normalizer (app/ingestion/normalizer.py::_flag_timestomp),
   since this rule engine only supports literal-value matching, not
   cross-field comparison -- this rule just checks the resulting flag.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
+
+  Windows Installer, servicing and OneDrive set file creation times as
+  part of normal installs/sync and are excluded; archive tools and
+  browsers can still produce benign hits, so treat this as supporting
+  evidence.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
   - https://attack.mitre.org/techniques/T1070/006/
 tags:
-  - attack.defense_evasion
+  - attack.stealth
   - attack.t1070.006
 logsource:
   category: file_change
@@ -22,5 +32,12 @@ logsource:
 detection:
   selection:
     TimestompSuspected: 'true'
-  condition: selection
+  filter_installers:
+    Image|endswith:
+      - '\msiexec.exe'
+      - '\TiWorker.exe'
+      - '\TrustedInstaller.exe'
+      - '\OneDrive.exe'
+      - '\OneDriveSetup.exe'
+  condition: selection and not filter_installers
 level: medium

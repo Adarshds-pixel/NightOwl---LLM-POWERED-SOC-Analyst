@@ -5,6 +5,12 @@ description: >
   Detects tooling commonly used to dump LSASS process memory to disk to
   later extract credentials offline (procdump against lsass.exe, or
   rundll32.exe invoking comsvcs.dll's MiniDump export).
+
+  The comsvcs branch requires BOTH comsvcs.dll and its MiniDump export
+  (by name or ordinal #24). It used to match the word MiniDump anywhere,
+  which fired 13 times at critical severity on ChatGPT's crash-reporter
+  (`--type=crashpad-handler ... MiniDump`) in benign data. `procdump` now
+  also matches procdump64.exe.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
@@ -17,11 +23,14 @@ logsource:
   service: sysmon
 detection:
   selection_procdump:
-    Image|contains: procdump.exe
-    CommandLine|contains: lsass
+    Image|contains: 'procdump'
+    CommandLine|contains: 'lsass'
   selection_comsvcs:
+    CommandLine|contains: 'comsvcs'
+  selection_comsvcs_export:
     CommandLine|contains:
-      - comsvcs.dll
-      - MiniDump
-  condition: selection_procdump or selection_comsvcs
+      - 'MiniDump'
+      - '#24'
+      - '#+24'
+  condition: selection_procdump or (selection_comsvcs and selection_comsvcs_export)
 level: high

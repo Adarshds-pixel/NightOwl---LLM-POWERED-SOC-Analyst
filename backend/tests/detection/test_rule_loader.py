@@ -46,39 +46,12 @@ logsource:
   category: process_creation
 detection:
   selection:
-    Image|contains|all: powershell
+    Image|base64offset|contains: powershell
   condition: selection
 level: high
 """
 
-EXPECTED_RULE_COUNT = 45
-EXPECTED_CATEGORIES = {
-    "process_creation",
-    "network_connection",
-    "file_event",
-    "registry_event",
-    "process_access",
-    "create_remote_thread",
-    "pipe_event",
-    "wmi_event",
-    "file_change",
-    "audit_log_cleared",
-    "directory_service_access",
-    "local_group_enumeration",
-    "driver_load",
-    "rdp_tunneled_logon",
-    "admin_share_payload_write",
-    "local_group_membership_change",
-    "computer_account_created",
-    "scheduled_task_created_security",
-    "script_block_logging",
-    "audit_policy_weakened",
-    "remote_registry_access",
-    "kernel_driver_service_installed",
-    "sensitive_domain_group_membership_change",
-    "sam_privileged_group_object_access",
-    "image_load",
-}
+EXPECTED_RULE_COUNT = len(list(rule_loader.RULES_DIR.glob('*.yml')))
 
 
 # -- Day 7: loading/validation/caching -----------------------------------
@@ -108,10 +81,9 @@ def test_load_rules_skips_malformed_and_keeps_valid(tmp_path):
 
 
 def test_load_rules_rejects_unsupported_modifier_chain_and_keeps_valid(tmp_path, caplog):
-    """field|contains|all is a modifier chain engine.py's _field_matches
-    can never evaluate (v1 supports a single trailing modifier only) --
-    confirm the rule is dropped at load time (like a malformed-YAML rule),
-    not silently loaded to fail forever at match time."""
+    """A modifier the engine cannot evaluate (base64offset) drops the rule at
+    load time (like a malformed-YAML rule), instead of loading a rule that
+    silently never matches."""
     (tmp_path / "valid.yml").write_text(VALID_RULE, encoding="utf-8")
     (tmp_path / "bad_modifier.yml").write_text(UNSUPPORTED_MODIFIER_CHAIN_RULE, encoding="utf-8")
 
@@ -168,15 +140,21 @@ def test_seed_rule_directory_loads_at_least_one_real_rule():
 
 # -- Day 9/12: rule count/category growth + tag-parsing --------------------
 
-def test_load_rules_returns_expected_rule_count():
+def test_every_rule_file_loads():
+    """Strict validation rejects a malformed, mis-tagged or unscoped rule --
+    every shipped rule file must pass it."""
     rules = rule_loader.load_rules()
     assert len(rules) == EXPECTED_RULE_COUNT
 
 
-def test_load_rules_covers_eleven_categories_including_registry():
+def test_every_rule_category_is_scoped_to_event_ids():
+    from app.detection.engine import CATEGORY_TO_EVENT_ID
+
     rules = rule_loader.load_rules()
-    categories = {r.category for r in rules}
-    assert categories == EXPECTED_CATEGORIES
+    for rule in rules:
+        assert rule.category is None or rule.category in CATEGORY_TO_EVENT_ID, rule.title
+        if rule.category is None:
+            assert rule_loader._selects_event_id(rule.detections), rule.title
 
 
 def test_every_rule_has_a_technique_id_parsed_from_tags():
@@ -200,7 +178,7 @@ def test_registry_run_key_rule_technique_id_and_tactics():
 
 def test_scheduled_task_schtasks_rule_technique_id():
     rules = rule_loader.load_rules()
-    rule = next(r for r in rules if r.title == "Scheduled Task Creation via schtasks.exe")
+    rule = next(r for r in rules if r.title == "Scheduled Task Created with a Suspicious Action (schtasks.exe)")
     assert rule.technique_id == "T1053.005"
     assert rule.category == "process_creation"
 
@@ -209,7 +187,8 @@ def test_mshta_rule_technique_id_and_tactics():
     rules = rule_loader.load_rules()
     rule = next(r for r in rules if r.title == "Suspicious Mshta Execution")
     assert rule.technique_id == "T1218.005"
-    assert set(rule.tactics) == {"defense_evasion", "execution"}
+    # ATT&CK v19: Mshta is a stealth technique only
+    assert set(rule.tactics) == {"stealth"}
 
 
 # -- Day 11: MITRE technique validation -----------------------------------
@@ -247,7 +226,7 @@ def test_valid_technique_id_loads_without_warning(tmp_path, monkeypatch, caplog)
     assert caplog.records == []
 
 
-def test_unknown_technique_id_warns_but_rule_still_loads(tmp_path, monkeypatch, caplog):
+def test_unknown_technique_id_rejects_the_rule(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(
         rule_loader,
         "validate_technique_id",
@@ -258,7 +237,9 @@ def test_unknown_technique_id_warns_but_rule_still_loads(tmp_path, monkeypatch, 
     with caplog.at_level(logging.WARNING):
         rules = rule_loader.load_rules(tmp_path)
 
-    assert len(rules) == 1
+    # A rule tagged with a technique that does not exist would report a
+    # fabricated technique on every alert -- it is not loaded.
+    assert rules == []
     assert "unknown MITRE technique id" in caplog.text
     assert "T9999.999" in caplog.text
 
@@ -278,7 +259,7 @@ def test_deprecated_technique_id_warns_but_rule_still_loads(tmp_path, monkeypatc
     assert "deprecated MITRE technique id" in caplog.text
 
 
-def test_revoked_technique_id_warns_but_rule_still_loads(tmp_path, monkeypatch, caplog):
+def test_revoked_technique_id_rejects_the_rule(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(
         rule_loader,
         "validate_technique_id",
@@ -289,7 +270,7 @@ def test_revoked_technique_id_warns_but_rule_still_loads(tmp_path, monkeypatch, 
     with caplog.at_level(logging.WARNING):
         rules = rule_loader.load_rules(tmp_path)
 
-    assert len(rules) == 1
+    assert rules == []
     assert "revoked MITRE technique id" in caplog.text
 
 
@@ -358,3 +339,24 @@ def test_real_seed_rules_all_have_valid_technique_ids():
         assert result.is_valid, f"{rule.title}: unknown technique id {rule.technique_id!r}"
         assert not result.is_deprecated, f"{rule.title}: deprecated technique id {rule.technique_id!r}"
         assert not result.is_revoked, f"{rule.title}: revoked technique id {rule.technique_id!r}"
+
+
+
+def test_tactic_tag_must_belong_to_the_technique(tmp_path, caplog):
+    """Tactics drive severity escalation; a tactic the technique does not
+    have (here the retired v18 defense_evasion on Mshta) is a load error."""
+    text = VALID_RULE.replace("tags:", "tags:\n  - attack.defense_evasion\n  - attack.t1218.005", 1) if "tags:" in VALID_RULE else None
+    if text is None:
+        text = VALID_RULE.replace("logsource:", "tags:\n  - attack.defense_evasion\n  - attack.t1218.005\nlogsource:", 1)
+    (tmp_path / "mistagged.yml").write_text(text, encoding="utf-8")
+    with caplog.at_level(logging.WARNING):
+        assert rule_loader.load_rules(tmp_path) == []
+    assert "not tactics of T1218.005" in caplog.text
+
+
+def test_unparseable_condition_is_rejected_at_load(tmp_path, caplog):
+    text = VALID_RULE.replace("condition: selection", "condition: selection and missing_selection", 1)
+    (tmp_path / "badcond.yml").write_text(text, encoding="utf-8")
+    with caplog.at_level(logging.WARNING):
+        assert rule_loader.load_rules(tmp_path) == []
+    assert "cannot be evaluated" in caplog.text

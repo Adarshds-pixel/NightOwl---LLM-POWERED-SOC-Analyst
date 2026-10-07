@@ -17,6 +17,9 @@ description: >
   real content: `Network_Service_Guest_added_to_admins_4732.evtx`, 2
   records -- one MemberSid `S-1-5-20` (NetworkService), one ending
   `-501` (Guest), both TargetSid `S-1-5-32-544` (Administrators).
+
+  Also covers Account Operators, Server Operators and Backup Operators,
+  and ANONYMOUS LOGON (S-1-5-7).
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-05
 references:
@@ -31,11 +34,16 @@ logsource:
   service: security
 detection:
   selection_group:
-    TargetSid: S-1-5-32-544
+    TargetSid:
+      - 'S-1-5-32-544'
+      - 'S-1-5-32-548'
+      - 'S-1-5-32-549'
+      - 'S-1-5-32-551'
   selection_member:
     MemberSid:
-      - S-1-5-20
-      - S-1-5-19
+      - 'S-1-5-20'
+      - 'S-1-5-19'
+      - 'S-1-5-7'
   selection_guest:
     MemberSid|endswith: '-501'
   condition: selection_group and (selection_member or selection_guest)

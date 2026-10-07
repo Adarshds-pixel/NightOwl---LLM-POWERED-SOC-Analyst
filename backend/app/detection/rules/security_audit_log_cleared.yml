@@ -6,12 +6,17 @@ description: >
   a common anti-forensic step after an intrusion to remove evidence of
   prior activity. This event carries no EventData on real samples, so
   the rule matches on event_id alone.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
   - https://attack.mitre.org/techniques/T1685/005/
 tags:
-  - attack.defense_evasion
+  - attack.defense_impairment
   - attack.t1685.005
 logsource:
   category: audit_log_cleared

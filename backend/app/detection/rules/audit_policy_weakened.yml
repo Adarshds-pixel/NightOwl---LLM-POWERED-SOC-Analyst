@@ -27,13 +27,22 @@ description: >
   (`dcsync_replication_rights.yml`); this rule adds real, independently
   verified technique coverage rather than changing that file's own
   detection status.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
+
+  Changes made by a machine account ($) are Group Policy refreshes
+  applying configured policy and are excluded; an operator weakening
+  auditing with auditpol does so under a user account.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-06
 references:
   - https://attack.mitre.org/techniques/T1685/001/
   - https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4719
 tags:
-  - attack.defense_evasion
+  - attack.defense_impairment
   - attack.t1685.001
 logsource:
   category: audit_policy_weakened
@@ -43,5 +52,7 @@ detection:
     AuditPolicyChanges|contains:
       - '%%8449'
       - '%%8451'
-  condition: selection
+  filter_gpo_refresh:
+    SubjectUserName|endswith: '$'
+  condition: selection and not filter_gpo_refresh
 level: high

@@ -1,0 +1,27 @@
+title: Pass-the-Hash Style Logon (Logon Type 9 via seclogo)
+id: 3f6b2e84-9a1c-4d57-8e2b-6c4a0f9d7e15
+status: experimental
+description: >
+  Detects a successful logon of type 9 (NewCredentials) through the
+  seclogo logon process with the Negotiate package -- the logon Mimikatz
+  `sekurlsa::pth` (and similar overpass-the-hash tooling) produces on the
+  machine it runs from. `runas /netonly` produces the same logon shape,
+  so this is medium, not high. Verified against real content:
+  LM_4624_mimikatz_sekurlsa_pth_source_machine.evtx.
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1550/002/
+tags:
+  - attack.lateral_movement
+  - attack.t1550.002
+logsource:
+  category: logon_success
+  service: security
+detection:
+  selection:
+    LogonType: '9'
+    LogonProcessName: 'seclogo'
+    AuthenticationPackageName: 'Negotiate'
+  condition: selection
+level: medium

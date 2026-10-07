@@ -5,6 +5,9 @@ description: >
   Detects certutil.exe invoked with -urlcache or -split, a well-known
   LOLBin technique for downloading a remote file without a dedicated
   download tool.
+
+  Matches `/urlcache` as well as `-urlcache`, the -verifyctl download
+  variant, and a renamed certutil (OriginalFileName).
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-18
 references:
@@ -16,10 +19,12 @@ logsource:
   category: process_creation
   service: sysmon
 detection:
-  selection:
-    Image|contains: certutil.exe
-    CommandLine|contains:
+  selection_image:
+    - Image|endswith: '\certutil.exe'
+    - OriginalFileName: 'CertUtil.exe'
+  selection_download:
+    CommandLine|contains|windash:
       - '-urlcache'
-      - '-split'
-  condition: selection
+      - '-verifyctl'
+  condition: selection_image and selection_download
 level: high

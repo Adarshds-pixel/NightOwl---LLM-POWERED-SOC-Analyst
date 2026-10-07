@@ -1,13 +1,19 @@
-title: Accessibility Tool Launched by Utilman or Winlogon
+title: Accessibility Feature Hijack (Shell or Tool Spawned via Accessibility Binary)
 id: 7653de6e-fb41-40be-8ba1-349444409b4a
 status: experimental
 description: >
-  Detects an accessibility-feature binary (osk.exe, sethc.exe, utilman.exe,
-  magnify.exe, narrator.exe, displayswitch.exe, atbroker.exe) whose parent
-  is Utilman.exe or winlogon.exe, the process tree produced by the classic
-  "sticky keys" / accessibility-feature replacement persistence and
-  pre-authentication privilege-escalation technique invoked from the lock
-  screen.
+  Detects abuse of the Windows accessibility binaries (Sticky Keys,
+  On-Screen Keyboard, Utility Manager...) to get a shell at the logon
+  screen: an accessibility binary spawning a shell or recon tool,
+  winlogon / utilman launching a shell directly (the Image File Execution
+  Options 'Debugger' variant), or an accessibility binary that is really
+  cmd.exe/PowerShell under its original file name (the binary-replacement
+  variant). Utilman starting osk.exe and winlogon starting sethc.exe on
+  their own are what these features normally do -- the previous version
+  alerted on exactly that and fired on the Sticky Keys prompt in benign
+  data. Verified against real content:
+  persistence_accessibility_features_osk_sysmon1.evtx (osk.exe launched
+  through `utilman.exe /debug`, then spawning whoami.exe).
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
@@ -20,8 +26,8 @@ logsource:
   category: process_creation
   service: sysmon
 detection:
-  selection_image:
-    Image|endswith:
+  selection_child_of_accessibility:
+    ParentImage|endswith:
       - '\osk.exe'
       - '\sethc.exe'
       - '\utilman.exe'
@@ -29,9 +35,36 @@ detection:
       - '\narrator.exe'
       - '\displayswitch.exe'
       - '\atbroker.exe'
-  selection_parent:
+    Image|endswith:
+      - '\cmd.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+      - '\whoami.exe'
+      - '\net.exe'
+      - '\net1.exe'
+      - '\rundll32.exe'
+      - '\mshta.exe'
+      - '\wscript.exe'
+      - '\cscript.exe'
+      - '\reg.exe'
+  selection_shell_at_logon_screen:
     ParentImage|endswith:
-      - '\Utilman.exe'
       - '\winlogon.exe'
-  condition: selection_image and selection_parent
+      - '\utilman.exe'
+    Image|endswith:
+      - '\cmd.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+  selection_replaced_binary:
+    Image|endswith:
+      - '\osk.exe'
+      - '\sethc.exe'
+      - '\utilman.exe'
+      - '\magnify.exe'
+      - '\narrator.exe'
+    OriginalFileName:
+      - 'Cmd.Exe'
+      - 'PowerShell.EXE'
+      - 'pwsh.dll'
+  condition: 1 of selection_*
 level: medium

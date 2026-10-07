@@ -18,10 +18,10 @@ from app.schemas.event import NormalizedEvent
 # (rule_title, event_id, matching event_data, benign look-alike event_data)
 RULE_CASES = [
     (
-        "Suspicious Encoded PowerShell Command",
+        'Suspicious Encoded PowerShell Command',
         1,
-        {"Image": "C:\\Windows\\System32\\powershell.exe", "CommandLine": "powershell.exe -EncodedCommand aQBlAHgA"},
-        {"Image": "C:\\Windows\\System32\\powershell.exe", "CommandLine": "powershell.exe -Command Get-Process"},
+        {'Image': 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'CommandLine': 'powershell.exe -e JABzAD0ATgBlAHcALQBPAGIAagBlAGMAdAA='},
+        {'Image': 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'CommandLine': 'powershell.exe -Command Get-Content a.txt -Encoding UTF8'},
     ),
     (
         "Certutil Download via urlcache/split Flags",
@@ -36,16 +36,16 @@ RULE_CASES = [
         {"Image": "C:\\Windows\\System32\\powershell.exe", "CommandLine": "powershell.exe -Command Get-Process"},
     ),
     (
-        "Suspicious Network Connection from LOLBin",
+        'Network Connection from a Proxy-Execution LOLBin',
         3,
-        {"Image": "C:\\Windows\\System32\\powershell.exe", "DestinationIp": "203.0.113.10", "DestinationPort": "443"},
-        {"Image": "C:\\Windows\\System32\\svchost.exe", "DestinationIp": "239.255.255.250", "DestinationPort": "1900"},
+        {'Image': 'C:\\Windows\\System32\\certutil.exe', 'Initiated': 'true', 'DestinationIp': '203.0.113.10', 'DestinationPort': '443'},
+        {'Image': 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'Initiated': 'true', 'DestinationIp': '203.0.113.10', 'DestinationPort': '443'},
     ),
     (
-        "Suspicious Executable Written to Public or Temp Directory",
+        'Executable Content Written to Temp/Public by a Script Host or Office App',
         11,
-        {"TargetFilename": "C:\\Users\\Public\\update.exe"},
-        {"TargetFilename": "C:\\Users\\alice\\Documents\\report.docx"},
+        {'Image': 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'TargetFilename': 'C:\\Users\\Public\\update.exe'},
+        {'Image': 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'TargetFilename': 'C:\\Users\\alice\\AppData\\Local\\Temp\\__PSScriptPolicyTest_x1y2.ps1'},
     ),
     (
         "Registry Run Key Persistence",
@@ -60,16 +60,16 @@ RULE_CASES = [
         {"TargetObject": "HKU\\S-1-5-21\\Software\\SomeVendor\\App\\Settings", "Details": "1"},
     ),
     (
-        "Scheduled Task Creation via schtasks.exe",
+        'Scheduled Task Created with a Suspicious Action (schtasks.exe)',
         1,
-        {"Image": "C:\\Windows\\System32\\schtasks.exe", "CommandLine": "schtasks.exe /create /tn Updater /tr payload.exe /sc onlogon"},
-        {"Image": "C:\\Windows\\System32\\schtasks.exe", "CommandLine": "schtasks.exe /query /tn Updater"},
+        {'Image': 'C:\\Windows\\System32\\schtasks.exe', 'CommandLine': 'schtasks.exe /create /tn Updater /tr C:\\Users\\Public\\payload.exe /sc onlogon'},
+        {'Image': 'C:\\Windows\\System32\\schtasks.exe', 'CommandLine': 'schtasks.exe /Create /tn "Microsoft\\Office\\Office Feature Updates" /XML "C:\\ProgramData\\Microsoft\\ClickToRun\\task.xml"'},
     ),
     (
-        "Suspicious Scheduled Task via PowerShell Cmdlet",
+        'Scheduled Task Created with a Suspicious Action (PowerShell)',
         1,
-        {"Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "CommandLine": "powershell.exe Register-ScheduledTask -TaskName Updater -Action $action"},
-        {"Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "CommandLine": "powershell.exe Get-ScheduledTask"},
+        {'Image': 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'CommandLine': 'powershell.exe Register-ScheduledTask -TaskName U -Action (New-ScheduledTaskAction -Execute C:\\Users\\Public\\a.exe)'},
+        {'Image': 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'CommandLine': "powershell.exe Register-ScheduledTask -TaskName Backup -Action (New-ScheduledTaskAction -Execute 'C:\\Program Files\\Backup\\backup.exe')"},
     ),
     (
         "Suspicious Mshta Execution",
@@ -90,10 +90,10 @@ RULE_CASES = [
         {"Image": "C:\\Windows\\System32\\reg.exe", "CommandLine": "reg.exe query hklm\\software\\microsoft"},
     ),
     (
-        "RDP Lateral Movement",
+        'RDP Lateral Movement',
         3,
-        {"Image": "C:\\Windows\\System32\\mstsc.exe", "DestinationIp": "10.0.0.5", "DestinationPort": "3389"},
-        {"Image": "C:\\Windows\\System32\\svchost.exe", "DestinationIp": "10.0.0.5", "DestinationPort": "443"},
+        {'Image': 'C:\\Windows\\System32\\mstsc.exe', 'Initiated': 'true', 'DestinationIp': '10.0.0.5', 'DestinationPort': '3389'},
+        {'Image': 'C:\\Windows\\System32\\svchost.exe', 'Initiated': 'false', 'DestinationIp': '10.0.0.9', 'DestinationPort': '3389'},
     ),
     (
         "Lateral Movement via Windows Admin Share",
@@ -102,16 +102,16 @@ RULE_CASES = [
         {"Image": "C:\\Windows\\System32\\net.exe", "CommandLine": "net.exe use \\\\10.0.0.5\\shared /user:admin"},
     ),
     (
-        "WinRM Lateral Movement",
+        'WinRM Lateral Movement',
         3,
-        {"Image": "C:\\Windows\\System32\\powershell.exe", "DestinationIp": "10.0.0.5", "DestinationPort": "5985"},
-        {"Image": "C:\\Windows\\System32\\powershell.exe", "DestinationIp": "10.0.0.5", "DestinationPort": "80"},
+        {'Image': 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'Initiated': 'true', 'DestinationIp': '10.0.0.5', 'DestinationPort': '5985'},
+        {'Image': 'System', 'Initiated': 'false', 'DestinationIp': '10.0.0.9', 'DestinationPort': '5985'},
     ),
     (
-        "Suspicious Access to Protected System Process",
+        'Suspicious LSASS Process Memory Access',
         10,
-        {"TargetImage": "C:\\Windows\\system32\\lsass.exe", "GrantedAccess": "0x00001010"},
-        {"TargetImage": "C:\\Windows\\System32\\notepad.exe", "GrantedAccess": "0x00001010"},
+        {'SourceImage': 'C:\\Users\\bob\\Desktop\\mimikatz.exe', 'TargetImage': 'C:\\Windows\\system32\\lsass.exe', 'GrantedAccess': '0x1010'},
+        {'SourceImage': 'C:\\Windows\\System32\\taskmgr.exe', 'TargetImage': 'C:\\Windows\\system32\\lsass.exe', 'GrantedAccess': '0x1410'},
     ),
     (
         "Remote Thread Creation from Scripting Engine or Web Server Process",
@@ -132,16 +132,16 @@ RULE_CASES = [
         {"TargetObject": "HKU\\S-1-5-21-1\\exefile\\shell\\open\\command", "Details": "%1 %*"},
     ),
     (
-        "Accessibility Tool Launched by Utilman or Winlogon",
+        'Accessibility Feature Hijack (Shell or Tool Spawned via Accessibility Binary)',
         1,
-        {"Image": "C:\\Windows\\System32\\osk.exe", "ParentImage": "C:\\Windows\\System32\\Utilman.exe"},
-        {"Image": "C:\\Windows\\System32\\osk.exe", "ParentImage": "C:\\Windows\\explorer.exe"},
+        {'Image': 'C:\\Windows\\System32\\whoami.exe', 'ParentImage': 'C:\\Windows\\System32\\osk.exe'},
+        {'Image': 'C:\\Windows\\System32\\osk.exe', 'ParentImage': 'C:\\Windows\\System32\\Utilman.exe'},
     ),
     (
-        "Rogue Spoolss Named Pipe (SeImpersonate Privilege Escalation)",
+        'Rogue Named Pipe with a Nested \\pipe\\ Path (PrintSpoofer / Potato)',
         17,
-        {"PipeName": "\\9023de59-e026-4da5-97dd-913597cd038f\\pipe\\spoolss", "Image": "c:\\Users\\IEUser\\Tools\\PrivEsc\\PrintSpoofer.exe"},
-        {"PipeName": "\\spoolss", "Image": "C:\\Windows\\System32\\spoolsv.exe"},
+        {'PipeName': '\\9023de59-e026-4da5-97dd-913597cd038f\\pipe\\spoolss', 'Image': 'C:\\Tools\\PrintSpoofer.exe'},
+        {'PipeName': '\\spoolss', 'Image': 'C:\\Windows\\splwow64.exe'},
     ),
     (
         "WMI CommandLineEventConsumer Persistence",
@@ -205,6 +205,8 @@ RULE_CASES = [
 # channel just to add 3 more would be a much larger, noisier diff for the
 # same coverage.
 # (title, event_id, matching_event_data, benign_event_data_or_None)
+RULE_CASES += [('RDP Session Hijacking via tscon (Sysmon)', 1, {'Image': 'C:\\Windows\\System32\\tscon.exe', 'CommandLine': 'tscon 2 /dest:rdp-tcp#5'}, {'Image': 'C:\\Windows\\System32\\tscon.exe', 'CommandLine': 'tscon /?'}), ('Remote Command Execution via WMIC /node', 1, {'Image': 'C:\\Windows\\System32\\wbem\\WMIC.exe', 'CommandLine': 'wmic /node:10.0.0.5 process call create calc.exe'}, {'Image': 'C:\\Windows\\System32\\wbem\\WMIC.exe', 'CommandLine': 'wmic process list brief'}), ('Shell Spawned by a Windows Installer Custom Action', 1, {'Image': 'C:\\Windows\\System32\\cmd.exe', 'ParentImage': 'C:\\Windows\\Installer\\MSI4FFD.tmp'}, {'Image': 'C:\\Windows\\System32\\cmd.exe', 'ParentImage': 'C:\\Windows\\explorer.exe'}), ('Shell Started Directly by the Service Control Manager', 1, {'Image': 'C:\\Windows\\System32\\cmd.exe', 'ParentImage': 'C:\\Windows\\System32\\services.exe'}, {'Image': 'C:\\Windows\\System32\\svchost.exe', 'ParentImage': 'C:\\Windows\\System32\\services.exe'}), ('Service ImagePath Set to a Shell or Script Command (Registry)', 13, {'TargetObject': 'HKLM\\System\\CurrentControlSet\\Services\\hello\\ImagePath', 'Details': '%COMSPEC% /b /c start /b /min powershell.exe -nop -w hidden'}, {'TargetObject': 'HKLM\\System\\CurrentControlSet\\Services\\Spooler\\ImagePath', 'Details': 'C:\\Windows\\System32\\spoolsv.exe'})]
+
 SECURITY_RULE_CASES = [
     (
         "Security Audit Log Cleared",
@@ -223,10 +225,10 @@ SECURITY_RULE_CASES = [
         {"Properties": "{...} {00299570-246d-11d0-a768-00aa006e0529} {...}"},
     ),
     (
-        "LSASS Handle Access via Security Auditing",
-        4663,
-        {"ObjectName": "C:\\Windows\\system32\\lsass.exe"},
-        {"ObjectName": "C:\\Windows\\System32\\notepad.exe"},
+        'LSASS Process Handle with Memory Read Access (Security Audit)',
+        4656,
+        {'ObjectType': 'Process', 'ObjectName': '\\Device\\HarddiskVolume1\\Windows\\System32\\lsass.exe', 'AccessMask': '0x001f3fff', 'ProcessName': 'C:\\Windows\\System32\\cscript.exe'},
+        {'ObjectType': 'File', 'ObjectName': 'C:\\Windows\\System32\\lsass.exe', 'AccessMask': '0x00000010', 'ProcessName': 'C:\\Program Files\\Backup\\agent.exe'},
     ),
     (
         "Sensitive Local Group/Account Enumeration via net.exe",
@@ -274,11 +276,10 @@ SECURITY_RULE_CASES = [
         {"TargetSid": "S-1-5-32-544", "MemberSid": "S-1-5-21-111111111-222222222-3333333333-1105"},
     ),
     (
-        "Computer Account Created",
+        'User Account Created with a Computer-Style ($) Name',
         4720,
-        {"SamAccountName": "WORKSTATION01$"},
-        # Benign look-alike: a human user account, no trailing "$".
-        {"SamAccountName": "jdoe"},
+        {'SamAccountName': 'svc-update$', 'TargetUserName': 'svc-update$'},
+        {'SamAccountName': 'alice', 'TargetUserName': 'alice'},
     ),
     (
         "Scheduled Task Created with Hidden Flag",
@@ -296,13 +297,10 @@ SECURITY_RULE_CASES = [
         {"AuditPolicyChanges": "%%8448, %%8450"},
     ),
     (
-        "Remote Registry Access via winreg Named Pipe",
+        'Remote Registry Access over IPC$ (winreg)',
         5145,
-        {"ShareName": "\\\\*\\IPC$", "RelativeTargetName": "winreg"},
-        # Benign look-alike: same admin share, a different (and far more
-        # common) RPC endpoint -- e.g. querying share enumeration, not
-        # touching the registry.
-        {"ShareName": "\\\\*\\IPC$", "RelativeTargetName": "srvsvc"},
+        {'ShareName': '\\\\*\\IPC$', 'RelativeTargetName': 'winreg'},
+        {'ShareName': '\\\\*\\IPC$', 'RelativeTargetName': 'srvsvc'},
     ),
     (
         "Kernel-Mode Driver Installed as a Windows Service",
@@ -342,6 +340,8 @@ SECURITY_RULE_CASES = [
 # that list is kept separate from RULE_CASES: _event()'s channel default
 # doesn't fit a third channel any better than a second.
 # (title, event_id, matching_event_data, benign_event_data_or_None)
+SECURITY_RULE_CASES += [('Service Installed with a Shell or Script Command as Its Binary (Security 4697)', 4697, {'ServiceName': 'BTOBTO', 'ServiceFileName': '%COMSPEC% /Q /c echo cd ^> \\\\127.0.0.1\\C$\\__output'}, {'ServiceName': 'Backup', 'ServiceFileName': '"C:\\Program Files\\Backup\\agent.exe" -service'}), ('RDP Session Hijacking via tscon (Security 4688)', 4688, {'NewProcessName': 'C:\\Windows\\System32\\sc.exe', 'CommandLine': 'sc.exe create hijack binpath= "cmd.exe /k tscon 2 /dest:rdp-tcp#5"'}, {'NewProcessName': 'C:\\Windows\\System32\\sc.exe', 'CommandLine': 'sc.exe query hijack'}), ('Pass-the-Hash Style Logon (Logon Type 9 via seclogo)', 4624, {'LogonType': '9', 'LogonProcessName': 'seclogo', 'AuthenticationPackageName': 'Negotiate'}, {'LogonType': '2', 'LogonProcessName': 'User32', 'AuthenticationPackageName': 'Negotiate'}), ('WMIC Used with Explicit Credentials Against a Remote Host', 4648, {'ProcessName': 'C:\\Windows\\System32\\wbem\\WMIC.exe', 'TargetServerName': 'dc01.example.corp'}, {'ProcessName': 'C:\\Windows\\System32\\wbem\\WMIC.exe', 'TargetServerName': 'localhost'}), ('Computer Account Renamed Without Its Trailing $ (sAMAccountName Spoofing)', 4781, {'OldTargetUserName': 'DC012$', 'NewTargetUserName': 'DC01'}, {'OldTargetUserName': 'WS-OLD$', 'NewTargetUserName': 'WS-NEW$'}), ('Computer Account Created by a User Account', 4741, {'SamAccountName': 'DC012$', 'SubjectUserName': 'lgrove'}, {'SamAccountName': 'WS42$', 'SubjectUserName': 'DC01$'})]
+
 POWERSHELL_RULE_CASES = [
     (
         "PowerShell LSASS Memory Dump via Reflection",
@@ -385,13 +385,14 @@ def _event(event_id, event_data, channel="Microsoft-Windows-Sysmon/Operational")
     )
 
 
-def test_exactly_forty_five_rules_are_covered_by_this_matrix():
-    assert len(RULE_CASES) + len(SECURITY_RULE_CASES) + len(POWERSHELL_RULE_CASES) == 45
+def test_every_loaded_rule_is_covered_by_this_matrix():
     rules = rule_loader.load_rules()
     covered_titles = (
         {title for title, *_ in RULE_CASES}
         | {title for title, *_ in SECURITY_RULE_CASES}
         | {title for title, *_ in POWERSHELL_RULE_CASES}
+        | {title for title, *_ in SYSTEM_RULE_CASES}
+        | {title for title, *_ in APPLICATION_RULE_CASES}
     )
     assert covered_titles == {r.title for r in rules}
 
@@ -676,3 +677,61 @@ def test_sysmon_rules_do_not_fire_on_security_channel_event_id_collision():
     matches = evaluate_event(event, rules)
 
     assert not any(m.title == "Suspicious Access to Protected System Process" for m in matches)
+
+
+# System and Application channel rules (7045 / 104 service + log-clear, MSI 1040).
+SYSTEM_RULE_CASES = [('Service Installed with a Shell or Script Command as Its Binary (System 7045)', 7045, {'ServiceName': 'BTOBTO', 'ImagePath': '%COMSPEC% /Q /c echo cd ^> \\\\127.0.0.1\\C$\\__output 2^>^&1'}, {'ServiceName': 'Backup', 'ImagePath': '"C:\\Program Files\\Backup\\agent.exe"'}), ('Windows Event Log Cleared (System 104)', 104, {'Channel': 'System'}, None)]
+APPLICATION_RULE_CASES = [('Windows Installer Package Installed from a URL', 1040, {'UnnamedEventData': '<string>http://officemysuppbox.com/staterepository</string>\n<string>2600</string>'}, {'UnnamedEventData': '<string>C:\\Program Files\\Google\\Update\\GoogleUpdateHelper.msi</string>'})]
+
+
+@pytest.mark.parametrize(
+    "title,event_id,matching_data,benign_data", SYSTEM_RULE_CASES, ids=[c[0] for c in SYSTEM_RULE_CASES]
+)
+def test_system_rule_fires_and_ignores_benign(title, event_id, matching_data, benign_data):
+    rules = rule_loader.load_rules()
+    assert title in {m.title for m in evaluate_event(_event(event_id, matching_data, channel="System"), rules)}
+    if benign_data is not None:
+        assert title not in {m.title for m in evaluate_event(_event(event_id, benign_data, channel="System"), rules)}
+    # Never on the same event id from another channel.
+    assert title not in {m.title for m in evaluate_event(_event(event_id, matching_data, channel="Security"), rules)}
+
+
+@pytest.mark.parametrize(
+    "title,event_id,matching_data,benign_data", APPLICATION_RULE_CASES, ids=[c[0] for c in APPLICATION_RULE_CASES]
+)
+def test_application_rule_fires_and_ignores_benign(title, event_id, matching_data, benign_data):
+    rules = rule_loader.load_rules()
+    assert title in {m.title for m in evaluate_event(_event(event_id, matching_data, channel="Application"), rules)}
+    assert title not in {m.title for m in evaluate_event(_event(event_id, benign_data, channel="Application"), rules)}
+
+
+@pytest.mark.parametrize(
+    "command_line",
+    [
+        "powershell.exe -ec JABzAD0ATgBlAHcA",
+        "powershell.exe /enc JABzAD0ATgBlAHcA",
+        "pwsh.exe -EncodedCommand JABzAD0ATgBlAHcA",
+    ],
+)
+def test_encoded_powershell_rule_matches_every_accepted_spelling(command_line):
+    image = "C:\\Program Files\\PowerShell\\7\\pwsh.exe" if command_line.startswith("pwsh") else "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    matches = evaluate_event(_event(1, {"Image": image, "CommandLine": command_line}), rule_loader.load_rules())
+    assert "Suspicious Encoded PowerShell Command" in {m.title for m in matches}
+
+
+def test_lsass_dump_rule_ignores_crash_reporter_minidump_flag():
+    """Regression: ChatGPT's crash reporter passes a MiniDump flag; the old
+    comsvcs branch matched the word alone (13 critical false positives)."""
+    event = _event(1, {
+        "Image": "C:\\Users\\a\\AppData\\Local\\Programs\\ChatGPT\\ChatGPT.exe",
+        "CommandLine": "ChatGPT.exe --type=crashpad-handler --annotation=MiniDump=1",
+    })
+    assert "LSASS Memory Dump" not in {m.title for m in evaluate_event(event, rule_loader.load_rules())}
+
+
+def test_lsass_dump_rule_matches_comsvcs_ordinal():
+    event = _event(1, {
+        "Image": "C:\\Windows\\System32\\rundll32.exe",
+        "CommandLine": "rundll32.exe C:\\Windows\\System32\\comsvcs.dll, #24 640 C:\\temp\\l.dmp full",
+    })
+    assert "LSASS Memory Dump" in {m.title for m in evaluate_event(event, rule_loader.load_rules())}

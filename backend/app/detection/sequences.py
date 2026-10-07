@@ -34,6 +34,7 @@ technique (routes_alerts.py, routes_events.py, routes_incidents.py) must
 also consult `SEQUENCE_PATTERNS` below.
 """
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import timedelta
@@ -70,7 +71,7 @@ PROCESS_HERPADERPING = SequencePattern(
     # to -- confirmed present in this project's loaded MITRE dataset via
     # app.mitre.loader.load_mitre_techniques(), not guessed.
     technique_id="T1055",
-    tactics=["defense_evasion", "privilege_escalation"],
+    tactics=["stealth", "privilege_escalation"],
     level="high",
 )
 
@@ -90,6 +91,46 @@ KERBEROS_PASSWORD_SPRAY = SequencePattern(
     level="high",
 )
 
+AUTHENTICATION_BRUTE_FORCE = SequencePattern(
+    rule_id="sequence-authentication-brute-force",
+    title="Authentication Brute Force (Repeated Failed Logons from One Source)",
+    technique_id="T1110",  # Brute Force
+    tactics=["credential_access"],
+    level="medium",
+)
+
+REMOTE_SAM_ENUMERATION = SequencePattern(
+    rule_id="sequence-remote-sam-lsa-enumeration",
+    title="Remote SAM/LSA/Server Service Enumeration over IPC$ (BloodHound / net-style recon)",
+    technique_id="T1087",  # Account Discovery
+    tactics=["discovery"],
+    level="low",
+)
+
+MASS_PROCESS_ACCESS = SequencePattern(
+    rule_id="sequence-mass-process-access",
+    title="Process Discovery by Mass Process Access from a Non-System Binary",
+    technique_id="T1057",  # Process Discovery
+    tactics=["discovery"],
+    level="low",
+)
+
+GROUP_SELF_ADD = SequencePattern(
+    rule_id="sequence-group-self-add",
+    title="Account Added Itself to a Security Group",
+    technique_id="T1098",  # Account Manipulation
+    tactics=["persistence", "privilege_escalation"],
+    level="medium",
+)
+
+BULK_GROUP_ADDITION = SequencePattern(
+    rule_id="sequence-bulk-group-membership-addition",
+    title="One Account Added Members to Many Security Groups in a Short Time",
+    technique_id="T1098",  # Account Manipulation
+    tactics=["persistence", "privilege_escalation"],
+    level="medium",
+)
+
 # rule_id -> SequencePattern, for any read path that resolves an Alert's
 # rule_id to a human title/technique but only ever queried
 # rule_loader.get_loaded_rules() before (routes_alerts.py, routes_events.py,
@@ -98,7 +139,49 @@ SEQUENCE_PATTERNS: dict[str, SequencePattern] = {
     PROCESS_HERPADERPING.rule_id: PROCESS_HERPADERPING,
     SMB_SHARE_ENUM_PROBE.rule_id: SMB_SHARE_ENUM_PROBE,
     KERBEROS_PASSWORD_SPRAY.rule_id: KERBEROS_PASSWORD_SPRAY,
+    AUTHENTICATION_BRUTE_FORCE.rule_id: AUTHENTICATION_BRUTE_FORCE,
+    REMOTE_SAM_ENUMERATION.rule_id: REMOTE_SAM_ENUMERATION,
+    MASS_PROCESS_ACCESS.rule_id: MASS_PROCESS_ACCESS,
+    GROUP_SELF_ADD.rule_id: GROUP_SELF_ADD,
+    BULK_GROUP_ADDITION.rule_id: BULK_GROUP_ADDITION,
 }
+
+# 4728 / 4732 / 4756: member added to a global / local / universal security group.
+_GROUP_ADD_EVENT_IDS = frozenset({4728, 4732, 4756})
+# Bulk additions: one subject adding members to this many distinct groups
+# within the window. Onboarding one user touches a handful of groups at
+# most; scripted privilege staging touches many at once.
+_BULK_GROUP_WINDOW = timedelta(minutes=10)
+_BULK_GROUP_DISTINCT_GROUPS = 5
+
+# Brute force: this many failed authentications from one source within the
+# window. A user mistyping a password produces 1-3; lockout policies
+# typically trip at 5-10.
+_BRUTE_FORCE_WINDOW = timedelta(minutes=5)
+_BRUTE_FORCE_THRESHOLD = 8
+
+# Remote enumeration: one (source address, user account) touching at least
+# this many DISTINCT RPC pipes from the set below over IPC$ within the
+# window, with at least _SAM_ENUM_MIN_ACCESSES accesses in total. Machine
+# accounts ($) are excluded -- domain members talk to these pipes on their
+# own all day. NOTE: on domain controllers with heavy legitimate admin
+# tooling this can still be noisy; it is low severity for that reason.
+_SAM_ENUM_WINDOW = timedelta(seconds=60)
+_SAM_ENUM_PIPES = frozenset({"samr", "lsarpc", "srvsvc", "wkssvc"})
+_SAM_ENUM_MIN_DISTINCT_PIPES = 3
+_SAM_ENUM_MIN_ACCESSES = 5
+
+# Mass process access: one non-system binary opening at least this many
+# distinct processes within the window (a process listing done by opening
+# every process -- e.g. Meterpreter's `ps`).
+_MASS_ACCESS_WINDOW = timedelta(seconds=10)
+_MASS_ACCESS_DISTINCT_TARGETS = 10
+_SYSTEM_IMAGE_PREFIXES = (
+    "c:\\windows\\",
+    "c:\\program files\\",
+    "c:\\program files (x86)\\",
+    "c:\\programdata\\microsoft\\windows defender\\",
+)
 
 # Real observed gap between chained events in the verified fixture
 # (DE_ProcessHerpaderping_Sysmon_11_10_1_7.evtx) is ~70ms end to end
@@ -258,6 +341,7 @@ def _detect_smb_share_enum_probe(rows: list[EventRow]) -> list[tuple[Event, Rule
         return []
 
     matches: list[tuple[Event, RuleMatch]] = []
+    last_alert_at: dict[str, object] = {}
 
     for pipe_event, pipe_normalized in pipe_connects:
         if pipe_normalized.event_data.get("PipeName") not in _DISCOVERY_PIPE_NAMES:
@@ -275,7 +359,11 @@ def _detect_smb_share_enum_probe(rows: list[EventRow]) -> list[tuple[Event, Rule
             if gap > _SMB_ENUM_WINDOW.total_seconds():
                 continue
 
-            matches.append((pipe_event, _match(SMB_SHARE_ENUM_PROBE)))
+            # One alert per host per window, not one per pipe connect.
+            last = last_alert_at.get(pipe_normalized.host)
+            if last is None or (pipe_normalized.timestamp - last) > _SMB_ENUM_WINDOW:
+                matches.append((pipe_event, _match(SMB_SHARE_ENUM_PROBE)))
+                last_alert_at[pipe_normalized.host] = pipe_normalized.timestamp
             break  # one corroborating connection is enough for this pipe connect
 
     return matches
@@ -291,6 +379,17 @@ def _detect_kerberos_password_spray(rows: list[EventRow]) -> list[tuple[Event, R
         ip = _normalize_ip(normalized.event_data.get("IpAddress"))
         username = normalized.event_data.get("TargetUserName")
         if not ip or not username:
+            continue
+        # Failures only: a successful TGT request (Status 0x0) is a normal
+        # logon, and counting them made any busy terminal server / NAT
+        # address look like a spray. Machine accounts and krbtgt are not
+        # spray targets.
+        status = (normalized.event_data.get("Status") or "").lower()
+        if normalized.event_id == 4768 and status in ("0x0", "0x00000000", ""):
+            continue
+        if username.endswith("$") or username.lower() == "krbtgt":
+            continue
+        if ip in ("::1", "127.0.0.1"):
             continue
         by_source[(normalized.host, ip)].append((event, normalized))
 
@@ -324,6 +423,143 @@ def _detect_kerberos_password_spray(rows: list[EventRow]) -> list[tuple[Event, R
     return matches
 
 
+_MSSQL_CLIENT_RE = re.compile(r"\[CLIENT:\s*([^\]\s]+)\s*\]", re.IGNORECASE)
+
+
+def _failed_auth_source(normalized: NormalizedEvent) -> str | None:
+    """Grouping key for a failed authentication, or None if `normalized` is
+    not one: Security 4625 (failed Windows logon) keyed by source address
+    (or target account for local logons with no address), MSSQL 18456
+    (Application log) keyed by the [CLIENT: x] address in its message."""
+    channel = canonical_channel(normalized.channel)
+    if channel == "security" and normalized.event_id == 4625:
+        ip = _normalize_ip(normalized.event_data.get("IpAddress"))
+        if ip and ip not in ("-", "::1", "127.0.0.1"):
+            return f"ip:{ip}"
+        user = normalized.event_data.get("TargetUserName")
+        return f"user:{user.lower()}" if user and user != "-" else None
+    if channel == "application" and normalized.event_id == 18456:
+        match = _MSSQL_CLIENT_RE.search(normalized.event_data.get("UnnamedEventData") or "")
+        return f"mssql:{match.group(1)}" if match else None
+    return None
+
+
+def _sliding_bursts(group: list[EventRow], window: timedelta, is_burst) -> list[EventRow]:
+    """One anchor per burst: walk `group` (time-ordered), keep the events
+    within `window` of the newest, and report the event at which `is_burst`
+    first becomes true; re-arm once the window falls back below it."""
+    anchors: list[EventRow] = []
+    in_view: list[EventRow] = []
+    armed = False
+    for event, normalized in group:
+        in_view.append((event, normalized))
+        in_view[:] = [(e, n) for e, n in in_view if normalized.timestamp - n.timestamp <= window]
+        if is_burst(in_view):
+            if not armed:
+                anchors.append((event, normalized))
+                armed = True
+        else:
+            armed = False
+    return anchors
+
+
+def _detect_authentication_brute_force(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
+    by_source: dict[tuple[str, str], list[EventRow]] = defaultdict(list)
+    for event, normalized in rows:
+        key = _failed_auth_source(normalized)
+        if key:
+            by_source[(normalized.host, key)].append((event, normalized))
+    matches: list[tuple[Event, RuleMatch]] = []
+    for group in by_source.values():
+        if len(group) < _BRUTE_FORCE_THRESHOLD:
+            continue
+        group.sort(key=lambda pair: pair[1].timestamp)
+        for anchor, _n in _sliding_bursts(group, _BRUTE_FORCE_WINDOW, lambda view: len(view) >= _BRUTE_FORCE_THRESHOLD):
+            matches.append((anchor, _match(AUTHENTICATION_BRUTE_FORCE)))
+    return matches
+
+
+def _detect_remote_sam_enumeration(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
+    by_source: dict[tuple[str, str, str], list[EventRow]] = defaultdict(list)
+    for event, normalized in rows:
+        if not (_is_security(normalized) and normalized.event_id == 5145):
+            continue
+        data = normalized.event_data
+        if not (data.get("ShareName") or "").upper().endswith("IPC$"):
+            continue
+        pipe = (data.get("RelativeTargetName") or "").lower()
+        user = data.get("SubjectUserName") or ""
+        if pipe not in _SAM_ENUM_PIPES or not user or user.endswith("$"):
+            continue
+        ip = _normalize_ip(data.get("IpAddress")) or "-"
+        by_source[(normalized.host, ip, user.lower())].append((event, normalized))
+
+    def _is_burst(view: list[EventRow]) -> bool:
+        pipes = {(n.event_data.get("RelativeTargetName") or "").lower() for _e, n in view}
+        return len(view) >= _SAM_ENUM_MIN_ACCESSES and len(pipes) >= _SAM_ENUM_MIN_DISTINCT_PIPES
+
+    matches: list[tuple[Event, RuleMatch]] = []
+    for group in by_source.values():
+        group.sort(key=lambda pair: pair[1].timestamp)
+        for anchor, _n in _sliding_bursts(group, _SAM_ENUM_WINDOW, _is_burst):
+            matches.append((anchor, _match(REMOTE_SAM_ENUMERATION)))
+    return matches
+
+
+def _detect_mass_process_access(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
+    by_source: dict[tuple[str, str], list[EventRow]] = defaultdict(list)
+    for event, normalized in rows:
+        if not (_is_sysmon(normalized) and normalized.event_id == 10):
+            continue
+        source = (normalized.event_data.get("SourceImage") or "").lower()
+        if not source or source.startswith(_SYSTEM_IMAGE_PREFIXES):
+            continue
+        by_source[(normalized.host, source)].append((event, normalized))
+
+    def _is_burst(view: list[EventRow]) -> bool:
+        targets = {(n.event_data.get("TargetImage") or "").lower() for _e, n in view}
+        return len(targets) >= _MASS_ACCESS_DISTINCT_TARGETS
+
+    matches: list[tuple[Event, RuleMatch]] = []
+    for group in by_source.values():
+        if len(group) < _MASS_ACCESS_DISTINCT_TARGETS:
+            continue
+        group.sort(key=lambda pair: pair[1].timestamp)
+        for anchor, _n in _sliding_bursts(group, _MASS_ACCESS_WINDOW, _is_burst):
+            matches.append((anchor, _match(MASS_PROCESS_ACCESS)))
+    return matches
+
+
+def _detect_group_membership_abuse(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
+    """Two checks a single Sigma rule cannot express: a field compared with
+    another field (the subject adding ITSELF -- someone who can modify a
+    group granting themselves its rights), and a volume of additions by one
+    subject. Both exclude machine accounts and SYSTEM."""
+    additions = [
+        (e, n)
+        for e, n in rows
+        if _is_security(n) and n.event_id in _GROUP_ADD_EVENT_IDS
+        and (n.event_data.get("SubjectUserSid") or "") not in ("", "S-1-5-18")
+        and not (n.event_data.get("SubjectUserName") or "").endswith("$")
+    ]
+    matches: list[tuple[Event, RuleMatch]] = []
+    by_subject: dict[tuple[str, str], list[EventRow]] = defaultdict(list)
+    for event, normalized in additions:
+        data = normalized.event_data
+        if data.get("MemberSid") and data.get("MemberSid") == data.get("SubjectUserSid"):
+            matches.append((event, _match(GROUP_SELF_ADD)))
+        by_subject[(normalized.host, data["SubjectUserSid"])].append((event, normalized))
+
+    def _is_burst(view: list[EventRow]) -> bool:
+        return len({n.event_data.get("TargetSid") for _e, n in view}) >= _BULK_GROUP_DISTINCT_GROUPS
+
+    for group in by_subject.values():
+        group.sort(key=lambda pair: pair[1].timestamp)
+        for anchor, _n in _sliding_bursts(group, _BULK_GROUP_WINDOW, _is_burst):
+            matches.append((anchor, _match(BULK_GROUP_ADDITION)))
+    return matches
+
+
 def detect_sequences(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
     """Runs all three patterns over one ingest batch's (Event row,
     NormalizedEvent) pairs. Returns (anchor_event, RuleMatch) pairs in the
@@ -336,4 +572,8 @@ def detect_sequences(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
         _detect_process_herpaderping(rows)
         + _detect_smb_share_enum_probe(rows)
         + _detect_kerberos_password_spray(rows)
+        + _detect_authentication_brute_force(rows)
+        + _detect_remote_sam_enumeration(rows)
+        + _detect_mass_process_access(rows)
+        + _detect_group_membership_abuse(rows)
     )

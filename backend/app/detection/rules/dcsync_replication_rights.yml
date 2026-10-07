@@ -7,6 +7,13 @@ description: >
   DS-Replication-Get-Changes-All extended-right GUID, the signature of a
   DCSync attack -- an attacker impersonating a domain controller to pull
   password hashes via directory replication.
+
+  Domain controllers replicate with each other using their machine
+  accounts, and Azure AD Connect's MSOL_ account holds these rights by
+  design -- both are excluded, so the rule fires on replication requested
+  by an ordinary user or admin account, which is what DCSync looks like.
+  The filtered-set GUID (89e95b76...) is included alongside Get-Changes /
+  Get-Changes-All.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
@@ -22,5 +29,10 @@ detection:
     Properties|contains:
       - '{1131f6aa-9c07-11d1-f79f-00c04fc2dcd2}'
       - '{1131f6ad-9c07-11d1-f79f-00c04fc2dcd2}'
-  condition: selection
+      - '{89e95b76-444d-4c62-991a-0facbeda640c}'
+  filter_machine_accounts:
+    SubjectUserName|endswith: '$'
+  filter_aad_connect:
+    SubjectUserName|startswith: 'MSOL_'
+  condition: selection and not 1 of filter_*
 level: high

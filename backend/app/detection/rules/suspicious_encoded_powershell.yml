@@ -4,6 +4,11 @@ status: experimental
 description: >
   Detects PowerShell process creation with an encoded/inline command flag,
   a common technique to obfuscate malicious commands from casual log review.
+
+  Matches every prefix PowerShell accepts for -EncodedCommand (-e, -ec,
+  -enc, ...), with `-` or `/`, for both Windows PowerShell and pwsh, and
+  requires a Base64 payload to follow. The previous `contains: -enc` both
+  missed `-e`/`-ec` and matched the ordinary `-Encoding UTF8` parameter.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-16
 references:
@@ -15,10 +20,14 @@ logsource:
   category: process_creation
   service: sysmon
 detection:
-  selection:
-    Image|contains: powershell
-    CommandLine|contains:
-      - '-enc'
-      - '-EncodedCommand'
-  condition: selection
+  selection_image:
+    - Image|endswith:
+        - '\powershell.exe'
+        - '\pwsh.exe'
+    - OriginalFileName:
+        - 'PowerShell.EXE'
+        - 'pwsh.dll'
+  selection_encoded:
+    CommandLine|re: '(?i)\s[-/\u2013\u2014](e|ec|en|enc|enco|encod|encode|encoded|encodedc|encodedco|encodedcom|encodedcomm|encodedcomma|encodedcomman|encodedcommand)\s+[A-Za-z0-9+/=]{8,}'
+  condition: selection_image and selection_encoded
 level: high

@@ -1,0 +1,27 @@
+title: Computer Account Created by a User Account
+id: 4c8e2a91-6d3f-4b57-a9e1-0f7b3c5d8e26
+status: experimental
+description: >
+  Detects Security event 4741 (a computer account was created) where the
+  creator is a user, not a machine or service. Any authenticated user can
+  create up to ten computer accounts by default
+  (ms-DS-MachineAccountQuota), which relay and delegation attacks (noPac,
+  RBCD) rely on; help-desk domain joins also look like this, hence low
+  severity.
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1136/002/
+tags:
+  - attack.persistence
+  - attack.t1136.002
+logsource:
+  category: computer_account_created
+  service: security
+detection:
+  selection:
+    SamAccountName|endswith: '$'
+  filter_machine_creator:
+    SubjectUserName|endswith: '$'
+  condition: selection and not filter_machine_creator
+level: low

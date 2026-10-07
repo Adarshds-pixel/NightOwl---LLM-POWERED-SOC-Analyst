@@ -1,0 +1,27 @@
+title: Windows Installer Package Installed from a URL
+id: 6e4a9d12-8c5b-4f73-a0d6-2b9e7c1f3a58
+status: experimental
+description: >
+  Detects MsiInstaller transaction events (Application log 1040/1042)
+  whose package source is an http(s) URL -- `msiexec /i http://...`, a
+  signed-binary way to pull and run a remote installer. Ordinary installs
+  reference a local or UNC path. Verified against real content:
+  rogue_msi_url_1040_1042.evtx
+  (http://officemysuppbox.com/staterepository).
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1218/007/
+tags:
+  - attack.stealth
+  - attack.t1218.007
+logsource:
+  service: application
+detection:
+  selection:
+    EventID:
+      - 1040
+      - 1042
+    UnnamedEventData|re: '(?i)<string>\s*https?://'
+  condition: selection
+level: medium

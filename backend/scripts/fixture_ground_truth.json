@@ -1,0 +1,414 @@
+{
+  "_about": "Expected ATT&CK techniques per attack fixture, written from each capture's documented scenario (the EVTX-ATTACK-SAMPLES naming and the behaviour inside the file), not from what NightOwl's rules emit. A detection is CORRECT when an emitted technique shares its parent (T1234 of T1234.005) with an expected one. All of these captures informed rule development at some point, so every number measured on them is a development-set number, not a held-out estimate -- see run_detection_benchmark.py and docs/DOCUMENTATION.md.",
+  "fixtures": {
+    "4799_remote_local_groups_enumeration.evtx": {
+      "expected": [
+        "T1069.001",
+        "T1087.001"
+      ],
+      "split": "dev"
+    },
+    "ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx": {
+      "expected": [
+        "T1098",
+        "T1222.001",
+        "T1558.003"
+      ],
+      "split": "dev"
+    },
+    "CA_DCSync_4662.evtx": {
+      "expected": [
+        "T1003.006"
+      ],
+      "split": "dev"
+    },
+    "CA_hashdump_4663_4656_lsass_access.evtx": {
+      "expected": [
+        "T1003.001"
+      ],
+      "split": "dev"
+    },
+    "DE_1102_security_log_cleared.evtx": {
+      "expected": [
+        "T1685.005"
+      ],
+      "split": "dev"
+    },
+    "DE_Fake_ComputerAccount_4720.evtx": {
+      "expected": [
+        "T1136.002",
+        "T1036"
+      ],
+      "split": "dev"
+    },
+    "DE_ProcessHerpaderping_Sysmon_11_10_1_7.evtx": {
+      "expected": [
+        "T1055"
+      ],
+      "split": "dev"
+    },
+    "DE_RDP_Tunnel_5156.evtx": {
+      "expected": [
+        "T1572"
+      ],
+      "split": "dev"
+    },
+    "DE_RDP_Tunneling_4624.evtx": {
+      "expected": [
+        "T1572"
+      ],
+      "split": "dev"
+    },
+    "DE_UAC_Disabled_Sysmon_12_13.evtx": {
+      "expected": [
+        "T1548.002",
+        "T1685",
+        "T1112"
+      ],
+      "split": "dev"
+    },
+    "de_unmanagedpowershell_psinject_sysmon_7_8_10.evtx": {
+      "expected": [
+        "T1059.001",
+        "T1055"
+      ],
+      "split": "dev"
+    },
+    "dicovery_4661_net_group_domain_admins_target.evtx": {
+      "expected": [
+        "T1069.002",
+        "T1087.002"
+      ],
+      "split": "dev"
+    },
+    "discovery_bloodhound.evtx": {
+      "expected": [
+        "T1087",
+        "T1069",
+        "T1482",
+        "T1018",
+        "T1033"
+      ],
+      "split": "dev"
+    },
+    "discovery_enum_shares_target_sysmon_3_18.evtx": {
+      "expected": [
+        "T1135"
+      ],
+      "split": "dev"
+    },
+    "discovery_local_user_or_group_windows_security_4799_4798.evtx": {
+      "expected": [
+        "T1069.001",
+        "T1087.001"
+      ],
+      "split": "dev"
+    },
+    "discovery_meterpreter_ps_cmd_process_listing_sysmon_10.evtx": {
+      "expected": [
+        "T1057"
+      ],
+      "split": "dev"
+    },
+    "discovery_psloggedon.evtx": {
+      "expected": [
+        "T1033",
+        "T1012"
+      ],
+      "split": "dev"
+    },
+    "discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx": {
+      "expected": [
+        "T1033",
+        "T1087",
+        "T1069",
+        "T1018"
+      ],
+      "split": "dev"
+    },
+    "discovery_UEFI_Settings_rweverything_sysmon_6.evtx": {
+      "expected": [
+        "T1068",
+        "T1542",
+        "T1014",
+        "T1082"
+      ],
+      "split": "dev"
+    },
+    "exec_emotet_ps_4104.evtx": {
+      "expected": [
+        "T1059.001",
+        "T1105"
+      ],
+      "split": "dev"
+    },
+    "exec_sysmon_1_ftp.evtx": {
+      "expected": [
+        "T1202",
+        "T1059"
+      ],
+      "split": "dev"
+    },
+    "exec_sysmon_1_lolbin_pcalua.evtx": {
+      "expected": [
+        "T1218",
+        "T1202"
+      ],
+      "split": "dev"
+    },
+    "Exec_sysmon_meterpreter_reversetcp_msipackage.evtx": {
+      "expected": [
+        "T1218.007",
+        "T1059"
+      ],
+      "split": "dev"
+    },
+    "ID4688-4697 RDP hijack via service creation.evtx": {
+      "expected": [
+        "T1563.002",
+        "T1543.003",
+        "T1569.002"
+      ],
+      "split": "dev"
+    },
+    "ID4697-New service for Mimikatz.evtx": {
+      "expected": [
+        "T1543.003",
+        "T1569.002"
+      ],
+      "split": "dev"
+    },
+    "ID4728-4756-Member added to sensitive domain groups.evtx": {
+      "expected": [
+        "T1098"
+      ],
+      "split": "dev"
+    },
+    "kerberos_pwd_spray_4771.evtx": {
+      "expected": [
+        "T1110.003"
+      ],
+      "split": "dev"
+    },
+    "LM_4624_mimikatz_sekurlsa_pth_source_machine.evtx": {
+      "expected": [
+        "T1550.002"
+      ],
+      "split": "dev"
+    },
+    "LM_5145_Remote_FileCopy.evtx": {
+      "expected": [
+        "T1570",
+        "T1021.002"
+      ],
+      "split": "dev"
+    },
+    "LM_PowershellRemoting_sysmon_1_wsmprovhost.evtx": {
+      "expected": [
+        "T1021.006"
+      ],
+      "split": "dev"
+    },
+    "LM_ScheduledTask_ATSVC_target_host.evtx": {
+      "expected": [
+        "T1053.002",
+        "T1053.005"
+      ],
+      "split": "dev"
+    },
+    "LM_sysmon_psexec_smb_meterpreter.evtx": {
+      "expected": [
+        "T1569.002",
+        "T1021.002"
+      ],
+      "split": "dev"
+    },
+    "LM_winrm_exec_sysmon_1_winrshost.evtx": {
+      "expected": [
+        "T1021.006"
+      ],
+      "split": "dev"
+    },
+    "LM_WMIC_4648_rpcss.evtx": {
+      "expected": [
+        "T1047"
+      ],
+      "split": "dev"
+    },
+    "Network_Service_Guest_added_to_admins_4732.evtx": {
+      "expected": [
+        "T1098"
+      ],
+      "split": "dev"
+    },
+    "NTLM2SelfRelay-med0x2e-security_4624_4688.evtx": {
+      "expected": [
+        "T1557",
+        "T1187"
+      ],
+      "split": "dev"
+    },
+    "persistence_accessibility_features_osk_sysmon1.evtx": {
+      "expected": [
+        "T1546.008"
+      ],
+      "split": "dev"
+    },
+    "phish_windows_credentials_powershell_scriptblockLog_4104.evtx": {
+      "expected": [
+        "T1056.002"
+      ],
+      "split": "dev"
+    },
+    "Powershell_4104_MiniDumpWriteDump_Lsass.evtx": {
+      "expected": [
+        "T1003.001"
+      ],
+      "split": "dev"
+    },
+    "privesc_rotten_potato_from_webshell_metasploit_sysmon_1_8_3.evtx": {
+      "expected": [
+        "T1134",
+        "T1505.003",
+        "T1055"
+      ],
+      "split": "dev"
+    },
+    "privesc_seimpersonate_tosys_spoolsv_sysmon_17_18.evtx": {
+      "expected": [
+        "T1134"
+      ],
+      "split": "dev"
+    },
+    "remote_sam_registry_access_via_backup_operator_priv.evtx": {
+      "expected": [
+        "T1003.002",
+        "T1012"
+      ],
+      "split": "dev"
+    },
+    "samaccount_spoofing_CVE-2021-42287_CVE-2021-42278_DC_securitylogs.evtx": {
+      "expected": [
+        "T1068",
+        "T1136.002",
+        "T1098",
+        "T1558"
+      ],
+      "split": "dev"
+    },
+    "sysmon_10_lsass_mimikatz_sekurlsa_logonpasswords.evtx": {
+      "expected": [
+        "T1003.001"
+      ],
+      "split": "dev"
+    },
+    "Sysmon_13_1_UACBypass_SDCLTBypass.evtx": {
+      "expected": [
+        "T1548.002"
+      ],
+      "split": "dev"
+    },
+    "sysmon_2_11_evasion_timestomp_MACE.evtx": {
+      "expected": [
+        "T1070.006"
+      ],
+      "split": "dev"
+    },
+    "sysmon_20_21_1_CommandLineEventConsumer.evtx": {
+      "expected": [
+        "T1546.003"
+      ],
+      "split": "dev"
+    },
+    "sysmon_mshta_sharpshooter_stageless_meterpreter.evtx": {
+      "expected": [
+        "T1218.005"
+      ],
+      "split": "dev"
+    },
+    "Sysmon_UACME_32.evtx": {
+      "expected": [
+        "T1548.002"
+      ],
+      "split": "dev"
+    },
+    "temp_scheduled_task_4698_4699.evtx": {
+      "expected": [
+        "T1053.005"
+      ],
+      "split": "dev"
+    },
+    "bits_openvpn.evtx": {
+      "expected": [],
+      "split": "excluded",
+      "note": "Mislabeled capture: 1,537 routine BITS-Client events (Windows/Google Update, OneDrive) and no malicious or OpenVPN activity. Scored as a benign file."
+    },
+    "CA_4624_4625_LogonType2_LogonProc_chrome.evtx": {
+      "expected": [
+        "T1110",
+        "T1078",
+        "T1555.003"
+      ],
+      "split": "dev"
+    },
+    "CA_PetiPotam_etw_rpc_efsr_5_6.evtx": {
+      "expected": [
+        "T1187"
+      ],
+      "split": "dev"
+    },
+    "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx": {
+      "expected": [
+        "T1018",
+        "T1135"
+      ],
+      "split": "dev"
+    },
+    "discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx": {
+      "expected": [
+        "T1033",
+        "T1049"
+      ],
+      "split": "dev"
+    },
+    "ID4697-MSF payload deployed via service.evtx": {
+      "expected": [
+        "T1543.003",
+        "T1569.002"
+      ],
+      "split": "dev"
+    },
+    "ID4728-Massive account group membership change.evtx": {
+      "expected": [
+        "T1098"
+      ],
+      "split": "dev"
+    },
+    "ID4728-Member adding to a group by the same account.evtx": {
+      "expected": [
+        "T1098"
+      ],
+      "split": "dev"
+    },
+    "ID7045-4697-SMBexec service registration.evtx": {
+      "expected": [
+        "T1543.003",
+        "T1569.002",
+        "T1021.002"
+      ],
+      "split": "dev"
+    },
+    "MSSQL_multiple_failed_logon_EventID_18456.evtx": {
+      "expected": [
+        "T1110"
+      ],
+      "split": "dev"
+    },
+    "rogue_msi_url_1040_1042.evtx": {
+      "expected": [
+        "T1218.007"
+      ],
+      "split": "dev"
+    }
+  }
+}

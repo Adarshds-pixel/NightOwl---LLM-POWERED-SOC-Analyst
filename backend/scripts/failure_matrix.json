@@ -36,6 +36,7 @@
       "T1069.001"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Sensitive Local Group/Account Enumeration via net.exe",
@@ -90,35 +91,26 @@
       }
     ],
     "matched_rule_ids": [
-      "3a7e9c14-6b2d-4f8a-9e1c-5d3a7b9c2f64",
-      "7a4e9c26-3d81-4f5e-9b02-6c8a1d3f5e72",
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
-      "Audit Policy Weakened (Success or Failure Auditing Removed)",
-      "DCSync -- Directory Replication Rights Abused",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
-      "T1003.006",
-      "T1685.001",
       "T1685.005"
     ],
-    "alerts_created": 12,
+    "alerts_created": 1,
     "incident_ids": [
-      1,
-      2,
-      3
+      1
     ],
     "mitre_technique_ids": [
-      "T1003.006",
-      "T1685.001",
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": false,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Audit Policy Weakened (Success or Failure Auditing Removed), DCSync -- Directory Replication Rights Abused, Security Audit Log Cleared",
+    "reason": "detected -- Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -150,7 +142,7 @@
     "matched_technique_ids": [
       "T1003.006"
     ],
-    "alerts_created": 3,
+    "alerts_created": 1,
     "incident_ids": [
       1
     ],
@@ -158,6 +150,7 @@
       "T1003.006"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- DCSync -- Directory Replication Rights Abused",
@@ -188,12 +181,12 @@
       "6d2b8f43-1e9c-4a7d-8b3f-2c6e9a1d4f75"
     ],
     "matched_rule_titles": [
-      "LSASS Handle Access via Security Auditing"
+      "LSASS Process Handle with Memory Read Access (Security Audit)"
     ],
     "matched_technique_ids": [
       "T1003.001"
     ],
-    "alerts_created": 2,
+    "alerts_created": 1,
     "incident_ids": [
       1
     ],
@@ -201,9 +194,10 @@
       "T1003.001"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- LSASS Handle Access via Security Auditing",
+    "reason": "detected -- LSASS Process Handle with Memory Read Access (Security Audit)",
     "manual_review_needed": false
   },
   {
@@ -252,6 +246,7 @@
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Security Audit Log Cleared",
@@ -281,12 +276,12 @@
       "8c2e6a41-4f9b-4d3e-a17c-6b5d9e2f0a13"
     ],
     "matched_rule_titles": [
-      "Computer Account Created"
+      "User Account Created with a Computer-Style ($) Name"
     ],
     "matched_technique_ids": [
       "T1136.002"
     ],
-    "alerts_created": 2,
+    "alerts_created": 1,
     "incident_ids": [
       1
     ],
@@ -294,9 +289,10 @@
       "T1136.002"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Computer Account Created",
+    "reason": "detected -- User Account Created with a Computer-Style ($) Name",
     "manual_review_needed": false
   },
   {
@@ -339,6 +335,7 @@
       "T1055"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Process Herpaderping (File Create -> Process Access -> Image Load Chain)",
@@ -368,8 +365,8 @@
     },
     "normalized_count": 101,
     "skipped_count": 0,
-    "covered_count": 6,
-    "uncovered_count": 95,
+    "covered_count": 26,
+    "uncovered_count": 75,
     "uncovered_breakdown": [
       {
         "channel": "Security",
@@ -378,18 +375,8 @@
       },
       {
         "channel": "Security",
-        "event_id": 4688,
-        "count": 17
-      },
-      {
-        "channel": "Security",
         "event_id": 5158,
         "count": 9
-      },
-      {
-        "channel": "Security",
-        "event_id": 4648,
-        "count": 3
       },
       {
         "channel": "Security",
@@ -418,6 +405,7 @@
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- RDP Logon via Loopback-Tunneled Connection, Security Audit Log Cleared",
@@ -460,6 +448,7 @@
       "T1572"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- RDP Logon via Loopback-Tunneled Connection",
@@ -484,15 +473,9 @@
     },
     "normalized_count": 3,
     "skipped_count": 0,
-    "covered_count": 2,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "Microsoft-Windows-Sysmon/Operational",
-        "event_id": 12,
-        "count": 1
-      }
-    ],
+    "covered_count": 3,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
     "matched_rule_ids": [
       "02df3fee-40fa-49aa-8303-c9ed04cf3bd8"
     ],
@@ -510,6 +493,7 @@
       "T1548.002"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- User Account Control Disabled via Registry",
@@ -549,7 +533,7 @@
       "T1055",
       "T1059.001"
     ],
-    "alerts_created": 83,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
@@ -558,6 +542,7 @@
       "T1059.001"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Remote Thread Creation from Scripting Engine or Web Server Process, Unmanaged PowerShell (System.Management.Automation Loaded into a Non-PowerShell Process)",
@@ -630,7 +615,7 @@
       "T1069.002",
       "T1685.005"
     ],
-    "alerts_created": 3,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
@@ -639,6 +624,7 @@
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- SAM Privileged Group Object Access, Security Audit Log Cleared",
@@ -667,25 +653,30 @@
     "uncovered_count": 0,
     "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21",
+      "sequence-remote-sam-lsa-enumeration"
     ],
     "matched_rule_titles": [
+      "Remote SAM/LSA/Server Service Enumeration over IPC$ (BloodHound / net-style recon)",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
+      "T1087",
       "T1685.005"
     ],
-    "alerts_created": 1,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1087",
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Security Audit Log Cleared",
+    "reason": "detected -- Remote SAM/LSA/Server Service Enumeration over IPC$ (BloodHound / net-style recon), Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -718,7 +709,7 @@
     "matched_technique_ids": [
       "T1135"
     ],
-    "alerts_created": 2,
+    "alerts_created": 1,
     "incident_ids": [
       1
     ],
@@ -726,6 +717,7 @@
       "T1135"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- SMB Share Enumeration Probe (Remote Connection + Server Service Pipe)",
@@ -761,7 +753,7 @@
     "matched_technique_ids": [
       "T1069.001"
     ],
-    "alerts_created": 3,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
@@ -769,6 +761,7 @@
       "T1069.001"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Sensitive Local Group/Account Enumeration via net.exe",
@@ -795,25 +788,30 @@
     "uncovered_count": 0,
     "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "806ea242-4d35-4cc6-8888-deb768d55aed"
+      "806ea242-4d35-4cc6-8888-deb768d55aed",
+      "sequence-mass-process-access"
     ],
     "matched_rule_titles": [
-      "Suspicious Access to Protected System Process"
+      "Process Discovery by Mass Process Access from a Non-System Binary",
+      "Suspicious LSASS Process Memory Access"
     ],
     "matched_technique_ids": [
-      "T1003.001"
+      "T1003.001",
+      "T1057"
     ],
-    "alerts_created": 6,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1003.001"
+      "T1003.001",
+      "T1057"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Suspicious Access to Protected System Process",
+    "reason": "detected -- Process Discovery by Mass Process Access from a Non-System Binary, Suspicious LSASS Process Memory Access",
     "manual_review_needed": false
   },
   {
@@ -843,11 +841,11 @@
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
-      "Remote Registry Access via winreg Named Pipe",
+      "Remote Registry Access over IPC$ (winreg)",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
-      "T1003.002",
+      "T1012",
       "T1685.005"
     ],
     "alerts_created": 2,
@@ -855,13 +853,14 @@
       1
     ],
     "mitre_technique_ids": [
-      "T1003.002",
+      "T1012",
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Remote Registry Access via winreg Named Pipe, Security Audit Log Cleared",
+    "reason": "detected -- Remote Registry Access over IPC$ (winreg), Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -884,26 +883,21 @@
     "covered_count": 9,
     "uncovered_count": 0,
     "uncovered_breakdown": [],
-    "matched_rule_ids": [
-      "2a7e9c14-5d3f-4b6a-9e1c-8f4a2d7b6c53"
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "correct_technique": false,
+    "classification_codes": [
+      11
     ],
-    "matched_rule_titles": [
-      "Suspicious Network Connection from LOLBin"
+    "classification_labels": [
+      "ambiguous_behavior"
     ],
-    "matched_technique_ids": [
-      "T1071.001"
-    ],
-    "alerts_created": 2,
-    "incident_ids": [
-      1
-    ],
-    "mitre_technique_ids": [
-      "T1071.001"
-    ],
-    "detected": true,
-    "classification_codes": [],
-    "classification_labels": [],
-    "reason": "detected -- Suspicious Network Connection from LOLBin",
+    "reason": "9 Sysmon network events: PowerShell querying LDAP (389) on a DC and System making SMB (445) connections to two hosts. That volume is indistinguishable from a normal domain member; previously 'detected' only by the PowerShell-network rule (removed: it fired on all PowerShell traffic), with the wrong technique.",
     "manual_review_needed": false
   },
   {
@@ -933,16 +927,17 @@
       "Known-Abusable (LOLDriver) Kernel Driver Loaded"
     ],
     "matched_technique_ids": [
-      "T1014"
+      "T1068"
     ],
     "alerts_created": 1,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1014"
+      "T1068"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Known-Abusable (LOLDriver) Kernel Driver Loaded",
@@ -985,6 +980,7 @@
       "T1105"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Suspicious PowerShell WebClient Instantiation",
@@ -1017,16 +1013,17 @@
       "Suspicious Child Process of ftp.exe"
     ],
     "matched_technique_ids": [
-      "T1105"
+      "T1202"
     ],
     "alerts_created": 1,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1105"
+      "T1202"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Suspicious Child Process of ftp.exe",
@@ -1069,6 +1066,7 @@
       "T1218"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- LOLBin Execution via Program Compatibility Assistant (pcalua.exe)",
@@ -1098,25 +1096,26 @@
     "uncovered_count": 0,
     "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "49c6ddee-506c-4b31-9370-57437f62a3cf"
+      "d5c8b3e9-1f74-4a26-8b0e-7e3d9a6c2f81"
     ],
     "matched_rule_titles": [
-      "File Creation Timestamp Backdated (Timestomping)"
+      "Shell Spawned by a Windows Installer Custom Action"
     ],
     "matched_technique_ids": [
-      "T1070.006"
+      "T1218.007"
     ],
-    "alerts_created": 2,
+    "alerts_created": 1,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1070.006"
+      "T1218.007"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- File Creation Timestamp Backdated (Timestomping)",
+    "reason": "detected -- Shell Spawned by a Windows Installer Custom Action",
     "manual_review_needed": false
   },
   {
@@ -1139,35 +1138,38 @@
     },
     "normalized_count": 3,
     "skipped_count": 0,
-    "covered_count": 2,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 4688,
-        "count": 1
-      }
-    ],
+    "covered_count": 3,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+      "5b0f3d0c-7f2e-4c1e-9a43-2f6c0e8b1d11",
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21",
+      "c7e93a15-2d48-4b6f-a1e0-5d8c3f7b2a94"
     ],
     "matched_rule_titles": [
-      "Security Audit Log Cleared"
+      "RDP Session Hijacking via tscon (Security 4688)",
+      "Security Audit Log Cleared",
+      "Service Installed with a Shell or Script Command as Its Binary (Security 4697)"
     ],
     "matched_technique_ids": [
+      "T1543.003",
+      "T1563.002",
       "T1685.005"
     ],
-    "alerts_created": 1,
+    "alerts_created": 3,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1543.003",
+      "T1563.002",
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Security Audit Log Cleared",
+    "reason": "detected -- RDP Session Hijacking via tscon (Security 4688), Security Audit Log Cleared, Service Installed with a Shell or Script Command as Its Binary (Security 4697)",
     "manual_review_needed": false
   },
   {
@@ -1213,6 +1215,7 @@
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Kernel-Mode Driver Installed as a Windows Service, Security Audit Log Cleared",
@@ -1256,6 +1259,7 @@
       "T1098.007"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Sensitive Domain Group Membership Change",
@@ -1316,6 +1320,7 @@
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Kerberos Password Spray (Multiple Distinct Accounts from One Source), Security Audit Log Cleared",
@@ -1342,14 +1347,9 @@
     },
     "normalized_count": 6,
     "skipped_count": 0,
-    "covered_count": 2,
-    "uncovered_count": 4,
+    "covered_count": 5,
+    "uncovered_count": 1,
     "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 4688,
-        "count": 3
-      },
       {
         "channel": "Security",
         "event_id": 4672,
@@ -1357,25 +1357,30 @@
       }
     ],
     "matched_rule_ids": [
+      "3f6b2e84-9a1c-4d57-8e2b-6c4a0f9d7e15",
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
+      "Pass-the-Hash Style Logon (Logon Type 9 via seclogo)",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
+      "T1550.002",
       "T1685.005"
     ],
-    "alerts_created": 1,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1550.002",
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Security Audit Log Cleared",
+    "reason": "detected -- Pass-the-Hash Style Logon (Logon Type 9 via seclogo), Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -1407,7 +1412,7 @@
     "matched_technique_ids": [
       "T1570"
     ],
-    "alerts_created": 4,
+    "alerts_created": 1,
     "incident_ids": [
       1
     ],
@@ -1415,6 +1420,7 @@
       "T1570"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Executable Payload Written to Admin Share (Remote File Copy)",
@@ -1457,6 +1463,7 @@
       "T1021.006"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Process Spawned by WinRM/PSRemoting Host",
@@ -1489,8 +1496,8 @@
     },
     "normalized_count": 34,
     "skipped_count": 0,
-    "covered_count": 16,
-    "uncovered_count": 18,
+    "covered_count": 20,
+    "uncovered_count": 14,
     "uncovered_breakdown": [
       {
         "channel": "Security",
@@ -1505,11 +1512,6 @@
       {
         "channel": "Security",
         "event_id": 5140,
-        "count": 4
-      },
-      {
-        "channel": "Security",
-        "event_id": 4688,
         "count": 4
       },
       {
@@ -1539,6 +1541,7 @@
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Scheduled Task Created with Hidden Flag, Security Audit Log Cleared",
@@ -1569,29 +1572,30 @@
     "uncovered_count": 0,
     "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "1d9a4e7c-2f6b-4c8a-b3d1-7e9c5a2f4b16",
-      "2a7e9c14-5d3f-4b6a-9e1c-8f4a2d7b6c53"
+      "7a1f4c92-3e6d-4b08-9c15-8d2e5b7f0a64",
+      "e3b6d0a7-9c4f-4e21-8a5b-1f7c3d9e6b40"
     ],
     "matched_rule_titles": [
-      "PowerShell Execution Policy Bypass",
-      "Suspicious Network Connection from LOLBin"
+      "Service ImagePath Set to a Shell or Script Command (Registry)",
+      "Shell Started Directly by the Service Control Manager"
     ],
     "matched_technique_ids": [
-      "T1059.001",
-      "T1071.001"
+      "T1543.003",
+      "T1569.002"
     ],
-    "alerts_created": 3,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1059.001",
-      "T1071.001"
+      "T1543.003",
+      "T1569.002"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- PowerShell Execution Policy Bypass, Suspicious Network Connection from LOLBin",
+    "reason": "detected -- Service ImagePath Set to a Shell or Script Command (Registry), Shell Started Directly by the Service Control Manager",
     "manual_review_needed": false
   },
   {
@@ -1631,6 +1635,7 @@
       "T1021.006"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Process Spawned by WinRM/PSRemoting Host",
@@ -1656,40 +1661,34 @@
     },
     "normalized_count": 5,
     "skipped_count": 0,
-    "covered_count": 1,
-    "uncovered_count": 4,
-    "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 4648,
-        "count": 3
-      },
-      {
-        "channel": "Security",
-        "event_id": 4688,
-        "count": 1
-      }
-    ],
+    "covered_count": 5,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
     "matched_rule_ids": [
+      "8d2c5f71-0b3e-4a96-9f48-1e7a6d3c5b29",
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
-      "Security Audit Log Cleared"
+      "Security Audit Log Cleared",
+      "WMIC Used with Explicit Credentials Against a Remote Host"
     ],
     "matched_technique_ids": [
+      "T1047",
       "T1685.005"
     ],
-    "alerts_created": 1,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1047",
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Security Audit Log Cleared",
+    "reason": "detected -- Security Audit Log Cleared, WMIC Used with Explicit Credentials Against a Remote Host",
     "manual_review_needed": false
   },
   {
@@ -1729,6 +1728,7 @@
       "T1098"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Well-Known Low-Privilege Account Added to Local Administrators",
@@ -1756,18 +1756,13 @@
     },
     "normalized_count": 11,
     "skipped_count": 0,
-    "covered_count": 5,
-    "uncovered_count": 6,
+    "covered_count": 6,
+    "uncovered_count": 5,
     "uncovered_breakdown": [
       {
         "channel": "Security",
         "event_id": 4672,
         "count": 4
-      },
-      {
-        "channel": "Security",
-        "event_id": 4688,
-        "count": 1
       },
       {
         "channel": "Security",
@@ -1792,6 +1787,7 @@
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": false,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Security Audit Log Cleared",
@@ -1815,20 +1811,14 @@
     },
     "normalized_count": 3,
     "skipped_count": 0,
-    "covered_count": 2,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "Microsoft-Windows-Sysmon/Operational",
-        "event_id": 12,
-        "count": 1
-      }
-    ],
+    "covered_count": 3,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
     "matched_rule_ids": [
       "7653de6e-fb41-40be-8ba1-349444409b4a"
     ],
     "matched_rule_titles": [
-      "Accessibility Tool Launched by Utilman or Winlogon"
+      "Accessibility Feature Hijack (Shell or Tool Spawned via Accessibility Binary)"
     ],
     "matched_technique_ids": [
       "T1546.008"
@@ -1841,9 +1831,10 @@
       "T1546.008"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Accessibility Tool Launched by Utilman or Winlogon",
+    "reason": "detected -- Accessibility Feature Hijack (Shell or Tool Spawned via Accessibility Binary)",
     "manual_review_needed": false
   },
   {
@@ -1883,6 +1874,7 @@
       "T1056.002"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- PowerShell Fake Credential Prompt (Phishing)",
@@ -1944,6 +1936,7 @@
       "T1003.001"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- PowerShell LSASS Memory Dump via Reflection",
@@ -1989,6 +1982,7 @@
       "T1055"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Remote Thread Creation from Scripting Engine or Web Server Process",
@@ -2027,12 +2021,12 @@
       "01a199bd-19b8-46ac-a89a-ece738b3a5e5"
     ],
     "matched_rule_titles": [
-      "Rogue Spoolss Named Pipe (SeImpersonate Privilege Escalation)"
+      "Rogue Named Pipe with a Nested \\pipe\\ Path (PrintSpoofer / Potato)"
     ],
     "matched_technique_ids": [
       "T1134.001"
     ],
-    "alerts_created": 3,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
@@ -2040,9 +2034,10 @@
       "T1134.001"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Rogue Spoolss Named Pipe (SeImpersonate Privilege Escalation)",
+    "reason": "detected -- Rogue Named Pipe with a Nested \\pipe\\ Path (PrintSpoofer / Potato)",
     "manual_review_needed": false
   },
   {
@@ -2092,25 +2087,26 @@
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
-      "Remote Registry Access via winreg Named Pipe",
+      "Remote Registry Access over IPC$ (winreg)",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
-      "T1003.002",
+      "T1012",
       "T1685.005"
     ],
-    "alerts_created": 3,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1003.002",
+      "T1012",
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Remote Registry Access via winreg Named Pipe, Security Audit Log Cleared",
+    "reason": "detected -- Remote Registry Access over IPC$ (winreg), Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -2139,8 +2135,8 @@
     },
     "normalized_count": 18,
     "skipped_count": 0,
-    "covered_count": 6,
-    "uncovered_count": 12,
+    "covered_count": 9,
+    "uncovered_count": 9,
     "uncovered_breakdown": [
       {
         "channel": "Security",
@@ -2159,16 +2155,6 @@
       },
       {
         "channel": "Security",
-        "event_id": 4781,
-        "count": 2
-      },
-      {
-        "channel": "Security",
-        "event_id": 4741,
-        "count": 1
-      },
-      {
-        "channel": "Security",
         "event_id": 4722,
         "count": 1
       },
@@ -2179,25 +2165,34 @@
       }
     ],
     "matched_rule_ids": [
-      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+      "4c8e2a91-6d3f-4b57-a9e1-0f7b3c5d8e26",
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21",
+      "9b3e1d58-7a2c-4f69-8e04-5c1b6a9f2d37"
     ],
     "matched_rule_titles": [
+      "Computer Account Created by a User Account",
+      "Computer Account Renamed Without Its Trailing $ (sAMAccountName Spoofing)",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
+      "T1068",
+      "T1136.002",
       "T1685.005"
     ],
-    "alerts_created": 1,
+    "alerts_created": 3,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1068",
+      "T1136.002",
       "T1685.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Security Audit Log Cleared",
+    "reason": "detected -- Computer Account Created by a User Account, Computer Account Renamed Without Its Trailing $ (sAMAccountName Spoofing), Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -2224,7 +2219,7 @@
       "806ea242-4d35-4cc6-8888-deb768d55aed"
     ],
     "matched_rule_titles": [
-      "Suspicious Access to Protected System Process"
+      "Suspicious LSASS Process Memory Access"
     ],
     "matched_technique_ids": [
       "T1003.001"
@@ -2237,9 +2232,10 @@
       "T1003.001"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Suspicious Access to Protected System Process",
+    "reason": "detected -- Suspicious LSASS Process Memory Access",
     "manual_review_needed": false
   },
   {
@@ -2281,6 +2277,7 @@
       "T1548.002"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- UAC Bypass via sdclt.exe IsolatedCommand Registry Hijack",
@@ -2315,14 +2312,14 @@
       "806ea242-4d35-4cc6-8888-deb768d55aed"
     ],
     "matched_rule_titles": [
-      "Suspicious Access to Protected System Process",
+      "Suspicious LSASS Process Memory Access",
       "WMI CommandLineEventConsumer Persistence"
     ],
     "matched_technique_ids": [
       "T1003.001",
       "T1546.003"
     ],
-    "alerts_created": 4,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
@@ -2331,9 +2328,10 @@
       "T1546.003"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Suspicious Access to Protected System Process, WMI CommandLineEventConsumer Persistence",
+    "reason": "detected -- Suspicious LSASS Process Memory Access, WMI CommandLineEventConsumer Persistence",
     "manual_review_needed": false
   },
   {
@@ -2374,6 +2372,7 @@
       "T1070.006"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- File Creation Timestamp Backdated (Timestomping)",
@@ -2401,25 +2400,30 @@
     "uncovered_count": 0,
     "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "1a6d3e78-4f9c-4b2e-8a1d-7c5b3f9e6d24"
+      "1a6d3e78-4f9c-4b2e-8a1d-7c5b3f9e6d24",
+      "2a7e9c14-5d3f-4b6a-9e1c-8f4a2d7b6c53"
     ],
     "matched_rule_titles": [
+      "Network Connection from a Proxy-Execution LOLBin",
       "Suspicious Mshta Execution"
     ],
     "matched_technique_ids": [
+      "T1071.001",
       "T1218.005"
     ],
-    "alerts_created": 1,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1071.001",
       "T1218.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Suspicious Mshta Execution",
+    "reason": "detected -- Network Connection from a Proxy-Execution LOLBin, Suspicious Mshta Execution",
     "manual_review_needed": false
   },
   {
@@ -2443,26 +2447,21 @@
     "covered_count": 8,
     "uncovered_count": 0,
     "uncovered_breakdown": [],
-    "matched_rule_ids": [
-      "6f3b8d21-9a1c-4e5f-8b2d-3c7a1e9f5d84"
+    "matched_rule_ids": [],
+    "matched_rule_titles": [],
+    "matched_technique_ids": [],
+    "alerts_created": 0,
+    "incident_ids": [],
+    "mitre_technique_ids": [],
+    "detected": false,
+    "correct_technique": false,
+    "classification_codes": [
+      6
     ],
-    "matched_rule_titles": [
-      "Suspicious Executable Written to Public or Temp Directory"
+    "classification_labels": [
+      "rule_missing"
     ],
-    "matched_technique_ids": [
-      "T1105"
-    ],
-    "alerts_created": 1,
-    "incident_ids": [
-      1
-    ],
-    "mitre_technique_ids": [
-      "T1105"
-    ],
-    "detected": true,
-    "classification_codes": [],
-    "classification_labels": [],
-    "reason": "detected -- Suspicious Executable Written to Public or Temp Directory",
+    "reason": "UACME method 32 (UIPI bypass via an osk.exe DLL hijack). The only observable steps are explorer.exe writing OskSupport.dll to Temp, consent.exe prompts and cmd.exe launching a copy of osk.exe from 'C:\\Program Files\\Windows Media Player\\'. No generalisable single-event or sequence signature without overfitting to this sample; previously 'detected' only by the over-broad Temp-write rule, with the wrong technique.",
     "manual_review_needed": false
   },
   {
@@ -2509,6 +2508,7 @@
       "T1053.005"
     ],
     "detected": true,
+    "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Scheduled Task Created with Hidden Flag",
@@ -2595,13 +2595,14 @@
     "incident_ids": [],
     "mitre_technique_ids": [],
     "detected": false,
+    "correct_technique": false,
     "classification_codes": [
       2
     ],
     "classification_labels": [
       "channel_provider_gap"
     ],
-    "reason": "Bits-Client/Operational channel, not Sysmon or Security.",
+    "reason": "Mislabeled capture: 1,537 routine Bits-Client events (Windows/Google Update, OneDrive polling) and no malicious or OpenVPN activity. Nothing to detect; run_detection_benchmark.py scores it as a benign file.",
     "manual_review_needed": false
   },
   {
@@ -2638,6 +2639,7 @@
     "incident_ids": [],
     "mitre_technique_ids": [],
     "detected": false,
+    "correct_technique": false,
     "classification_codes": [
       10
     ],
@@ -2714,6 +2716,7 @@
     "incident_ids": [],
     "mitre_technique_ids": [],
     "detected": false,
+    "correct_technique": false,
     "classification_codes": [
       2
     ],
@@ -2750,6 +2753,7 @@
     "incident_ids": [],
     "mitre_technique_ids": [],
     "detected": false,
+    "correct_technique": false,
     "classification_codes": [
       6
     ],
@@ -2786,6 +2790,7 @@
     "incident_ids": [],
     "mitre_technique_ids": [],
     "detected": false,
+    "correct_technique": false,
     "classification_codes": [
       6
     ],
@@ -2815,20 +2820,27 @@
     "covered_count": 1,
     "uncovered_count": 0,
     "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      7
+    "matched_rule_ids": [
+      "5b0f3d0c-7f2e-4c1e-9a43-2f6c0e8b1d11"
     ],
-    "classification_labels": [
-      "rule_too_narrow"
+    "matched_rule_titles": [
+      "Service Installed with a Shell or Script Command as Its Binary (Security 4697)"
     ],
-    "reason": "Real content read directly: ServiceType 0x00000010 (ordinary user-mode/own-process service), not the kernel-driver value (0x00000001) kernel_driver_service_installed.yml is scoped to. 4697 IS covered as an event id/category (the new rule maps it), so this is rule_too_narrow, not a coverage gap -- the rule was deliberately scoped to the one real invariant this project's 4 real 4697 samples actually share (only 1 of 4 is a kernel driver); ServiceName/ServiceFileName are fully attacker-chosen in all 4 samples and not safe to key a rule on, and no real benign-4697 sample exists anywhere in the corpus to bound a broader rule's false-positive rate against. Not pursued further this pass -- see the rule file's own description.",
+    "matched_technique_ids": [
+      "T1543.003"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1543.003"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Service Installed with a Shell or Script Command as Its Binary (Security 4697)",
     "manual_review_needed": false
   },
   {
@@ -2851,20 +2863,27 @@
     "covered_count": 11,
     "uncovered_count": 0,
     "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      7
+    "matched_rule_ids": [
+      "sequence-bulk-group-membership-addition"
     ],
-    "classification_labels": [
-      "rule_too_narrow"
+    "matched_rule_titles": [
+      "One Account Added Members to Many Security Groups in a Short Time"
     ],
-    "reason": "Real content read directly: 11x4728, same actor adding the same member to 11 GENERIC groups (Group01..Group11, non-privileged sequential RIDs) -- 4728 IS covered (the new rule maps it), so this is rule_too_narrow/requires_sequence, not a coverage gap. This file's real signal is pure VOLUME (11 adds by one subject in one capture), not any single group's identity -- structurally different from the sensitive-group pattern the new rule targets, and correctly does not match it (none of these 11 groups are sensitive). Building a volume/threshold rule here would mean calibrating against exactly one real sample with no benign-volume baseline -- the same overfitting risk this project's sequence engine discipline explicitly avoids (extend only on a 3rd real sequence-dependent miss, not speculatively). This is the 1st such sample seen. Not pursued this pass.",
+    "matched_technique_ids": [
+      "T1098"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1098"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- One Account Added Members to Many Security Groups in a Short Time",
     "manual_review_needed": false
   },
   {
@@ -2887,20 +2906,27 @@
     "covered_count": 1,
     "uncovered_count": 0,
     "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      7
+    "matched_rule_ids": [
+      "sequence-group-self-add"
     ],
-    "classification_labels": [
-      "rule_too_narrow"
+    "matched_rule_titles": [
+      "Account Added Itself to a Security Group"
     ],
-    "reason": "Real content read directly: 1x4728, MemberSid == SubjectUserSid (a self-add: the account added itself to a group) targeting Group02, a GENERIC non-sensitive group. 4728 IS covered, so this is rule_too_narrow, not a coverage gap. Self-add-to-own-group is a real, generalizable behavioral indicator (self-service privilege grab) independent of which group -- but this is the only real sample of it, and it happens to target a non-sensitive group, so it doesn't establish 'self-add is independently suspicious' with this project's usual rigor (a real population, not a 1-file case -- the same bar that kept the samaccount_spoofing file's anomalous ServiceName from becoming a rule). Flagged, not acted on, pending a second real sample.",
+    "matched_technique_ids": [
+      "T1098"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1098"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Account Added Itself to a Security Group",
     "manual_review_needed": false
   },
   {
@@ -2923,29 +2949,32 @@
     },
     "normalized_count": 2,
     "skipped_count": 0,
-    "covered_count": 1,
-    "uncovered_count": 1,
-    "uncovered_breakdown": [
-      {
-        "channel": "System",
-        "event_id": 7045,
-        "count": 1
-      }
+    "covered_count": 2,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "0e2a7b51-3c4d-4f86-b2c7-91d5a6e3f402",
+      "5b0f3d0c-7f2e-4c1e-9a43-2f6c0e8b1d11"
     ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      7
+    "matched_rule_titles": [
+      "Service Installed with a Shell or Script Command as Its Binary (Security 4697)",
+      "Service Installed with a Shell or Script Command as Its Binary (System 7045)"
     ],
-    "classification_labels": [
-      "rule_too_narrow"
+    "matched_technique_ids": [
+      "T1543.003"
     ],
-    "reason": "Real content read directly: this file's own 4697 record has ServiceType 0x00000010 (ordinary), so it doesn't match kernel_driver_service_installed.yml for the same reason as the MSF-payload file above (both 4697 and 7045 are now covered event ids/categories, so this is rule_too_narrow, not a coverage gap). This file's own 7045 (System channel, Service Control Manager) record was the only real System-channel sample anywhere in the corpus -- normalizer.py's CHANNEL_TOKEN_SUBSTRINGS gained a 'system' entry this pass so it's no longer silently misrouted through the Sysmon dispatch table, but no rule alerts on 7045 alone: a single real sample, 1:1-paired with this same file's own 4697, isn't enough to justify either a standalone 7045 rule (underfitting risk, same as raw 4697) or 4697+7045 correlation logic (would overfit to the one file that happens to have both). Parsed, normalized, and correctly reported as covered-but-not-matched -- not silently treated as unsupported.",
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1543.003"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Service Installed with a Shell or Script Command as Its Binary (Security 4697), Service Installed with a Shell or Script Command as Its Binary (System 7045)",
     "manual_review_needed": false
   },
   {
@@ -2974,20 +3003,27 @@
         "count": 10
       }
     ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      2
+    "matched_rule_ids": [
+      "sequence-authentication-brute-force"
     ],
-    "classification_labels": [
-      "channel_provider_gap"
+    "matched_rule_titles": [
+      "Authentication Brute Force (Repeated Failed Logons from One Source)"
     ],
-    "reason": "Application channel (MSSQLSERVER provider), not Sysmon or Security.",
+    "matched_technique_ids": [
+      "T1110"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1110"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Authentication Brute Force (Repeated Failed Logons from One Source)",
     "manual_review_needed": false
   },
   {
@@ -3024,20 +3060,27 @@
         "count": 173
       }
     ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "classification_codes": [
-      2
+    "matched_rule_ids": [
+      "6e4a9d12-8c5b-4f73-a0d6-2b9e7c1f3a58"
     ],
-    "classification_labels": [
-      "channel_provider_gap"
+    "matched_rule_titles": [
+      "Windows Installer Package Installed from a URL"
     ],
-    "reason": "Application channel (MsiInstaller provider), not Sysmon or Security.",
+    "matched_technique_ids": [
+      "T1218.007"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1218.007"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Windows Installer Package Installed from a URL",
     "manual_review_needed": false
   }
 ]

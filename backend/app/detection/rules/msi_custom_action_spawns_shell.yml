@@ -1,0 +1,29 @@
+title: Shell Spawned by a Windows Installer Custom Action
+id: d5c8b3e9-1f74-4a26-8b0e-7e3d9a6c2f81
+status: experimental
+description: >
+  Detects cmd.exe or PowerShell started by a Windows Installer
+  custom-action binary (C:\Windows\Installer\MSI*.tmp). A malicious MSI
+  embeds its payload as a custom action; legitimate installers rarely
+  open an interactive shell from one. Verified against real content:
+  Exec_sysmon_meterpreter_reversetcp_msipackage.evtx.
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1218/007/
+tags:
+  - attack.stealth
+  - attack.t1218.007
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection:
+    ParentImage|contains: '\Windows\Installer\'
+    ParentImage|endswith: '.tmp'
+    Image|endswith:
+      - '\cmd.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+  condition: selection
+level: high

@@ -4,6 +4,12 @@ status: experimental
 description: >
   Detects a value being set under a Run/RunOnce registry key, a classic
   technique for making a program launch automatically at logon.
+
+  Now requires the autostart value to point at a user-writable location,
+  a script host / LOLBin or a URL. Every installer writes Run keys
+  (OneDrive, Teams, updaters live under AppData\Local\Microsoft and
+  Program Files), and the previous version alerted on all of them. The
+  policy Run key is now covered too.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
@@ -16,9 +22,27 @@ logsource:
   category: registry_event
   service: sysmon
 detection:
-  selection:
+  selection_key:
     TargetObject|contains:
       - '\CurrentVersion\Run\'
       - '\CurrentVersion\RunOnce\'
-  condition: selection
+      - '\CurrentVersion\Policies\Explorer\Run\'
+  selection_value:
+    Details|contains:
+      - '\AppData\Roaming\'
+      - '\AppData\Local\Temp\'
+      - '\Users\Public\'
+      - '\ProgramData\'
+      - '\Windows\Temp\'
+      - 'powershell'
+      - 'cmd /c'
+      - 'cmd.exe /c'
+      - 'mshta'
+      - 'rundll32'
+      - 'regsvr32'
+      - 'wscript'
+      - 'cscript'
+      - 'http://'
+      - 'https://'
+  condition: selection_key and selection_value
 level: medium

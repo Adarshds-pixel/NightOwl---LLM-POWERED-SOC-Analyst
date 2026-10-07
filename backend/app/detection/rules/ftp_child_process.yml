@@ -6,13 +6,19 @@ description: >
   supports a scripted "-s:" command file, which attackers use as a LOLBin
   to fetch a payload and then hand off execution to a shell -- a
   legitimate-looking alternative to certutil/bitsadmin for staging tools.
+
+  Mapped to T1202 (Indirect Command Execution): ftp.exe spawning a
+  process is ftp's `!` shell escape or a `-s:` script running commands
+  through a trusted binary; it was previously tagged T1105 (Ingress Tool
+  Transfer), which describes downloading a file.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
-  - https://attack.mitre.org/techniques/T1105/
+  - https://attack.mitre.org/techniques/T1202/
+  - https://lolbas-project.github.io/lolbas/Binaries/Ftp/
 tags:
-  - attack.command_and_control
-  - attack.t1105
+  - attack.stealth
+  - attack.t1202
 logsource:
   category: process_creation
   service: sysmon

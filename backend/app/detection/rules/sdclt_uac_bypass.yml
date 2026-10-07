@@ -7,12 +7,16 @@ description: >
   sdclt.exe's auto-elevated "runas" verb reads from. Pointing it at an
   attacker payload makes sdclt.exe launch that payload elevated without a
   UAC prompt.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
   - https://attack.mitre.org/techniques/T1548/002/
 tags:
-  - attack.defense_evasion
   - attack.privilege_escalation
   - attack.t1548.002
 logsource:

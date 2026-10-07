@@ -90,8 +90,8 @@ def test_rule_carries_yaml_metadata(api_client):
     assert "execution" in rule["tactics"]
     assert rule["description"].startswith("Detects PowerShell process creation")
     assert rule["filename"] == "suspicious_encoded_powershell.yml"
-    assert rule["selections"] == ["selection"]
-    assert rule["condition"] == "selection"
+    assert rule["selections"] == ["selection_encoded", "selection_image"]
+    assert rule["condition"] == "selection_image and selection_encoded"
     assert rule["enabled"] is True
 
 

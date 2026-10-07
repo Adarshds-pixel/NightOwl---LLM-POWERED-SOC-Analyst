@@ -5,6 +5,9 @@ description: >
   Detects an outbound network connection to the standard Windows Remote
   Management ports (5985 HTTP / 5986 HTTPS), which can indicate an
   attacker moving laterally via WinRM/PowerShell remoting.
+
+  Only outbound connections (Initiated=true) count; inbound WinRM (Server
+  Manager, monitoring) no longer fires.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
@@ -20,5 +23,10 @@ detection:
     DestinationPort:
       - 5985
       - 5986
-  condition: selection
-level: medium
+    Initiated: 'true'
+  filter_loopback:
+    DestinationIp|cidr:
+      - '127.0.0.0/8'
+      - '::1/128'
+  condition: selection and not filter_loopback
+level: low

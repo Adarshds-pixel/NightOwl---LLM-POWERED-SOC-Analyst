@@ -1,0 +1,50 @@
+title: Service ImagePath Set to a Shell or Script Command (Registry)
+id: 7a1f4c92-3e6d-4b08-9c15-8d2e5b7f0a64
+status: experimental
+description: >
+  Detects a service's ImagePath value being written (Sysmon registry
+  event) as a shell, script host or LOLBin command line, or from a
+  user-writable location -- the registry side of the same service-based
+  remote execution the 4697/7045 rules see, and the only trace when those
+  logs are not collected. Verified against real content:
+  LM_sysmon_psexec_smb_meterpreter.evtx (`%COMSPEC% /b /c start /b /min
+  powershell.exe -nop -w hidden ...`).
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1543/003/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1543.003
+logsource:
+  category: registry_set
+  service: sysmon
+detection:
+  selection_key:
+    TargetObject|contains: '\CurrentControlSet\Services\'
+    TargetObject|endswith: '\ImagePath'
+  selection_value:
+    Details|contains:
+      - '%COMSPEC%'
+      - 'cmd.exe /c'
+      - 'cmd /c'
+      - 'cmd.exe /k'
+      - 'cmd /k'
+      - 'cmd.exe /q'
+      - 'powershell'
+      - 'pwsh'
+      - 'mshta'
+      - 'rundll32'
+      - 'regsvr32'
+      - 'wscript'
+      - 'cscript'
+      - '\\127.0.0.1\'
+      - '\ADMIN$\'
+      - '\Users\Public\'
+      - '\AppData\'
+      - '\Windows\Temp\'
+      - '%TEMP%'
+      - 'tscon'
+  condition: selection_key and selection_value
+level: high

@@ -4,6 +4,9 @@ status: experimental
 description: >
   Detects reg.exe being used to save the SAM, SYSTEM, or SECURITY registry
   hives to a file, a common precursor to offline credential extraction.
+
+  Matches the long-form HKEY_LOCAL_MACHINE path and `reg export` as well
+  as `reg save`.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
@@ -15,13 +18,14 @@ logsource:
   category: process_creation
   service: sysmon
 detection:
-  selection:
-    Image|contains: reg.exe
-    CommandLine|contains: save
-  targets:
+  selection_image:
+    - Image|endswith: '\reg.exe'
+    - OriginalFileName: 'reg.exe'
+  selection_action:
     CommandLine|contains:
-      - 'hklm\sam'
-      - 'hklm\system'
-      - 'hklm\security'
-  condition: selection and targets
+      - ' save '
+      - ' export '
+  selection_target:
+    CommandLine|re: '(?i)(hklm|hkey_local_machine)\\(sam|system|security)\b'
+  condition: selection_image and selection_action and selection_target
 level: high

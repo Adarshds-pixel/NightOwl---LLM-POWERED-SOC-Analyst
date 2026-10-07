@@ -1,9 +1,13 @@
-title: Scheduled Task Creation via schtasks.exe
+title: Scheduled Task Created with a Suspicious Action (schtasks.exe)
 id: 3c7b9e42-6d1a-4f8c-b2e5-9a4d7c1f6b38
 status: experimental
 description: >
-  Detects schtasks.exe being used to create a new scheduled task, a common
-  persistence mechanism (run a payload on a schedule or at logon/startup).
+  Detects schtasks.exe creating a task whose action runs from a
+  user-writable location (AppData, Temp, Public), through a
+  script host or LOLBin, or from a URL -- the shape persistence via
+  scheduled task takes. Creating a scheduled task is otherwise routine:
+  the previous version alerted on every `schtasks /create` and fired 28
+  times on Office Click-to-Run's own service-monitor task in benign data.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
@@ -17,8 +21,26 @@ logsource:
   category: process_creation
   service: sysmon
 detection:
-  selection:
-    Image|contains: schtasks.exe
-    CommandLine|contains: '/create'
-  condition: selection
+  selection_create:
+    Image|endswith: '\schtasks.exe'
+    CommandLine|contains|windash: '-create'
+  selection_action:
+    CommandLine|contains:
+      - '\AppData\'
+      - '\Users\Public\'
+      - '\Temp\'
+      - 'powershell'
+      - 'pwsh'
+      - 'cmd /c'
+      - 'cmd.exe /c'
+      - 'mshta'
+      - 'rundll32'
+      - 'regsvr32'
+      - 'wscript'
+      - 'cscript'
+      - 'certutil'
+      - 'bitsadmin'
+      - 'http://'
+      - 'https://'
+  condition: selection_create and selection_action
 level: medium

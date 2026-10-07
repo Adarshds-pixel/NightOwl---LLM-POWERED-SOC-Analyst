@@ -6,23 +6,31 @@ description: >
   Applications) being invoked with a remote URL or inline script -- a
   common LOLBin technique for executing attacker code while evading
   binary-allowlisting controls.
+
+  Tactic tags follow the pinned ATT&CK v19.2 dataset, which retired the
+  defense-evasion tactic (split into stealth and defense-impairment); the
+  loader rejects a tactic tag that is not a tactic of the rule's
+  technique.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-19
 references:
   - https://attack.mitre.org/techniques/T1218/005/
 tags:
-  - attack.defense_evasion
-  - attack.execution
+  - attack.stealth
   - attack.t1218.005
 logsource:
   category: process_creation
   service: sysmon
 detection:
-  selection:
-    Image|contains: mshta.exe
+  selection_image:
+    - Image|endswith: '\mshta.exe'
+    - OriginalFileName: 'MSHTA.EXE'
+  selection_payload:
     CommandLine|contains:
       - 'http'
       - '.hta'
       - 'javascript:'
-  condition: selection
+      - 'vbscript:'
+      - 'about:'
+  condition: selection_image and selection_payload
 level: high

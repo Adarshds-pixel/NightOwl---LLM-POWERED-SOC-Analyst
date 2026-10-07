@@ -1,250 +1,277 @@
-"""Detection accuracy benchmark: runs the real engine over the fixture corpus
-and reports recall on known-malicious samples and false positives on
-known-clean ones.
+"""Detection benchmark: the real rule engine + sequence detectors over every
+attack and benign EVTX capture in the repo, measured three ways.
 
-Runs the pipeline in-process (`read_records_as_dicts` -> `normalize_event` ->
-`evaluate_event`, plus `detect_sequences` for the 3-pattern sequence engine --
-see detection/sequences.py), deliberately skipping HTTP and the database:
-this measures *detection*, not ingestion plumbing, and it stays side-effect
-free so it can be run against a live deployment without polluting its data.
-`detect_sequences` needs an anchor "Event row" with an id/host/timestamp to
-attach a match to; this script builds a throwaway one per normalized event
-(never persisted -- ingest_service.py uses the real, DB-backed row) purely
-so its own detection count reflects the same matches a real ingest would.
+  1. Attack captures (sample_logs/real_world_fixtures/{detected,undetected}):
+     * any-alert rate  -- the capture raised at least one alert (the only
+       number the project used to report);
+     * correct-technique rate -- at least one alert carries a technique that
+       matches the capture's documented scenario (scripts/
+       fixture_ground_truth.json; parent-technique match). An alert that only
+       fires because the sample's author cleared the log before recording
+       does not count as detecting the attack.
+  2. Benign captures -- every alert is a false positive. Reported per rule and
+     per file, as alert counts, not just "files with any hit":
+       sample_logs/real_world_fixtures/NightOwl-Benign-Dataset/  (tracked)
+       sample_logs/real_world_fixtures/benign/                   (optional, gitignored)
+       sample_logs/demo_fixtures/noise_*.evtx                    (synthetic noise)
+       plus any attack capture the ground truth marks as mislabeled-benign.
+  3. Nothing else: no HTTP, no database, no ML layer (evaluated separately
+     by scripts/eval_ml_model.py). Alerts are de-duplicated the same way
+     ingest does (same rule, host, actor and target within 60 s = one alert).
 
-Two corpora, both already in the repo, kept in physically separate
-directories (2026-09-05 -- previously mixed by filename convention alone,
-which invited exactly the kind of "which of these is actually safe to
-call clean" confusion this split now makes structurally impossible):
+All captures informed rule development, so these are development-set numbers;
+see fixture_ground_truth.json's note.
 
-  malicious  sample_logs/real_world_fixtures/{detected,undetected}/
-             real-world attack captures (public ATT&CK sample corpus).
-             Split into two directories (2026-09-08) purely so the repo
-             itself shows which fixtures the *current* rule set catches --
-             this script still scans both together and scores every file
-             as malicious regardless of which directory it's in, so a file
-             with zero matches is still a false negative, never a correct
-             verdict. detected/undetected is this script's own output
-             recorded as a filesystem location, not an input filter.
-
-  clean      sample_logs/demo_fixtures/noise_*.evtx    5 slices of ordinary
-             workstation activity, verified clean at generation time by
-             build_demo_evtx_fixtures.py -- Sysmon-only, so this alone never
-             exercises a Security-channel rule's false-positive behavior.
-             sample_logs/real_world_fixtures/benign/*.evtx -- real
-             (not synthetic) captures from an ordinary PC:
-             nightowl_benign_security.evtx (~32k Security-channel events)
-             and nightowl_benign_powershell.evtx (~1.2k PowerShell-
-             Operational events, 466 real 4104 script blocks + 10 real
-             4103 module-logging records), added 2026-09-05 to close the
-             Security- and PowerShell-channel false-positive-testing gaps
-             respectively. Both contain their owner's real Windows
-             username/hostname -- gitignored rather than committed (see
-             root .gitignore), so a fresh clone simply has fewer clean
-             fixtures rather than failing; nothing in this script requires
-             them to be present.
-
-Run from backend/:
+Parsing EVTX is slow (the 56 MB Sysmon capture takes minutes), so normalized
+events are cached under scripts/cache/ keyed by file size + mtime. Delete the
+directory to force a re-parse.
 
     ./venv/Scripts/python.exe scripts/run_detection_benchmark.py
-    ./venv/Scripts/python.exe scripts/run_detection_benchmark.py --json out.json
-
-`--baseline <file>` diffs against an earlier JSON run and prints what newly
-fires and what regressed, which is the point of keeping the JSON around.
+    ./venv/Scripts/python.exe scripts/run_detection_benchmark.py --json scripts/benchmark_results.json --markdown scripts/benchmark_results.md
 """
 
 import argparse
 import json
+import pickle
 import sys
 import time
-from collections import Counter
-from dataclasses import asdict, dataclass, field
+from collections import Counter, defaultdict
+from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
+BACKEND = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND))
 
 from app.detection.engine import evaluate_event  # noqa: E402
-from app.detection.rule_loader import get_loaded_rules  # noqa: E402
+from app.detection.rule_loader import load_rules  # noqa: E402
 from app.detection.sequences import detect_sequences  # noqa: E402
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts  # noqa: E402
 from app.ingestion.normalizer import EventNormalizationError, normalize_event  # noqa: E402
-from app.models.event import Event  # noqa: E402
+from app.services.ingest_service import ALERT_DEDUP_WINDOW, _alert_dedup_key  # noqa: E402
 
-SAMPLE_LOGS = Path(__file__).resolve().parents[1] / "sample_logs"
-REAL_WORLD_DIR = SAMPLE_LOGS / "real_world_fixtures"
-MALICIOUS_DIRS = (REAL_WORLD_DIR / "detected", REAL_WORLD_DIR / "undetected")
-CLEAN_GLOB = sorted((SAMPLE_LOGS / "demo_fixtures").glob("noise_*.evtx")) + sorted(
-    (REAL_WORLD_DIR / "benign").glob("*.evtx")
-)
-
-
-@dataclass
-class FileResult:
-    name: str
-    records: int
-    normalized: int
-    skipped: int
-    matches: int
-    rule_titles: list[str] = field(default_factory=list)
-    technique_ids: list[str] = field(default_factory=list)
-    event_ids: list[int] = field(default_factory=list)
-    elapsed_s: float = 0.0
-    error: str | None = None
-
-    @property
-    def detected(self) -> bool:
-        return self.matches > 0
+SAMPLE_LOGS = BACKEND / "sample_logs"
+REAL_WORLD = SAMPLE_LOGS / "real_world_fixtures"
+ATTACK_DIRS = (REAL_WORLD / "detected", REAL_WORLD / "undetected")
+BENIGN_SOURCES = {
+    "NightOwl-Benign-Dataset": sorted((REAL_WORLD / "NightOwl-Benign-Dataset").glob("*.evtx")),
+    "benign (local only)": sorted((REAL_WORLD / "benign").glob("*.evtx")),
+    "synthetic noise": sorted((SAMPLE_LOGS / "demo_fixtures").glob("noise_*.evtx")),
+}
+GROUND_TRUTH = json.loads((BACKEND / "scripts" / "fixture_ground_truth.json").read_text(encoding="utf-8"))["fixtures"]
+CACHE_DIR = BACKEND / "scripts" / "cache" / "normalized"
 
 
-def scan(path: Path, rules) -> FileResult:
-    started = time.time()
-    try:
-        records = list(read_records_as_dicts(path))
-    except EvtxReadError as e:
-        return FileResult(name=path.name, records=0, normalized=0, skipped=0, matches=0, error=str(e))
-
-    titles: Counter[str] = Counter()
-    techniques: set[str] = set()
-    event_ids: Counter[int] = Counter()
-    normalized_count = 0
-    skipped = 0
-    matches = 0
-    sequence_rows: list[tuple[Event, object]] = []
-
-    for record in records:
+def load_events(path: Path) -> tuple[list, int, int]:
+    """(normalized events in timestamp order, records read, records skipped), cached."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache = _cache_path(path)
+    use_cache = True
+    if cache.exists():
         try:
-            event = normalize_event(record)
-        except EventNormalizationError:
-            skipped += 1
+            with open(cache, "rb") as f:
+                return pickle.load(f)
+        except (OSError, pickle.UnpicklingError, EOFError):
+            # Antivirus can quarantine a cache file whose decoded strings look
+            # like attack tooling (the psexec/meterpreter capture does) --
+            # parse the capture directly instead and do not re-cache it.
+            use_cache = False
+    events, read, skipped = [], 0, 0
+    try:
+        for record in read_records_as_dicts(path):
+            read += 1
+            try:
+                event = normalize_event(record)
+            except EventNormalizationError:
+                skipped += 1
+                continue
+            except Exception:  # noqa: BLE001 -- a corrupt record must not end the benchmark
+                skipped += 1
+                continue
+            events.append(event.model_copy(update={"raw": {}}))
+    except EvtxReadError:
+        pass
+    events.sort(key=lambda e: e.timestamp)
+    result = (events, read, skipped)
+    if not use_cache:
+        return result
+    # Write-then-rename so an interrupted run never leaves a truncated cache file.
+    tmp = cache.with_suffix(".tmp")
+    with open(tmp, "wb") as f:
+        pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
+    tmp.replace(cache)
+    return result
+
+
+def _cache_path(path: Path) -> Path:
+    stat = path.stat()
+    return CACHE_DIR / f"{path.name}.{stat.st_size}.{int(stat.st_mtime)}.pkl"
+
+
+def _warm_cache() -> None:
+    """Parse every uncached capture in its own short-lived subprocess, one at
+    a time, so the memory python-evtx uses on a large file is returned to the
+    OS before the next one starts (parsing everything in one process
+    exhausted memory on a 16 GB machine)."""
+    import subprocess
+
+    paths = [p for d in ATTACK_DIRS for p in sorted(d.glob("*.evtx"))]
+    paths += [p for group in BENIGN_SOURCES.values() for p in group]
+    for path in paths:
+        if _cache_path(path).exists():
             continue
-        normalized_count += 1
-        event_ids[event.event_id] += 1
+        print(f"  parsing {path.name} ...", flush=True)
+        subprocess.run([sys.executable, __file__, "--cache-one", str(path)], check=False)
+
+
+def scan(path: Path, rules) -> dict:
+    events, read, skipped = load_events(path)
+    alerts: list[dict] = []
+    open_alerts: dict[tuple, tuple[int, object]] = {}
+    for event in events:
         for match in evaluate_event(event, rules):
-            matches += 1
-            titles[match.title] += 1
-            if match.technique_id:
-                techniques.add(match.technique_id)
-        # Throwaway anchor row (id only needs to be unique within this
-        # scan; never persisted) -- see this module's docstring.
-        sequence_rows.append((
-            Event(
-                id=normalized_count,
-                host=event.host,
-                timestamp=event.timestamp,
-                event_id=event.event_id,
-                channel=event.channel,
-                process=None,
-                command_line=None,
-                user=None,
-                event_record_id=None,
-                raw_json={},
-            ),
-            event,
-        ))
-
-    for _anchor, match in detect_sequences(sequence_rows):
-        matches += 1
-        titles[match.title] += 1
-        if match.technique_id:
-            techniques.add(match.technique_id)
-
-    return FileResult(
-        name=path.name,
-        records=len(records),
-        normalized=normalized_count,
-        skipped=skipped,
-        matches=matches,
-        rule_titles=sorted(titles),
-        technique_ids=sorted(techniques),
-        event_ids=sorted(event_ids),
-        elapsed_s=round(time.time() - started, 1),
-    )
+            key = _alert_dedup_key(match.rule_id, event)
+            previous = open_alerts.get(key)
+            if previous is not None and event.timestamp - previous[1] <= ALERT_DEDUP_WINDOW:
+                alerts[previous[0]]["occurrences"] += 1
+                open_alerts[key] = (previous[0], event.timestamp)
+                continue
+            open_alerts[key] = (len(alerts), event.timestamp)
+            alerts.append(
+                {"rule": match.title, "technique": match.technique_id, "level": match.level, "occurrences": 1,
+                 "sample": (event.command_line or event.process or json.dumps(event.event_data)[:160])}
+            )
+    rows = [(SimpleNamespace(id=i, host=e.host, timestamp=e.timestamp), e) for i, e in enumerate(events)]
+    for _anchor, match in detect_sequences(rows):
+        alerts.append({"rule": match.title, "technique": match.technique_id, "level": match.level, "occurrences": 1,
+                       "sample": "(sequence)"})
+    return {"name": path.name, "records": read, "events": len(events), "skipped": skipped, "alerts": alerts}
 
 
-def _print_section(title: str, results: list[FileResult], *, expect_detection: bool) -> None:
-    print(f"\n{title}")
-    print("-" * 100)
-    for r in sorted(results, key=lambda x: (not x.detected, x.name)):
-        if r.error:
-            flag, detail = "ERR ", r.error[:60]
-        elif r.detected:
-            # A hit is what we want in the malicious corpus and a false
-            # positive in the clean one -- same fact, opposite verdict.
-            flag = "HIT " if expect_detection else "FP  "
-            detail = ", ".join(r.rule_titles)[:70]
-        else:
-            flag = "MISS" if expect_detection else "ok  "
-            detail = f"event ids present: {r.event_ids}"[:70] if expect_detection else ""
-        print(f"  {flag} {r.name[:52]:52s} {r.matches:3d}  {detail}")
+def _parent(technique: str | None) -> str | None:
+    return technique.split(".")[0] if technique else None
+
+
+def correct_technique(result: dict, expected: list[str]) -> bool:
+    expected_parents = {_parent(t) for t in expected}
+    return any(_parent(a["technique"]) in expected_parents for a in result["alerts"])
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--json", type=Path, help="write full results to this file")
-    parser.add_argument("--baseline", type=Path, help="compare against an earlier --json run")
+    parser.add_argument("--json", type=Path)
+    parser.add_argument("--markdown", type=Path)
+    parser.add_argument("--cache-one", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    rules = get_loaded_rules()
-    print(f"Loaded {len(rules)} detection rules")
+    if args.cache_one:
+        load_events(args.cache_one)
+        return 0
+    _warm_cache()
 
-    malicious_files = sorted(p for d in MALICIOUS_DIRS for p in d.glob("*.evtx"))
-    if not malicious_files:
-        print(f"No fixtures found in {MALICIOUS_DIRS}", file=sys.stderr)
-        return 1
+    started = time.time()
+    rules = load_rules()
+    print(f"{len(rules)} rules loaded")
 
-    print(f"Scanning {len(malicious_files)} malicious + {len(CLEAN_GLOB)} clean fixtures "
-          f"(large files take a while -- python-evtx parsing dominates)...")
+    attack_files = [p for d in ATTACK_DIRS for p in sorted(d.glob("*.evtx"))]
+    attack_rows, benign_rows = [], []
+    for path in attack_files:
+        truth = GROUND_TRUTH.get(path.name)
+        if truth is None:
+            print(f"WARNING: {path.name} has no ground-truth entry; skipped")
+            continue
+        result = scan(path, rules)
+        if truth["split"] == "excluded":
+            result["corpus"] = "mislabeled attack capture"
+            benign_rows.append(result)
+            continue
+        result["expected"] = truth["expected"]
+        result["any_alert"] = bool(result["alerts"])
+        result["correct"] = correct_technique(result, truth["expected"])
+        attack_rows.append(result)
+        print(f"  attack  {'OK ' if result['correct'] else 'ANY' if result['any_alert'] else '-- '} {path.name}")
+    for corpus, paths in BENIGN_SOURCES.items():
+        for path in paths:
+            result = scan(path, rules)
+            result["corpus"] = corpus
+            benign_rows.append(result)
+            print(f"  benign  {len(result['alerts']):4d} alerts  {path.name}")
 
-    malicious = [scan(p, rules) for p in malicious_files]
-    clean = [scan(p, rules) for p in CLEAN_GLOB]
+    n = len(attack_rows)
+    any_hits = sum(r["any_alert"] for r in attack_rows)
+    correct = sum(r["correct"] for r in attack_rows)
+    fp_by_rule: Counter[str] = Counter()
+    fp_events = 0
+    benign_events = 0
+    for r in benign_rows:
+        benign_events += r["events"]
+        for a in r["alerts"]:
+            fp_by_rule[a["rule"]] += 1
+            fp_events += a["occurrences"]
+    fp_alerts = sum(fp_by_rule.values())
 
-    _print_section("MALICIOUS CORPUS (every file should be detected)", malicious, expect_detection=True)
-    _print_section("CLEAN CORPUS (any hit is a false positive)", clean, expect_detection=False)
-
-    detected = sum(1 for r in malicious if r.detected)
-    false_positives = sum(1 for r in clean if r.detected)
-    techniques = sorted({t for r in malicious for t in r.technique_ids})
-    recall = detected / len(malicious) * 100 if malicious else 0.0
-
-    print("\n" + "=" * 100)
-    print(f"  Detection rate : {detected}/{len(malicious)}  ({recall:.1f}%)")
-    print(f"  False positives: {false_positives}/{len(clean)}")
-    print(f"  Techniques seen: {len(techniques)}  {', '.join(techniques) if techniques else '(none)'}")
-    print("=" * 100)
-
-    payload = {
-        "detected": detected,
-        "total_malicious": len(malicious),
-        "recall_pct": round(recall, 1),
-        "false_positives": false_positives,
-        "total_clean": len(clean),
-        "techniques": techniques,
+    summary = {
         "rules_loaded": len(rules),
-        "malicious": [asdict(r) for r in malicious],
-        "clean": [asdict(r) for r in clean],
+        "attack_captures": n,
+        "any_alert": any_hits,
+        "correct_technique": correct,
+        "benign_files": len(benign_rows),
+        "benign_events": benign_events,
+        "false_positive_alerts": fp_alerts,
+        "false_positive_matched_events": fp_events,
+        "benign_files_with_alerts": sum(1 for r in benign_rows if r["alerts"]),
+        "false_positives_by_rule": dict(fp_by_rule.most_common()),
+        "elapsed_s": round(time.time() - started, 1),
     }
-
-    if args.baseline and args.baseline.exists():
-        before = json.loads(args.baseline.read_text())
-        was = {r["name"] for r in before["malicious"] if r["matches"] > 0}
-        now = {r["name"] for r in malicious_names(payload)}
-        print(f"\nvs baseline ({before['detected']}/{before['total_malicious']} -> {detected}/{len(malicious)}):")
-        for name in sorted(now - was):
-            print(f"  + newly detected  {name}")
-        for name in sorted(was - now):
-            print(f"  - REGRESSED       {name}")
-        if not (now - was) and not (was - now):
-            print("  (no change)")
+    print()
+    print(f"Attack captures: {n}")
+    print(f"  any alert:          {any_hits}/{n} ({any_hits / n:.1%})")
+    print(f"  correct technique:  {correct}/{n} ({correct / n:.1%})")
+    print(f"Benign: {len(benign_rows)} files, {benign_events} events")
+    print(f"  false-positive alerts: {fp_alerts} in {summary['benign_files_with_alerts']} file(s)")
+    for rule, count in fp_by_rule.most_common():
+        print(f"    {count:4d}  {rule}")
 
     if args.json:
-        args.json.write_text(json.dumps(payload, indent=2))
-        print(f"\nWrote {args.json}")
-
+        args.json.write_text(
+            json.dumps({"summary": summary, "attack": attack_rows, "benign": benign_rows}, indent=2, default=str),
+            encoding="utf-8",
+        )
+    if args.markdown:
+        args.markdown.write_text(_markdown(summary, attack_rows, benign_rows), encoding="utf-8")
     return 0
 
 
-def malicious_names(payload: dict):
-    return [r for r in payload["malicious"] if r["matches"] > 0]
+def _markdown(summary: dict, attack_rows: list[dict], benign_rows: list[dict]) -> str:
+    lines = [
+        "# Detection benchmark results",
+        "",
+        "Generated by `backend/scripts/run_detection_benchmark.py` -- do not edit by hand. Rules + sequence detectors",
+        "only (the ML anomaly layer is evaluated separately in ML.md). All attack captures informed rule development,",
+        "so these are development-set numbers, not a held-out estimate.",
+        "",
+        f"* Rules loaded: {summary['rules_loaded']} (+ 3 sequence detectors)",
+        f"* Attack captures: {summary['attack_captures']}",
+        f"  * raised any alert: **{summary['any_alert']}/{summary['attack_captures']}**",
+        f"  * raised an alert with the correct ATT&CK technique: **{summary['correct_technique']}/{summary['attack_captures']}**",
+        f"* Benign captures: {summary['benign_files']} files, {summary['benign_events']:,} events",
+        f"  * false-positive alerts: **{summary['false_positive_alerts']}** in {summary['benign_files_with_alerts']} file(s)",
+        "",
+        "## False positives by rule",
+        "",
+        "| alerts | rule |",
+        "|---:|---|",
+    ]
+    lines += [f"| {c} | {rule} |" for rule, c in summary["false_positives_by_rule"].items()] or ["| 0 | -- |"]
+    lines += ["", "## Attack captures", "", "| capture | expected | emitted techniques | verdict |", "|---|---|---|---|"]
+    for r in sorted(attack_rows, key=lambda r: (not r["correct"], not r["any_alert"], r["name"].lower())):
+        emitted = sorted({a["technique"] or "--" for a in r["alerts"]})
+        verdict = "correct" if r["correct"] else "alert, wrong technique" if r["any_alert"] else "missed"
+        lines.append(f"| {r['name']} | {', '.join(r['expected'])} | {', '.join(emitted) or '--'} | {verdict} |")
+    lines += ["", "## Benign captures", "", "| corpus | file | events | alerts |", "|---|---|---:|---:|"]
+    for r in benign_rows:
+        lines.append(f"| {r['corpus']} | {r['name']} | {r['events']:,} | {len(r['alerts'])} |")
+    return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ from sigma.exceptions import SigmaError
 from sigma.rule import SigmaRule
 
 from app.ingestion.normalizer import canonical_channel
+from app.mitre.loader import load_mitre_techniques
 from app.mitre.validator import validate_technique_id
 
 logger = logging.getLogger(__name__)
@@ -85,23 +86,31 @@ class LoadedRule:
     status: str = ""
 
 
-def _validate_category(path: Path, category: str | None) -> None:
-    """Warns when a rule's `logsource.category` isn't one engine.py knows how
-    to scope to an event ID. Without this, a typo'd or unmapped category
-    silently means `expected_event_ids is None`, and evaluate_event() runs
-    the rule against *every* event instead of skipping it -- warn-only,
-    matching this loader's existing tolerance policy, since the rule may
-    still be intentionally unscoped.
+def _selects_event_id(detections: dict[str, object]) -> bool:
+    def _has(body: object) -> bool:
+        if isinstance(body, list):
+            return any(_has(item) for item in body)
+        if isinstance(body, dict):
+            return any(isinstance(k, str) and k.split("|")[0] in ("EventID", "event_id") for k in body)
+        return False
+
+    return any(_has(body) for body in detections.values())
+
+
+def _validate_category(path: Path, category: str | None, detections: dict[str, object]) -> None:
+    """A rule must be scoped to specific event IDs -- by a `logsource.category`
+    engine.py maps, or by an `EventID` selection (standard Sigma for the
+    Security/System logs). An unmapped category used to load with a warning
+    and then run against EVERY event of its channel; that is now a load
+    error, not a warning that scrolls past.
     """
-    if category is None:
-        return
-    # Deferred import: engine.py imports LoadedRule from this module, so a
-    # top-level import here would be circular.
+    # Deferred import: engine.py imports LoadedRule from this module.
     from app.detection.engine import CATEGORY_TO_EVENT_ID
 
-    if category not in CATEGORY_TO_EVENT_ID:
-        logger.warning("%s: logsource.category %r is not scoped to any event ID in engine.py "
-                        "-- this rule will run unscoped against every event", path, category)
+    if category is not None and category not in CATEGORY_TO_EVENT_ID:
+        raise RuleLoadError(f"{path}: logsource.category {category!r} is not a category this engine maps to event IDs")
+    if category is None and not _selects_event_id(detections):
+        raise RuleLoadError(f"{path}: rule has no logsource.category and no EventID selection -- it would match every event")
 
 
 def _parse_channel(path: Path, service: object) -> str | None:
@@ -120,23 +129,37 @@ def _parse_channel(path: Path, service: object) -> str | None:
     return token
 
 
-def _validate_technique(path: Path, technique_id: str | None) -> None:
-    """Validates a rule's parsed technique_id against the real MITRE
-    ATT&CK dataset (Day 11) via mitre/validator.py (Pair 2's Day 6
-    scaffold). Warn-only, matching the loader's existing "log + keep
-    going" tolerance policy: an unknown/deprecated/revoked technique tag
-    is a rule-authoring problem worth surfacing, not a reason to drop an
-    otherwise-valid detection rule from the running rule set.
+def _validate_technique(path: Path, technique_id: str | None, tactics: list[str]) -> None:
+    """A rule's ATT&CK tags must be real and consistent with the pinned
+    dataset (ATT&CK v19.2):
+
+    * the technique id must exist and not be revoked (v19 revoked e.g.
+      T1562 / T1070.001 in favour of the T1685 family);
+    * every tactic tag must be one of THAT technique's tactics -- tactics
+      drive severity escalation (services/severity_service.py), so a stray
+      `attack.lateral_movement` on a discovery rule silently raised its
+      severity, and the retired `defense_evasion` tactic no longer exists.
+
+    These are load errors: a mis-tagged rule reports the wrong technique and
+    the wrong severity on every alert it raises.
     """
     if technique_id is None:
+        if tactics:
+            raise RuleLoadError(f"{path}: tactic tags {tactics} without a technique tag")
         return
     result = validate_technique_id(technique_id)
     if not result.is_valid:
-        logger.warning("%s: tagged with unknown MITRE technique id %r", path, technique_id)
-    elif result.is_revoked:
-        logger.warning("%s: tagged with revoked MITRE technique id %r", path, technique_id)
-    elif result.is_deprecated:
+        raise RuleLoadError(f"{path}: tagged with unknown MITRE technique id {technique_id!r}")
+    if result.is_revoked:
+        raise RuleLoadError(f"{path}: tagged with revoked MITRE technique id {technique_id!r}")
+    if result.is_deprecated:
         logger.warning("%s: tagged with deprecated MITRE technique id %r", path, technique_id)
+    allowed = {t.replace("-", "_") for t in load_mitre_techniques()[technique_id]["tactics"]}
+    wrong = [t for t in tactics if t not in allowed]
+    if wrong:
+        raise RuleLoadError(
+            f"{path}: tactic tag(s) {wrong} are not tactics of {technique_id} in ATT&CK v19 (allowed: {sorted(allowed)})"
+        )
 
 
 def _parse_tags(tags: object) -> tuple[str | None, list[str]]:
@@ -179,9 +202,8 @@ def _validate_modifiers(path: Path, rule_id: str, detections: dict[str, object])
     silently mean "not actually detecting," not "detecting with weaker
     provenance."
     """
-    # Deferred import: engine.py imports LoadedRule from this module (same
-    # reason _validate_category's deferred import exists).
-    from app.detection.engine import _SUPPORTED_MODIFIERS
+    # Deferred import: engine.py imports LoadedRule from this module.
+    from app.detection.engine import UnsupportedModifierError, parse_field_key
 
     def _check(selection_body: object) -> None:
         if isinstance(selection_body, list):
@@ -189,20 +211,26 @@ def _validate_modifiers(path: Path, rule_id: str, detections: dict[str, object])
                 _check(item)
             return
         if not isinstance(selection_body, dict):
-            return
+            raise RuleLoadError(f"{path}: rule {rule_id!r}: unsupported selection shape {type(selection_body).__name__}")
         for key in selection_body:
             if not isinstance(key, str):
-                continue
-            field, _, modifier = key.partition("|")
-            modifier = modifier or None
-            if modifier not in _SUPPORTED_MODIFIERS:
-                raise RuleLoadError(
-                    f"{path}: rule {rule_id!r} field {field!r}: unsupported modifier {modifier!r} "
-                    "(v1 supports a single trailing |contains, |startswith, |endswith, or none)"
-                )
+                raise RuleLoadError(f"{path}: rule {rule_id!r}: non-string field key {key!r}")
+            try:
+                parse_field_key(key)
+            except UnsupportedModifierError as e:
+                raise RuleLoadError(f"{path}: rule {rule_id!r}: {e}") from e
 
     for selection_body in detections.values():
         _check(selection_body)
+
+
+def _validate_condition(path: Path, rule_id: str, condition: str, detections: dict[str, object]) -> None:
+    from app.detection.engine import ConditionSyntaxError, validate_condition
+
+    try:
+        validate_condition(condition, detections.keys())
+    except ConditionSyntaxError as e:
+        raise RuleLoadError(f"{path}: rule {rule_id!r}: condition {condition!r} cannot be evaluated: {e}") from e
 
 
 def _validate_with_pysigma(text: str, path: Path) -> SigmaRule:
@@ -237,11 +265,12 @@ def _load_one(path: Path) -> LoadedRule:
 
     rule_id = str(sigma_rule.id) if sigma_rule.id else path.stem
     _validate_modifiers(path, rule_id, detections)
+    _validate_condition(path, rule_id, condition, detections)
 
     logsource = raw.get("logsource") or {}
     technique_id, tactics = _parse_tags(raw.get("tags"))
-    _validate_technique(path, technique_id)
-    _validate_category(path, logsource.get("category"))
+    _validate_technique(path, technique_id, tactics)
+    _validate_category(path, logsource.get("category"), detections)
     channel = _parse_channel(path, logsource.get("service"))
 
     return LoadedRule(

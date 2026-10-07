@@ -42,7 +42,9 @@ def test_sample_file_in_incidents_and_techniques_out(api_client, monkeypatch):
     # Sanity check: this test is only meaningful against the real, full
     # rule set -- fail loudly if that ever drifts instead of silently
     # passing against fewer rules.
-    assert len(get_loaded_rules()) == 45
+    from app.detection.rule_loader import RULES_DIR
+
+    assert len(get_loaded_rules()) == len(list(RULES_DIR.glob("*.yml")))
 
     monkeypatch.setattr(
         "app.api.routes_ingest.read_records_as_dicts",

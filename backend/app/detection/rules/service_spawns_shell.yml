@@ -1,0 +1,29 @@
+title: Shell Started Directly by the Service Control Manager
+id: e3b6d0a7-9c4f-4e21-8a5b-1f7c3d9e6b40
+status: experimental
+description: >
+  Detects services.exe starting cmd.exe or PowerShell directly. A real
+  service runs its own executable; a service whose binary path is a shell
+  command (PsExec-style and Impacket remote execution, Metasploit service
+  payloads) shows up as the Service Control Manager spawning a shell.
+  Some old service wrappers do this legitimately, hence medium. Verified
+  against real content: LM_sysmon_psexec_smb_meterpreter.evtx.
+author: NightOwl
+date: 2026-10-07
+references:
+  - https://attack.mitre.org/techniques/T1569/002/
+tags:
+  - attack.execution
+  - attack.t1569.002
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection:
+    ParentImage|endswith: '\services.exe'
+    Image|endswith:
+      - '\cmd.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+  condition: selection
+level: medium

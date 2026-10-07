@@ -1,10 +1,14 @@
-title: Suspicious Network Connection from LOLBin
+title: Network Connection from a Proxy-Execution LOLBin
 id: 2a7e9c14-5d3f-4b6a-9e1c-8f4a2d7b6c53
 status: experimental
 description: >
-  Detects an outbound network connection initiated by a living-off-the-land
-  binary (powershell.exe, certutil.exe, curl.exe) commonly abused to reach
-  a command-and-control server or download second-stage tooling.
+  Detects an outbound network connection from a signed Windows binary
+  that has no business talking to the network but is routinely abused to
+  fetch or run payloads (certutil, mshta, rundll32, regsvr32, cmstp,
+  installutil, msbuild, wmic...). PowerShell and curl were removed: both
+  make legitimate connections all day (updates, module galleries,
+  scripts), and the old rule fired on every one of them, inbound or
+  outbound.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-08-18
 references:
@@ -17,9 +21,21 @@ logsource:
   service: sysmon
 detection:
   selection:
-    Image|contains:
-      - powershell.exe
-      - certutil.exe
-      - curl.exe
-  condition: selection
+    Initiated: 'true'
+    Image|endswith:
+      - '\certutil.exe'
+      - '\mshta.exe'
+      - '\rundll32.exe'
+      - '\regsvr32.exe'
+      - '\cmstp.exe'
+      - '\installutil.exe'
+      - '\msbuild.exe'
+      - '\wmic.exe'
+      - '\odbcconf.exe'
+      - '\msxsl.exe'
+  filter_loopback:
+    DestinationIp|cidr:
+      - '127.0.0.0/8'
+      - '::1/128'
+  condition: selection and not filter_loopback
 level: medium
