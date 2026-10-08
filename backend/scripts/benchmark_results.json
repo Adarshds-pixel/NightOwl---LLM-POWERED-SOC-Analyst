@@ -12,7 +12,7 @@
     "false_positives_by_rule": {
       "Windows Event Log Cleared (System 104)": 5
     },
-    "elapsed_s": 42.7
+    "elapsed_s": 29.3
   },
   "attack": [
     {
@@ -26,7 +26,7 @@
           "technique": "T1069.001",
           "level": "low",
           "occurrences": 1,
-          "sample": "{\"TargetUserName\": \"Administrators\", \"TargetDomainName\": \"Builtin\", \"TargetSid\": \"S-1-5-32-544\", \"SubjectUserSid\": \"S-1-5-21-308926384-506822093-3341789130-1105"
+          "sample": "C:\\Windows\\System32\\net1.exe"
         }
       ],
       "expected": [
@@ -67,7 +67,7 @@
           "technique": "T1003.001",
           "level": "critical",
           "occurrences": 2,
-          "sample": "{\"SubjectUserSid\": \"S-1-5-21-3461203602-4096304019-2269080069-1000\", \"SubjectUserName\": \"IEUser\", \"SubjectDomainName\": \"MSEDGEWIN10\", \"SubjectLogonId\": \"0x00000"
+          "sample": "C:\\Windows\\System32\\cscript.exe"
         }
       ],
       "expected": [
@@ -155,7 +155,7 @@
           "technique": "T1572",
           "level": "critical",
           "occurrences": 1,
-          "sample": "{\"SubjectUserSid\": \"S-1-5-18\", \"SubjectUserName\": \"PC01$\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x00000000000003e7\", \"TargetUserSid\": \"S-1-5-21-15"
+          "sample": "C:\\Windows\\System32\\winlogon.exe"
         }
       ],
       "expected": [
@@ -175,7 +175,7 @@
           "technique": "T1572",
           "level": "critical",
           "occurrences": 1,
-          "sample": "{\"SubjectUserSid\": \"S-1-5-18\", \"SubjectUserName\": \"PC02$\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x00000000000003e7\", \"TargetUserSid\": \"S-1-5-21-35"
+          "sample": "C:\\Windows\\System32\\winlogon.exe"
         }
       ],
       "expected": [
@@ -252,7 +252,7 @@
           "technique": "T1069.002",
           "level": "low",
           "occurrences": 2,
-          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
+          "sample": "C:\\Windows\\System32\\lsass.exe"
         }
       ],
       "expected": [
@@ -324,14 +324,14 @@
           "technique": "T1069.001",
           "level": "low",
           "occurrences": 2,
-          "sample": "{\"TargetUserName\": \"Administrator\", \"TargetDomainName\": \"MSEDGEWIN10\", \"TargetSid\": \"S-1-5-21-3461203602-4096304019-2269080069-500\", \"SubjectUserSid\": \"S-1-5-21"
+          "sample": "C:\\Windows\\System32\\net1.exe"
         },
         {
           "rule": "Sensitive Local Group/Account Enumeration via net.exe",
           "technique": "T1069.001",
           "level": "low",
           "occurrences": 1,
-          "sample": "{\"TargetUserName\": \"Administrators\", \"TargetDomainName\": \"Builtin\", \"TargetSid\": \"S-1-5-32-544\", \"SubjectUserSid\": \"S-1-5-21-3461203602-4096304019-2269080069-10"
+          "sample": "C:\\Windows\\System32\\net1.exe"
         }
       ],
       "expected": [
@@ -743,7 +743,7 @@
           "technique": "T1550.002",
           "level": "high",
           "occurrences": 1,
-          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
+          "sample": "C:\\Windows\\System32\\svchost.exe"
         }
       ],
       "expected": [
@@ -887,7 +887,7 @@
           "technique": "T1047",
           "level": "medium",
           "occurrences": 2,
-          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
+          "sample": "C:\\Windows\\System32\\wbem\\WMIC.exe"
         }
       ],
       "expected": [
