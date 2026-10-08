@@ -43,6 +43,209 @@
     "manual_review_needed": false
   },
   {
+    "name": "ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx",
+    "behavior_hint": "ACL ForcePwd SPNAdd User Computer Accounts",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 55,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Eventlog",
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "1102": 1,
+      "4662": 14,
+      "4702": 4,
+      "4719": 8,
+      "4738": 5,
+      "4742": 1,
+      "5136": 22
+    },
+    "normalized_count": 55,
+    "skipped_count": 0,
+    "covered_count": 29,
+    "uncovered_count": 26,
+    "uncovered_breakdown": [
+      {
+        "channel": "Security",
+        "event_id": 5136,
+        "count": 22
+      },
+      {
+        "channel": "Security",
+        "event_id": 4702,
+        "count": 4
+      }
+    ],
+    "matched_rule_ids": [
+      "3a6d9e71-c082-4b5f-97a4-0e1f8b2c5d36",
+      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
+    ],
+    "matched_rule_titles": [
+      "Security Audit Log Cleared",
+      "User or Computer Account Modified by Another User Account"
+    ],
+    "matched_technique_ids": [
+      "T1098",
+      "T1685.005"
+    ],
+    "alerts_created": 7,
+    "incident_ids": [
+      1,
+      2,
+      3
+    ],
+    "mitre_technique_ids": [
+      "T1098",
+      "T1685.005"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Security Audit Log Cleared, User or Computer Account Modified by Another User Account",
+    "manual_review_needed": false
+  },
+  {
+    "name": "bits_openvpn.evtx",
+    "behavior_hint": "bits openvpn",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 1537,
+    "channels": [
+      "Microsoft-Windows-Bits-Client/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Bits-Client"
+    ],
+    "event_id_counts": {
+      "3": 254,
+      "4": 125,
+      "5": 84,
+      "59": 162,
+      "60": 129,
+      "61": 492,
+      "209": 101,
+      "306": 150,
+      "310": 40
+    },
+    "normalized_count": 1537,
+    "skipped_count": 0,
+    "covered_count": 254,
+    "uncovered_count": 1283,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 61,
+        "count": 492
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 59,
+        "count": 162
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 306,
+        "count": 150
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 60,
+        "count": 129
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 4,
+        "count": 125
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 209,
+        "count": 101
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 5,
+        "count": 84
+      },
+      {
+        "channel": "Microsoft-Windows-Bits-Client/Operational",
+        "event_id": 310,
+        "count": 40
+      }
+    ],
+    "matched_rule_ids": [
+      "8f2c4a96-d170-4b3e-a5c8-3e91b7d02f64"
+    ],
+    "matched_rule_titles": [
+      "BITS Job Created by a Process That Never Uses BITS"
+    ],
+    "matched_technique_ids": [
+      "T1197"
+    ],
+    "alerts_created": 7,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1197"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- BITS Job Created by a Process That Never Uses BITS",
+    "manual_review_needed": false
+  },
+  {
+    "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
+    "behavior_hint": "CA 4624 4625 LogonType2 LogonProc chrome",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 4,
+    "channels": [
+      "Security"
+    ],
+    "providers": [
+      "Microsoft-Windows-Security-Auditing"
+    ],
+    "event_id_counts": {
+      "4624": 3,
+      "4625": 1
+    },
+    "normalized_count": 4,
+    "skipped_count": 0,
+    "covered_count": 4,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "7c3d1b58-2e94-4a6f-b0c7-91d5a3e8f240"
+    ],
+    "matched_rule_titles": [
+      "Windows Logon Requested by a Non-Windows Process (Browser Credential Check)"
+    ],
+    "matched_technique_ids": [
+      "T1555.003"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1555.003"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Windows Logon Requested by a Non-Windows Process (Browser Credential Check)",
+    "manual_review_needed": false
+  },
+  {
     "name": "CA_DCSync_4662.evtx",
     "behavior_hint": "CA DCSync 4662",
     "parsed_ok": true,
@@ -127,6 +330,84 @@
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- LSASS Process Handle with Memory Read Access (Security Audit)",
+    "manual_review_needed": false
+  },
+  {
+    "name": "CA_PetiPotam_etw_rpc_efsr_5_6.evtx",
+    "behavior_hint": "CA PetiPotam etw rpc efsr 5 6",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 29109,
+    "channels": [],
+    "providers": [
+      "Microsoft-Windows-RPC"
+    ],
+    "event_id_counts": {
+      "0": 1,
+      "1": 8,
+      "5": 14508,
+      "6": 14550,
+      "9": 1,
+      "14": 39,
+      "16": 2
+    },
+    "normalized_count": 29109,
+    "skipped_count": 0,
+    "covered_count": 14508,
+    "uncovered_count": 14601,
+    "uncovered_breakdown": [
+      {
+        "channel": "Microsoft-Windows-RPC",
+        "event_id": 6,
+        "count": 14550
+      },
+      {
+        "channel": "Microsoft-Windows-RPC",
+        "event_id": 14,
+        "count": 39
+      },
+      {
+        "channel": "Microsoft-Windows-RPC",
+        "event_id": 1,
+        "count": 8
+      },
+      {
+        "channel": "Microsoft-Windows-RPC",
+        "event_id": 16,
+        "count": 2
+      },
+      {
+        "channel": null,
+        "event_id": 0,
+        "count": 1
+      },
+      {
+        "channel": "Microsoft-Windows-RPC",
+        "event_id": 9,
+        "count": 1
+      }
+    ],
+    "matched_rule_ids": [
+      "0c5b8a2d-e631-47f9-b4a0-72d9e1f3a685"
+    ],
+    "matched_rule_titles": [
+      "EFSRPC (PetitPotam) Call to a Remote Host"
+    ],
+    "matched_technique_ids": [
+      "T1187"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1187"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- EFSRPC (PetitPotam) Call to a Remote Host",
     "manual_review_needed": false
   },
   {
@@ -790,6 +1071,92 @@
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Remote Registry Access over IPC$ (winreg), Security Audit Log Cleared",
+    "manual_review_needed": false
+  },
+  {
+    "name": "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
+    "behavior_hint": "Discovery Remote System NamedPipes Sysmon 18",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 20,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "18": 20
+    },
+    "normalized_count": 20,
+    "skipped_count": 0,
+    "covered_count": 20,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "sequence-named-pipe-sweep"
+    ],
+    "matched_rule_titles": [
+      "Named-Pipe Sweep (One Process Connecting to Many Distinct RPC Pipes in Seconds)"
+    ],
+    "matched_technique_ids": [
+      "T1018"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1018"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Named-Pipe Sweep (One Process Connecting to Many Distinct RPC Pipes in Seconds)",
+    "manual_review_needed": false
+  },
+  {
+    "name": "discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx",
+    "behavior_hint": "discovery sysmon 3 Invoke UserHunter SourceMachine",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 9,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "3": 9
+    },
+    "normalized_count": 9,
+    "skipped_count": 0,
+    "covered_count": 9,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "sequence-smb-fan-out"
+    ],
+    "matched_rule_titles": [
+      "SMB Fan-Out (One Process Connecting to Many Hosts on Port 445)"
+    ],
+    "matched_technique_ids": [
+      "T1018"
+    ],
+    "alerts_created": 1,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1018"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- SMB Fan-Out (One Process Connecting to Many Hosts on Port 445)",
     "manual_review_needed": false
   },
   {
@@ -2535,6 +2902,52 @@
     "manual_review_needed": false
   },
   {
+    "name": "Sysmon_UACME_32.evtx",
+    "behavior_hint": "Sysmon UACME 32",
+    "parsed_ok": true,
+    "parse_error": null,
+    "records_read": 8,
+    "channels": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "providers": [
+      "Microsoft-Windows-Sysmon"
+    ],
+    "event_id_counts": {
+      "1": 7,
+      "11": 1
+    },
+    "normalized_count": 8,
+    "skipped_count": 0,
+    "covered_count": 8,
+    "uncovered_count": 0,
+    "uncovered_breakdown": [],
+    "matched_rule_ids": [
+      "4b8e2f91-6d03-4c57-a1e4-7f09c3d5b862",
+      "d2a7e468-1b35-4f90-8c62-e5f7a0b3d914"
+    ],
+    "matched_rule_titles": [
+      "Accessibility Binary Launched from Outside the Windows Directory",
+      "UAC Bypass via OskSupport.dll Written Outside the Windows Directory"
+    ],
+    "matched_technique_ids": [
+      "T1548.002"
+    ],
+    "alerts_created": 2,
+    "incident_ids": [
+      1
+    ],
+    "mitre_technique_ids": [
+      "T1548.002"
+    ],
+    "detected": true,
+    "correct_technique": true,
+    "classification_codes": [],
+    "classification_labels": [],
+    "reason": "detected -- Accessibility Binary Launched from Outside the Windows Directory, UAC Bypass via OskSupport.dll Written Outside the Windows Directory",
+    "manual_review_needed": false
+  },
+  {
     "name": "temp_scheduled_task_4698_4699.evtx",
     "behavior_hint": "temp scheduled task 4698 4699",
     "parsed_ok": true,
@@ -2585,323 +2998,6 @@
     "manual_review_needed": false
   },
   {
-    "name": "ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx",
-    "behavior_hint": "ACL ForcePwd SPNAdd User Computer Accounts",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 55,
-    "channels": [
-      "Security"
-    ],
-    "providers": [
-      "Microsoft-Windows-Eventlog",
-      "Microsoft-Windows-Security-Auditing"
-    ],
-    "event_id_counts": {
-      "1102": 1,
-      "4662": 14,
-      "4702": 4,
-      "4719": 8,
-      "4738": 5,
-      "4742": 1,
-      "5136": 22
-    },
-    "normalized_count": 55,
-    "skipped_count": 0,
-    "covered_count": 29,
-    "uncovered_count": 26,
-    "uncovered_breakdown": [
-      {
-        "channel": "Security",
-        "event_id": 5136,
-        "count": 22
-      },
-      {
-        "channel": "Security",
-        "event_id": 4702,
-        "count": 4
-      }
-    ],
-    "matched_rule_ids": [
-      "3a6d9e71-c082-4b5f-97a4-0e1f8b2c5d36",
-      "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
-    ],
-    "matched_rule_titles": [
-      "Security Audit Log Cleared",
-      "User or Computer Account Modified by Another User Account"
-    ],
-    "matched_technique_ids": [
-      "T1098",
-      "T1685.005"
-    ],
-    "alerts_created": 7,
-    "incident_ids": [
-      1,
-      2,
-      3
-    ],
-    "mitre_technique_ids": [
-      "T1098",
-      "T1685.005"
-    ],
-    "detected": true,
-    "correct_technique": true,
-    "classification_codes": [],
-    "classification_labels": [],
-    "reason": "detected -- Security Audit Log Cleared, User or Computer Account Modified by Another User Account",
-    "manual_review_needed": false
-  },
-  {
-    "name": "bits_openvpn.evtx",
-    "behavior_hint": "bits openvpn",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 1537,
-    "channels": [
-      "Microsoft-Windows-Bits-Client/Operational"
-    ],
-    "providers": [
-      "Microsoft-Windows-Bits-Client"
-    ],
-    "event_id_counts": {
-      "3": 254,
-      "4": 125,
-      "5": 84,
-      "59": 162,
-      "60": 129,
-      "61": 492,
-      "209": 101,
-      "306": 150,
-      "310": 40
-    },
-    "normalized_count": 1537,
-    "skipped_count": 0,
-    "covered_count": 0,
-    "uncovered_count": 1537,
-    "uncovered_breakdown": [
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 61,
-        "count": 492
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 3,
-        "count": 254
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 59,
-        "count": 162
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 306,
-        "count": 150
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 60,
-        "count": 129
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 4,
-        "count": 125
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 209,
-        "count": 101
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 5,
-        "count": 84
-      },
-      {
-        "channel": "Microsoft-Windows-Bits-Client/Operational",
-        "event_id": 310,
-        "count": 40
-      }
-    ],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "correct_technique": false,
-    "classification_codes": [
-      2
-    ],
-    "classification_labels": [
-      "channel_provider_gap"
-    ],
-    "reason": "Mislabeled capture: 1,537 routine Bits-Client events (Windows/Google Update, OneDrive polling) and no malicious or OpenVPN activity. Nothing to detect; run_detection_benchmark.py scores it as a benign file.",
-    "manual_review_needed": false
-  },
-  {
-    "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
-    "behavior_hint": "CA 4624 4625 LogonType2 LogonProc chrome",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 4,
-    "channels": [
-      "Security"
-    ],
-    "providers": [
-      "Microsoft-Windows-Security-Auditing"
-    ],
-    "event_id_counts": {
-      "4624": 3,
-      "4625": 1
-    },
-    "normalized_count": 4,
-    "skipped_count": 0,
-    "covered_count": 4,
-    "uncovered_count": 0,
-    "uncovered_breakdown": [],
-    "matched_rule_ids": [
-      "7c3d1b58-2e94-4a6f-b0c7-91d5a3e8f240"
-    ],
-    "matched_rule_titles": [
-      "Windows Logon Requested by a Non-Windows Process (Browser Credential Check)"
-    ],
-    "matched_technique_ids": [
-      "T1555.003"
-    ],
-    "alerts_created": 1,
-    "incident_ids": [
-      1
-    ],
-    "mitre_technique_ids": [
-      "T1555.003"
-    ],
-    "detected": true,
-    "correct_technique": true,
-    "classification_codes": [],
-    "classification_labels": [],
-    "reason": "detected -- Windows Logon Requested by a Non-Windows Process (Browser Credential Check)",
-    "manual_review_needed": false
-  },
-  {
-    "name": "CA_PetiPotam_etw_rpc_efsr_5_6.evtx",
-    "behavior_hint": "CA PetiPotam etw rpc efsr 5 6",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 29109,
-    "channels": [],
-    "providers": [
-      "Microsoft-Windows-RPC"
-    ],
-    "event_id_counts": {
-      "0": 1,
-      "1": 8,
-      "5": 14508,
-      "6": 14550,
-      "9": 1,
-      "14": 39,
-      "16": 2
-    },
-    "normalized_count": 29109,
-    "skipped_count": 0,
-    "covered_count": 14508,
-    "uncovered_count": 14601,
-    "uncovered_breakdown": [
-      {
-        "channel": "Microsoft-Windows-RPC",
-        "event_id": 6,
-        "count": 14550
-      },
-      {
-        "channel": "Microsoft-Windows-RPC",
-        "event_id": 14,
-        "count": 39
-      },
-      {
-        "channel": "Microsoft-Windows-RPC",
-        "event_id": 1,
-        "count": 8
-      },
-      {
-        "channel": "Microsoft-Windows-RPC",
-        "event_id": 16,
-        "count": 2
-      },
-      {
-        "channel": null,
-        "event_id": 0,
-        "count": 1
-      },
-      {
-        "channel": "Microsoft-Windows-RPC",
-        "event_id": 9,
-        "count": 1
-      }
-    ],
-    "matched_rule_ids": [
-      "0c5b8a2d-e631-47f9-b4a0-72d9e1f3a685"
-    ],
-    "matched_rule_titles": [
-      "EFSRPC (PetitPotam) Call to a Remote Host"
-    ],
-    "matched_technique_ids": [
-      "T1187"
-    ],
-    "alerts_created": 1,
-    "incident_ids": [
-      1
-    ],
-    "mitre_technique_ids": [
-      "T1187"
-    ],
-    "detected": true,
-    "correct_technique": true,
-    "classification_codes": [],
-    "classification_labels": [],
-    "reason": "detected -- EFSRPC (PetitPotam) Call to a Remote Host",
-    "manual_review_needed": false
-  },
-  {
-    "name": "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
-    "behavior_hint": "Discovery Remote System NamedPipes Sysmon 18",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 20,
-    "channels": [
-      "Microsoft-Windows-Sysmon/Operational"
-    ],
-    "providers": [
-      "Microsoft-Windows-Sysmon"
-    ],
-    "event_id_counts": {
-      "18": 20
-    },
-    "normalized_count": 20,
-    "skipped_count": 0,
-    "covered_count": 20,
-    "uncovered_count": 0,
-    "uncovered_breakdown": [],
-    "matched_rule_ids": [],
-    "matched_rule_titles": [],
-    "matched_technique_ids": [],
-    "alerts_created": 0,
-    "incident_ids": [],
-    "mitre_technique_ids": [],
-    "detected": false,
-    "correct_technique": false,
-    "classification_codes": [
-      6
-    ],
-    "classification_labels": [
-      "rule_missing"
-    ],
-    "reason": "Event ID 18 (pipe connect) IS covered (pipe_event category), but the only loaded pipe_event rule targets spoolss specifically. Confirmed real content: PipeName=\\lsass, Image=System -- a remote SMB named-pipe connection to \\lsass, not \\spoolss. No rule exists for this pattern; writing one needs care since System connecting to \\lsass/\\srvsvc over SMB is also fairly common legitimate traffic -- likely needs a remote-vs-local or frequency signal to stay low-noise, not a blanket PipeName match.",
-    "manual_review_needed": false
-  },
-  {
     "name": "discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx",
     "behavior_hint": "discovery sysmon 18 Invoke UserHunter NetSessionEnum DC-srvsvc",
     "parsed_ok": true,
@@ -2936,49 +3032,6 @@
       "rule_missing"
     ],
     "reason": "Same gap as Discovery_Remote_System_NamedPipes_Sysmon_18.evtx. Confirmed real content: PipeName=\\srvsvc, Image=System -- PowerView's Invoke-UserHunter NetSessionEnum technique connects to \\srvsvc, not \\spoolss.",
-    "manual_review_needed": false
-  },
-  {
-    "name": "discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx",
-    "behavior_hint": "discovery sysmon 3 Invoke UserHunter SourceMachine",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 9,
-    "channels": [
-      "Microsoft-Windows-Sysmon/Operational"
-    ],
-    "providers": [
-      "Microsoft-Windows-Sysmon"
-    ],
-    "event_id_counts": {
-      "3": 9
-    },
-    "normalized_count": 9,
-    "skipped_count": 0,
-    "covered_count": 9,
-    "uncovered_count": 0,
-    "uncovered_breakdown": [],
-    "matched_rule_ids": [
-      "sequence-smb-fan-out"
-    ],
-    "matched_rule_titles": [
-      "SMB Fan-Out (One Process Connecting to Many Hosts on Port 445)"
-    ],
-    "matched_technique_ids": [
-      "T1018"
-    ],
-    "alerts_created": 1,
-    "incident_ids": [
-      1
-    ],
-    "mitre_technique_ids": [
-      "T1018"
-    ],
-    "detected": true,
-    "correct_technique": true,
-    "classification_codes": [],
-    "classification_labels": [],
-    "reason": "detected -- SMB Fan-Out (One Process Connecting to Many Hosts on Port 445)",
     "manual_review_needed": false
   },
   {
@@ -3042,52 +3095,6 @@
     "classification_codes": [],
     "classification_labels": [],
     "reason": "detected -- Process Spawned by the WMI Provider Host (Security 4688), Security Audit Log Cleared",
-    "manual_review_needed": false
-  },
-  {
-    "name": "Sysmon_UACME_32.evtx",
-    "behavior_hint": "Sysmon UACME 32",
-    "parsed_ok": true,
-    "parse_error": null,
-    "records_read": 8,
-    "channels": [
-      "Microsoft-Windows-Sysmon/Operational"
-    ],
-    "providers": [
-      "Microsoft-Windows-Sysmon"
-    ],
-    "event_id_counts": {
-      "1": 7,
-      "11": 1
-    },
-    "normalized_count": 8,
-    "skipped_count": 0,
-    "covered_count": 8,
-    "uncovered_count": 0,
-    "uncovered_breakdown": [],
-    "matched_rule_ids": [
-      "4b8e2f91-6d03-4c57-a1e4-7f09c3d5b862",
-      "d2a7e468-1b35-4f90-8c62-e5f7a0b3d914"
-    ],
-    "matched_rule_titles": [
-      "Accessibility Binary Launched from Outside the Windows Directory",
-      "UAC Bypass via OskSupport.dll Written Outside the Windows Directory"
-    ],
-    "matched_technique_ids": [
-      "T1548.002"
-    ],
-    "alerts_created": 2,
-    "incident_ids": [
-      1
-    ],
-    "mitre_technique_ids": [
-      "T1548.002"
-    ],
-    "detected": true,
-    "correct_technique": true,
-    "classification_codes": [],
-    "classification_labels": [],
-    "reason": "detected -- Accessibility Binary Launched from Outside the Windows Directory, UAC Bypass via OskSupport.dll Written Outside the Windows Directory",
     "manual_review_needed": false
   }
 ]

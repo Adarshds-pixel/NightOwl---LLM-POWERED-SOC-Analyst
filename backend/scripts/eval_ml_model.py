@@ -11,8 +11,9 @@ Every number here comes from windows the scoring model never saw.
   B. Leave-one-host-out -- transfer to an unseen machine of a known kind.
   C. Unseen benign captures -- the shipped model scored against benign data
      outside its training set: the local-only captures in
-     real_world_fixtures/benign/ (if present), the synthetic noise fixtures,
-     and the mislabeled attack capture bits_openvpn.evtx.
+     real_world_fixtures/benign/ (if present) and the synthetic noise fixtures.
+     (bits_openvpn.evtx used to be listed here as benign; it is a malicious
+     capture and must never count as benign data.)
   D. Attack captures -- every attack fixture, cut into windows exactly as a
      single-file upload would be. Most are far smaller than
      MIN_WINDOW_EVENTS and are therefore NOT scored: the ML layer is a
@@ -111,7 +112,6 @@ def protocol_c(bundle) -> dict:
     sources = {
         "local benign captures (unseen)": sorted((real / "benign").glob("*.evtx")),
         "synthetic noise (unseen)": sorted((BACKEND / "sample_logs" / "demo_fixtures").glob("noise_*.evtx")),
-        "mislabeled bits_openvpn (benign)": [p for d in ATTACK_DIRS for p in d.glob("bits_openvpn.evtx")],
     }
     out = {}
     for label, paths in sources.items():

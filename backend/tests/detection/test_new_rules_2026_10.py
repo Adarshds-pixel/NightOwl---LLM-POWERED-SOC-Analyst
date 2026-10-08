@@ -63,6 +63,13 @@ NEW_RULE_CASES = [
         {"SubjectUserName": "SERVER002$", "TargetUserName": "lplui"},
     ),
     (
+        "BITS Job Created by a Process That Never Uses BITS",
+        "Microsoft-Windows-Bits-Client/Operational",
+        3,
+        {"jobTitle": "539cd7d7.png", "processPath": "C:\\Windows\\SysWOW64\\notepad.exe"},
+        {"jobTitle": "Chrome Component Updater", "processPath": "C:\\Program Files (x86)\\Google\\Update\\GoogleUpdate.exe"},
+    ),
+    (
         "EFSRPC (PetitPotam) Call to a Remote Host",
         "Microsoft-Windows-RPC",
         5,

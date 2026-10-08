@@ -339,9 +339,11 @@
       "split": "dev"
     },
     "bits_openvpn.evtx": {
-      "expected": [],
-      "split": "excluded",
-      "note": "Mislabeled capture: 1,537 routine BITS-Client events (Windows/Google Update, OneDrive) and no malicious or OpenVPN activity. Scored as a benign file."
+      "expected": [
+        "T1197"
+      ],
+      "split": "dev",
+      "note": "BITS-based C2/payload retrieval: SysWOW64 notepad.exe creates BITS jobs with random names that download https://i.imgur.com/IFpvPlt.png every few minutes. Previously (wrongly) marked as a mislabelled benign capture."
     },
     "CA_4624_4625_LogonType2_LogonProc_chrome.evtx": {
       "expected": [

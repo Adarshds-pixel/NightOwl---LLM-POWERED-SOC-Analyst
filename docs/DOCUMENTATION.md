@@ -21,8 +21,8 @@ EVTX upload (one file = one channel)
 Ingestion     evtx_reader -> normalizer -> NormalizedEvent        --> events
    |          (de-duplicated by host + channel + EventRecordID)
    v
-Detection     65 Sigma-style YAML rules, per event
-              + 9 multi-event sequence detectors, per batch       --> alerts
+Detection     66 Sigma-style YAML rules, per event
+              + 10 multi-event sequence detectors, per batch      --> alerts
    |          severity = Sigma level + ATT&CK tactic weight
    |          repeat matches (same rule/host/process, 60 s) fold into one alert
    v
@@ -125,7 +125,7 @@ Error shape is uniform: `{"detail": ...}`. An LLM provider failure gives 503 wit
 
 ### Sigma-style rules
 
-The rules are 65 YAML files in `backend/app/detection/rules/`, loaded once per process and cached. Restart the backend after you change a rule.
+The rules are 66 YAML files in `backend/app/detection/rules/`, loaded once per process and cached. Restart the backend after you change a rule.
 
 - **pySigma validates; NightOwl evaluates.** pySigma converts rules into query languages for external log stores and has no backend for matching one in-memory event. So `SigmaRule.from_yaml()` validates each rule's structure and `engine.py` evaluates its `detection` block.
 - **Supported subset:**
@@ -140,17 +140,18 @@ The rules are 65 YAML files in `backend/app/detection/rules/`, loaded once per p
   - its logsource category is not scoped to known `(channel, event id)` pairs;
   - its ATT&CK tactic tags do not belong to its technique in ATT&CK v19.2.
 - **Field names are the raw Windows/Sysmon ones** (Image, CommandLine, TargetUserName). SigmaHQ rules that stay inside the supported subset and a scoped category can be adapted. Others, such as those using aggregations, `near` or unsupported modifiers, need rewriting.
-- **Channel coverage** (rules per service): Sysmon 36, Security 23, PowerShell script-block 4104 3, System 1, Application 1, RPC trace 1. PowerShell module logging (4103) is classed as everyday activity; the script text is judged from 4104.
+- **Channel coverage** (rules per service): Sysmon 36, Security 23, PowerShell script-block 4104 3, System 1, Application 1, RPC trace 1, BITS 1. PowerShell module logging (4103) is classed as everyday activity; the script text is judged from 4104.
 
 ### Sequence detectors
 
-`detection/sequences.py` holds 9 multi-event detectors. They run once per ingest batch and feed the same alert path:
+`detection/sequences.py` holds 10 multi-event detectors. They run once per ingest batch and feed the same alert path:
 
 | Detector | Technique |
 |---|---|
 | Process Herpaderping: FileCreate → ProcessAccess → ImageLoad on one ProcessGuid | T1055 |
 | SMB share-enumeration probe | T1135 |
 | SMB fan-out: one process opens port-445 connections to 5 or more distinct hosts within 60 s | T1018 |
+| Named-pipe sweep: one process connects to 8 or more distinct RPC pipes within 5 s (verified on the real discovery capture: 14 pipes in half a second) | T1018 |
 | Kerberos password spray: failed pre-auth across many accounts from one source | T1110.003 |
 | Authentication brute force: repeated failures against one account | T1110 |
 | Remote SAM/LSA enumeration | T1087 |
@@ -434,7 +435,7 @@ The frontend has one build-time variable, `VITE_API_BASE_URL`. No secret is ever
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                  # 774 offline tests
+./venv/Scripts/python -m pytest                  # 778 offline tests
 ./venv/Scripts/python scripts/upload_sweep.py    # every sample file's verdict
 ./venv/Scripts/python -m pytest -m integration   # 5 tests: real KB/embeddings, Postgres
 cd ../frontend && npx tsc -b && npm run lint && npm run build
@@ -457,7 +458,7 @@ The default run excludes tests marked `integration` and runs against in-memory S
 ## 14. Measuring detection accuracy
 
 `backend/sample_logs/real_world_fixtures/` holds real, independently sourced EVTX captures:
-- **`detected/`** (57) and **`undetected/`** (4): attack captures, split by the current rules' results. The split is an *output* of `build_failure_matrix.py`, which rescans both folders every run.
+- **`detected/`** (59) and **`undetected/`** (2): attack captures, split by the current rules' results. The split is an *output* of `build_failure_matrix.py`, which rescans both folders every run.
 - **`NightOwl-Benign-Dataset/`** (31 EVTX + `manifest.json`): real workstation and server captures, used as the false-positive corpus and as the ML baseline.
 
 The expected techniques per capture are in `backend/scripts/fixture_ground_truth.json`.
@@ -472,13 +473,14 @@ cd backend
 
 | | |
 |---|---|
-| Attack captures detected with the correct ATT&CK technique | **57/60** |
-| Attack captures raising any alert | 58/60 |
-| False-positive alerts on 40 benign captures (316,874 events) | **0** |
+| Attack captures detected with the correct ATT&CK technique | **59/61** |
+| Attack captures raising any alert | 60/61 |
+| False-positive alerts on 39 benign captures (315,337 events) | **0** |
 
-The failure matrix lists 61 captures because it also counts `bits_openvpn.evtx`. That capture is mislabelled: it contains only routine BITS traffic, so the benchmark scores it as benign.
+**Correction (2026-10-08):** `bits_openvpn.evtx` was earlier written off as a mislabelled benign capture. It is malicious: a 32-bit `SysWOW64
+otepad.exe` (which never uses BITS) creates BITS jobs with random names that download `https://i.imgur.com/IFpvPlt.png` every few minutes. Classing the whole BITS log as "everyday" briefly made it read Normal. BITS is no longer everyday, and a rule flags BITS jobs created by processes that never use BITS.
 
-The three remaining misses: two named-pipe discovery captures (`System` connecting to `\lsass` / `\srvsvc`, indistinguishable from normal SMB traffic at this log level, so a rule would false-alarm; they read **Review recommended**) and the NTLM self-relay capture, which is flagged for its WMI process execution and a log clear but whose relay itself is not visible in those events.
+The two remaining misses: a UserHunter capture that holds a single `System` -> `\srvsvc` pipe event (identical to an ordinary share browse; it reads **Review recommended**) and the NTLM self-relay capture, which is flagged for its WMI execution and a log clear but whose relay is not visible in those events (the logons are Kerberos).
 
 These are **development-set figures**: every attack capture informed rule development. Each miss in `failure_matrix.md` is classified (`channel_provider_gap`, `rule_missing`, `insufficient_telemetry`, `ambiguous_behavior`, ...) from the real field values.
 
@@ -488,8 +490,8 @@ These are **development-set figures**: every attack capture informed rule develo
 
 | Group | Result |
 |---|---|
-| 42 benign files (the benign dataset, the real-world benign set, the synthetic noise, `sample.evtx`, `sysmon_demo.evtx`, the mislabelled BITS capture) | **42 Normal** |
-| 60 attack captures | 58 Suspicious, 2 Review recommended |
+| 41 benign files (the benign dataset, the real-world benign set, the synthetic noise, `sample.evtx`, `sysmon_demo.evtx`) | **41 Normal** |
+| 61 attack captures | 60 Suspicious, 1 Review recommended |
 
 **Caveat:** the "everyday" event lists were derived from, and are checked against, the same benign corpus. A machine that behaves differently can still show Review recommended. Re-run the sweep on any new benign logs; every file that is not Normal is either a new everyday event type to add to `detection/coverage.py` (with its reason) or a real finding.
 
@@ -585,7 +587,7 @@ Not built, on purpose:
 | Sequence detectors added | 33/39 |
 | Corpus grew again | 50/61 |
 | 2026-10 audit | 52/60 |
-| 2026-10-08 upload audit (coverage split, 7 new rules, UserData and RPC parsing) | 57/60, 0 false positives |
+| 2026-10-08 upload audit (coverage split, 8 new rules, UserData and RPC parsing) | 59/61, 0 false positives |
 
 The 2026-10 audit changed how detection is scored. A capture now counts only when the alert carries the *correct technique*, and the clean corpus became the 40-capture benign set. Under that scoring the earlier 50/61 was 38/60 with 42 false-positive alerts. Rule fixes and 14 new rules brought it to 52/60 with 5 false positives.
 

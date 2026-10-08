@@ -1,0 +1,49 @@
+title: BITS Job Created by a Process That Never Uses BITS
+id: 8f2c4a96-d170-4b3e-a5c8-3e91b7d02f64
+status: experimental
+description: >
+  Detects a Background Intelligent Transfer Service job (BITS-Client event 3,
+  "a job was created") whose owning process is an editor, a script host or a
+  LOLBin -- notepad.exe, cmd.exe, powershell.exe, wscript.exe, cscript.exe,
+  mshta.exe, rundll32.exe, regsvr32.exe, calc.exe or mspaint.exe. Windows
+  Update, Google Update, OneDrive and browsers create BITS jobs; Notepad never
+  does. Malware injected into such a process uses BITS to fetch payloads or
+  poll a command-and-control URL because the traffic looks like an update.
+
+  Verified against real content: bits_openvpn.evtx -- a 32-bit
+  C:\Windows\SysWOW64\notepad.exe created BITS jobs with random 8-hex names
+  (539cd7d7.png, 47c090fb.png ...) every few minutes, all downloading
+  https://i.imgur.com/IFpvPlt.png (one transfer succeeded, 394,556 bytes). In
+  the same capture the legitimate jobs come from svchost.exe, GoogleUpdate.exe,
+  OneDriveStandaloneUpdater.exe, chrome.exe and SpeechModelDownload.exe, none
+  of which match.
+
+  This capture was previously mislabelled as benign (and, after the 2026-10-08
+  coverage change, read "Normal"); that was wrong.
+author: NightOwl
+date: 2026-10-08
+references:
+  - https://attack.mitre.org/techniques/T1197/
+tags:
+  - attack.stealth
+  - attack.persistence
+  - attack.t1197
+logsource:
+  service: bits
+detection:
+  selection:
+    EventID: 3
+    processPath|endswith:
+      - '\notepad.exe'
+      - '\cmd.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+      - '\wscript.exe'
+      - '\cscript.exe'
+      - '\mshta.exe'
+      - '\rundll32.exe'
+      - '\regsvr32.exe'
+      - '\calc.exe'
+      - '\mspaint.exe'
+  condition: selection
+level: high

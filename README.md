@@ -6,7 +6,7 @@ A final-year major project built by a team of 4, AI-assisted.
 
 ## Features
 - EVTX upload (up to 100 MB) with per-file telemetry profiling: which channels and event types were in the file, and which of them any rule can evaluate
-- **Detection:** 65 Sigma-style YAML rules + 9 multi-event sequence detectors (brute force, Kerberos password spray, group-membership abuse, SAM/LSA enumeration, mass process access, Process Herpaderping, SMB share enumeration). Rules are validated at load time — an unscoped rule, an unsupported modifier, an unparseable condition or an ATT&CK tag that does not belong to the rule's technique is rejected, not silently loaded
+- **Detection:** 66 Sigma-style YAML rules + 10 multi-event sequence detectors (brute force, Kerberos password spray, group-membership abuse, SAM/LSA enumeration, mass process access, Process Herpaderping, SMB share enumeration). Rules are validated at load time — an unscoped rule, an unsupported modifier, an unparseable condition or an ATT&CK tag that does not belong to the rule's technique is rejected, not silently loaded
 - ATT&CK v19.2 technique mapping (dataset bundled — no network needed) and tactic-weighted severity
 - Incident grouping per host with a sliding one-hour window, status workflow, alert de-duplication, audit trail
 - RAG explanations and incident chat (ChromaDB + sentence-transformers + Groq), with a self-critique pass, source attribution, prompt-injection containment for log content and flagging of any ATT&CK id the model invents
@@ -22,14 +22,14 @@ All numbers are produced by scripts in `backend/scripts/` and checked into the r
 
 | What | Result | Source |
 |---|---|---|
-| Attack captures detected **with the correct ATT&CK technique** | **57 / 60** (95.0%) | `run_detection_benchmark.py` → `benchmark_results.md` |
-| Attack captures raising any alert | 58 / 60 | same |
-| False-positive alerts on 40 benign captures (316,874 events) | **0** | same |
-| What an upload shows for each of the 102 sample files | 42 benign → **Normal**; 58 attack → Suspicious, 2 → Review recommended | `upload_sweep.py` |
+| Attack captures detected **with the correct ATT&CK technique** | **59 / 61** (96.7%) | `run_detection_benchmark.py` → `benchmark_results.md` |
+| Attack captures raising any alert | 60 / 61 | same |
+| False-positive alerts on 39 benign captures (315,337 events) | **0** | same |
+| What an upload shows for each of the 102 sample files | 41 benign → **Normal**; 60 attack → Suspicious, 1 → Review recommended | `upload_sweep.py` |
 | ML anomaly layer, held-out benign windows flagged | 1–4.5 per host-day (deployment protocol) | `eval_ml_model.py` → `ml_eval_results.json` |
-| Backend tests | 774 offline + 5 integration | `pytest` / `pytest -m integration` |
+| Backend tests | 778 offline + 5 integration | `pytest` / `pytest -m integration` |
 
-Caveat on the detection numbers: every attack capture in the corpus informed rule development at some point, so these are development-set figures, not a held-out estimate. The 3 misses and why are listed in `backend/scripts/failure_matrix.md`.
+Caveat on the detection numbers: every attack capture in the corpus informed rule development at some point, so these are development-set figures, not a held-out estimate. The 2 misses and why are listed in `backend/scripts/failure_matrix.md`.
 
 ## Repository structure
 

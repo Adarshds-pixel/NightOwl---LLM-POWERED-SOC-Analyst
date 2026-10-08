@@ -57,7 +57,7 @@ def test_every_sequence_detector_input_counts_as_checked():
     checked = _checked()
     for pair in (("sysmon", 3), ("sysmon", 18), ("security", 4625), ("security", 5145), ("application", 18456)):
         assert pair in checked
-    assert len(SEQUENCE_PATTERNS) == 9  # eight originals + SMB fan-out
+    assert len(SEQUENCE_PATTERNS) == 10  # eight originals + SMB fan-out + named-pipe sweep
 
 
 def test_user_data_fields_are_read_so_a_log_clear_names_who_did_it():
@@ -131,3 +131,58 @@ def test_smb_fan_out_ignores_a_client_talking_to_a_few_servers_or_a_slow_scan():
     assert not [m for _a, m in detect_sequences(slow) if m.rule_id == SMB_FAN_OUT.rule_id]
     repeated = [_smb("10.0.0.5", n) for n in range(10)]  # many connections, one host
     assert not [m for _a, m in detect_sequences(repeated) if m.rule_id == SMB_FAN_OUT.rule_id]
+
+
+# -- named-pipe sweep and the BITS rule ---------------------------------------
+
+
+def _pipe(name: str, offset_ms: int, image: str = "System"):
+    return _row(
+        18,
+        {"Image": image, "PipeName": name, "EventType": "ConnectPipe"},
+        timestamp=datetime(2020, 9, 27, 13, 19, 54, tzinfo=timezone.utc) + timedelta(milliseconds=offset_ms),
+    )
+
+
+def test_named_pipe_sweep_fires_on_the_real_burst_across_many_pipes():
+    from app.detection.sequences import NAMED_PIPE_SWEEP
+
+    pipes = ["\lsass", "\browser", "\atsvc", "\epmapper", "\eventlog", "\InitShutdown", "\LSM_API_service", "\ntsvcs", "\ROUTER", "\scerpc", "\srvsvc"]
+    rows = [_pipe(name, i * 20) for i, name in enumerate(pipes)]
+    assert [m.rule_id for _a, m in detect_sequences(rows) if m.rule_id == NAMED_PIPE_SWEEP.rule_id]
+
+
+def test_named_pipe_sweep_ignores_a_normal_client_and_repeats_of_one_pipe():
+    from app.detection.sequences import NAMED_PIPE_SWEEP
+
+    client = [_pipe(n, i * 20) for i, n in enumerate(["\srvsvc", "\wkssvc", "\lsass"])]
+    assert not [m for _a, m in detect_sequences(client) if m.rule_id == NAMED_PIPE_SWEEP.rule_id]
+    repeated = [_pipe("\lsass", i * 20) for i in range(30)]
+    assert not [m for _a, m in detect_sequences(repeated) if m.rule_id == NAMED_PIPE_SWEEP.rule_id]
+
+
+def test_bits_is_not_an_everyday_channel_and_a_notepad_job_is_detected():
+    from app.detection.engine import evaluate_event
+    from app.schemas.event import NormalizedEvent
+
+    checked = _checked()
+    assert classify("bits", 3, checked) == CHECKED  # job creation is judged by the rule
+    assert classify("bits", 61, checked) == ROUTINE  # transfer error: lifecycle noise
+    assert classify("bits", 9999, checked) == UNCHECKED  # an unknown BITS event is not assumed harmless
+
+    def event(path):
+        return NormalizedEvent(
+            host="H", timestamp=datetime(2021, 3, 15, tzinfo=timezone.utc), event_id=3,
+            channel="Microsoft-Windows-Bits-Client/Operational", raw={},
+            event_data={"jobTitle": "539cd7d7.png", "processPath": path},
+        )
+
+    rules = rule_loader.load_rules()
+    title = "BITS Job Created by a Process That Never Uses BITS"
+    assert title in {m.title for m in evaluate_event(event(r"C:\Windows\SysWOW64\notepad.exe"), rules)}
+    for legit in (
+        r"C:\Windows\System32\svchost.exe",
+        r"C:\Program Files (x86)\Google\Update\GoogleUpdate.exe",
+        r"C:\Users\IEUser\AppData\Local\Microsoft\OneDrive\OneDriveStandaloneUpdater.exe",
+    ):
+        assert title not in {m.title for m in evaluate_event(event(legit), rules)}, legit

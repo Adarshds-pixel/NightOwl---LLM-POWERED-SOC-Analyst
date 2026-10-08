@@ -145,6 +145,14 @@ SMB_FAN_OUT = SequencePattern(
     level="low",
 )
 
+NAMED_PIPE_SWEEP = SequencePattern(
+    rule_id="sequence-named-pipe-sweep",
+    title="Named-Pipe Sweep (One Process Connecting to Many Distinct RPC Pipes in Seconds)",
+    technique_id="T1018",  # Remote System Discovery
+    tactics=["discovery"],
+    level="low",
+)
+
 # rule_id -> SequencePattern, for any read path that resolves an Alert's
 # rule_id to a human title/technique but only ever queried
 # rule_loader.get_loaded_rules() before (routes_alerts.py, routes_events.py,
@@ -159,6 +167,7 @@ SEQUENCE_PATTERNS: dict[str, SequencePattern] = {
     GROUP_SELF_ADD.rule_id: GROUP_SELF_ADD,
     BULK_GROUP_ADDITION.rule_id: BULK_GROUP_ADDITION,
     SMB_FAN_OUT.rule_id: SMB_FAN_OUT,
+    NAMED_PIPE_SWEEP.rule_id: NAMED_PIPE_SWEEP,
 }
 
 # SMB fan-out: one process on one host opening port-445 connections to this
@@ -171,6 +180,16 @@ SEQUENCE_PATTERNS: dict[str, SequencePattern] = {
 # is collected (see ML.md "How to make it better").
 _SMB_FAN_OUT_WINDOW = timedelta(seconds=60)
 _SMB_FAN_OUT_DISTINCT_HOSTS = 5
+
+# Named-pipe sweep: one process (on the SMB server side usually `System`) connecting
+# to this many DISTINCT pipe names within the window. A client browsing a share
+# touches one to three pipes (srvsvc, wkssvc, lsarpc); a tool probing a host's
+# RPC services (rpcdump, Impacket, Metasploit pipe auditors) walks the whole list
+# at once. Verified against Discovery_Remote_System_NamedPipes_Sysmon_18.evtx: 14
+# distinct pipes in about half a second. Low severity: it says "something probed
+# this machine's pipes", not who.
+_PIPE_SWEEP_WINDOW = timedelta(seconds=5)
+_PIPE_SWEEP_DISTINCT_PIPES = 8
 
 # 4728 / 4732 / 4756: member added to a global / local / universal security group.
 _GROUP_ADD_EVENT_IDS = frozenset({4728, 4732, 4756})
@@ -582,6 +601,29 @@ def _detect_smb_fan_out(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
     return matches
 
 
+def _detect_named_pipe_sweep(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
+    by_process: dict[tuple[str, str], list[EventRow]] = defaultdict(list)
+    for event, normalized in rows:
+        if not (_is_sysmon(normalized) and normalized.event_id == 18):
+            continue
+        data = normalized.event_data
+        if not data.get("PipeName"):
+            continue
+        by_process[(normalized.host, (data.get("Image") or "").lower())].append((event, normalized))
+
+    def _is_burst(view: list[EventRow]) -> bool:
+        return len({(n.event_data.get("PipeName") or "").lower() for _e, n in view}) >= _PIPE_SWEEP_DISTINCT_PIPES
+
+    matches: list[tuple[Event, RuleMatch]] = []
+    for group in by_process.values():
+        if len(group) < _PIPE_SWEEP_DISTINCT_PIPES:
+            continue
+        group.sort(key=lambda pair: pair[1].timestamp)
+        for anchor, _n in _sliding_bursts(group, _PIPE_SWEEP_WINDOW, _is_burst):
+            matches.append((anchor, _match(NAMED_PIPE_SWEEP)))
+    return matches
+
+
 def _detect_group_membership_abuse(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
     """Two checks a single Sigma rule cannot express: a field compared with
     another field (the subject adding ITSELF -- someone who can modify a
@@ -628,5 +670,6 @@ def detect_sequences(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
         + _detect_remote_sam_enumeration(rows)
         + _detect_mass_process_access(rows)
         + _detect_smb_fan_out(rows)
+        + _detect_named_pipe_sweep(rows)
         + _detect_group_membership_abuse(rows)
     )

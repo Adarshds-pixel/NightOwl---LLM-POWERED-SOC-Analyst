@@ -2,7 +2,7 @@
 
 Everything about the project in one file: what it is, what you decided, what was built and why, what was measured, where it stands today, and what is left for you to do.
 
-> **Snapshot:** 8 October 2026 · branch `fix/production-readiness` (14 commits, **not pushed**) · 774 backend tests passing · detection **57/60** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **42** benign sample files read **Normal**.
+> **Snapshot:** 8 October 2026 · branch `fix/production-readiness` (14 commits, **not pushed**) · 778 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **41** benign sample files read **Normal**.
 >
 > This file is the story and the status. For deep technical reference (API tables, data model, environment variables, troubleshooting) see `docs/DOCUMENTATION.md`; for the machine-learning layer see `ML.md`; for the quick start see `README.md`.
 
@@ -33,7 +33,7 @@ It is not "a SOC platform that detects every attack". It is an evidence-driven i
 | 2 | Keep a restore point before changes | Done: branch `backup/pre-ml` (`e6a9066`) and tag `pre-latest-pull` (`b5e8d1f`), both pushed to GitHub. |
 | 3 | Fix every bug and gap; make it production and demo ready | Done in code, committed locally. Verified by tests, a Docker install and a headless-browser run (see §8). |
 | 4 | Correct the ML features | Rebuilt and evaluated honestly. It ships in **advisory mode** because it needs more benign data (see §9). |
-| 5 | Benign files must read **Normal**, never "Suspicious" or "Inconclusive" | Done: **42 of 42** benign sample files read Normal. |
+| 5 | Benign files must read **Normal**, never "Suspicious" or "Inconclusive" | Done: **41 of 41** benign sample files read Normal. (An earlier count of 42 wrongly included a malicious capture; see §6.) |
 | 6 | Make the AI second opinion consistent with the verdict | Done: it only reviews events no rule checks, says so on screen, and has a Retry button. |
 | 7 | Catch the attacks the rules missed | 5 more caught; 3 remain (see §8). |
 | 8 | Honest, measured numbers everywhere | Done: every figure comes from a script in `backend/scripts/`. |
@@ -84,7 +84,7 @@ It is not "a SOC platform that detects every attack". It is an evidence-driven i
 ```
 EVTX upload (one file = one channel)
   → read & normalise (UTC time, channel, fields incl. UserData)       → events
-  → detect: 65 Sigma-style rules per event + 9 sequence detectors     → alerts
+  → detect: 66 Sigma-style rules per event + 10 sequence detectors     → alerts
   → classify every event type: checked / everyday / unchecked
   → correlate: sliding 1-hour window per host                         → incidents
   → ML anomaly layer (advisory): unusual 10-minute windows            → alerts (kind=ml)
@@ -94,9 +94,9 @@ EVTX upload (one file = one channel)
 
 ### 4.2 Detection
 
-- **Rules:** 65 YAML files in `backend/app/detection/rules/`. A rule is rejected at load time if it uses an unsupported modifier, an unparseable condition, an unscoped category, or an ATT&CK tactic tag that does not belong to its technique (ATT&CK v19.2, bundled offline).
+- **Rules:** 66 YAML files in `backend/app/detection/rules/`. A rule is rejected at load time if it uses an unsupported modifier, an unparseable condition, an unscoped category, or an ATT&CK tactic tag that does not belong to its technique (ATT&CK v19.2, bundled offline).
 - **Supported Sigma subset:** named selections; `contains`, `startswith`, `endswith`, `re`, `cidr`, `all`, `windash`, wildcards, null; `and/or/not`, parentheses, `1 of` / `all of`. No `eval()`.
-- **Sequence detectors (9):** Process Herpaderping, SMB share-enumeration probe, Kerberos password spray, authentication brute force, remote SAM/LSA enumeration, mass process access, group self-add, bulk group addition, and the new **SMB fan-out** (one process opening port-445 connections to 5 or more hosts within 60 s).
+- **Sequence detectors (10):** Process Herpaderping, SMB share-enumeration probe, Kerberos password spray, authentication brute force, remote SAM/LSA enumeration, mass process access, group self-add, bulk group addition, and two new ones: **SMB fan-out** (one process opening port-445 connections to 5 or more hosts within 60 s) and **named-pipe sweep** (one process connecting to 8 or more distinct RPC pipes within 5 s).
 - **Severity:** Sigma level plus a +1 for high-leverage tactics. **Alert de-duplication:** the same rule, host and process within 60 s folds into one alert with a count. **Incidents:** open or investigating, same host, sliding 1-hour window, title follows the most severe alert.
 
 ### 4.3 Coverage and verdicts (the core of the benign-file fix)
@@ -118,7 +118,7 @@ Two bugs were behind the old behaviour: any event type without a rule counted as
 - **Everyday vs unchecked** classification (above), with each everyday entry carrying its reason.
 - **Log clears:** System 104 is now an informational **notice** naming the account and log, read from the event's `UserData` (which used to be dropped). It opens no alert. Security 1102, the clear attackers use, stays a detection.
 - **Raw ETW RPC records** (PetitPotam) get their own `rpc` channel; a new rule detects the EFSRPC call.
-- **Seven new rules:** browser-initiated Windows logon check; two UAC-bypass signals (OskSupport.dll outside Windows, accessibility binary run from outside Windows); WMI-spawned process (Sysmon and Security 4688); account modified by another user; EFSRPC call. Each was checked against all 40 benign captures: zero hits.
+- **Eight new rules:** browser-initiated Windows logon check; two UAC-bypass signals (OskSupport.dll outside Windows, accessibility binary run from outside Windows); WMI-spawned process (Sysmon and Security 4688); account modified by another user; EFSRPC call; and (added after the undetected-files check) a BITS job created by a process that never uses BITS. Each was checked against all 40 benign captures: zero hits.
 - **AI review:** reads only unchecked events and advisory-pattern events (benign files make **no** AI call); the panel is titled "AI review of unchecked events" and says the rule detections are listed above; up to 8 sampled events; a failed review can be retried (`POST /ai-opinions/{id}/retry`).
 - **Large uploads:** `POST /ingest/async` returns a job id at once, `GET /ingest/jobs/{id}` reports progress, and the console shows "Reading… N records". The upload size guard now covers the async route too.
 - **ML visibility:** a Settings → "ML model" panel (`GET /ml/model`), an ML line on every upload's profile, and a repeatable visual check in `ML.md`.
@@ -187,16 +187,18 @@ Decisions that were made along the way and still stand (technical):
 
 | What | Result | Script |
 |---|---|---|
-| Attack captures with the **correct ATT&CK technique** | **57 / 60** (was 52) | `run_detection_benchmark.py` |
-| Attack captures raising any alert | 58 / 60 | same |
-| False alarms on 40 benign captures (316,874 events) | **0** (was 5) | same |
-| Verdict for each of the 102 sample files | 42 benign → **Normal**; 58 attack → Suspicious; 2 → Review recommended | `upload_sweep.py` |
-| Backend tests | 774 offline + 5 integration | `pytest` |
+| Attack captures with the **correct ATT&CK technique** | **59 / 61** (was 52 / 60) | `run_detection_benchmark.py` |
+| Attack captures raising any alert | 60 / 61 | same |
+| False alarms on 39 benign captures (315,337 events) | **0** (was 5) | same |
+| Verdict for each of the 102 sample files | 41 benign → **Normal**; 60 attack → Suspicious; 1 → Review recommended | `upload_sweep.py` |
+| Backend tests | 778 offline + 5 integration | `pytest` |
 | ML false windows per machine per day (held-out benign) | 1.3 – 4.5 | `eval_ml_model.py` |
 
 **Caveats:** every attack capture informed rule development, so these are development-set figures. The everyday-event lists were measured on the same benign corpus: a new machine can still read "Review recommended" until its everyday events are added. Your new benign logs are the real held-out test.
 
-**Still not caught (3):** two named-pipe discovery captures (`System` connecting to `\lsass` / `\srvsvc`, indistinguishable from normal SMB traffic at this log level; they read **Review recommended**) and the NTLM self-relay capture (flagged for its WMI execution and a log clear, but the relay itself is not visible in those events). `bits_openvpn` is a mislabelled benign capture, scored as benign.
+**Still not caught as an attack (2):** a UserHunter capture that holds a single `System` -> `\srvsvc` pipe event (identical to an ordinary share browse; it reads **Review recommended**) and the NTLM self-relay capture (flagged for its WMI execution and a log clear, but the relay itself is not visible: the logons are Kerberos).
+
+**A mistake found and fixed on 8 October:** `bits_openvpn.evtx` had been written off as a mislabelled benign capture. Reading its events showed a 32-bit `notepad.exe` creating BITS jobs with random names that download `https://i.imgur.com/IFpvPlt.png` every few minutes (BITS-based command-and-control). The coverage change had also classed the whole BITS log as everyday, so it read Normal. BITS is no longer everyday, a rule flags BITS jobs created by processes that never use BITS, the ground truth is corrected, and the benign count is 41, not 42.
 
 ---
 
@@ -206,7 +208,7 @@ Decisions that were made along the way and still stand (technical):
 
 **Verified**
 
-- 774 backend tests pass; frontend type-check and build pass; lint shows warnings only.
+- 778 backend tests pass; frontend type-check and build pass; lint shows warnings only.
 - Clean Docker install in production mode: migrations, knowledge-base build, login, Demo Mode, upload, incident, explain, chat, status change and audit, logout and session revocation.
 - The new routes and rules running **inside the production backend image** against a throwaway database.
 - A headless Chrome run on an isolated copy: Normal verdicts on benign files, log-clear notices with the account, Suspicious on attacks, the ML panel, the ML alerts view, the new Logs cards.
@@ -304,7 +306,7 @@ Copy each machine's `C:\NightOwl\export` folder to `backend\sample_logs\benign_c
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                         # 774 offline tests
+./venv/Scripts/python -m pytest                         # 778 offline tests
 ./venv/Scripts/python scripts/upload_sweep.py           # verdict for every sample file
 ./venv/Scripts/python scripts/run_detection_benchmark.py
 ./venv/Scripts/python scripts/build_failure_matrix.py

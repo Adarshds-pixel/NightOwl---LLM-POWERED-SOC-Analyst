@@ -1,16 +1,16 @@
 {
   "summary": {
-    "rules_loaded": 65,
-    "attack_captures": 60,
-    "any_alert": 58,
-    "correct_technique": 57,
-    "benign_files": 40,
-    "benign_events": 316874,
+    "rules_loaded": 66,
+    "attack_captures": 61,
+    "any_alert": 60,
+    "correct_technique": 59,
+    "benign_files": 39,
+    "benign_events": 315337,
     "false_positive_alerts": 0,
     "false_positive_matched_events": 0,
     "benign_files_with_alerts": 0,
     "false_positives_by_rule": {},
-    "elapsed_s": 86.8
+    "elapsed_s": 26.9
   },
   "attack": [
     {
@@ -30,6 +30,92 @@
       "expected": [
         "T1069.001",
         "T1087.001"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx",
+      "records": 55,
+      "events": 55,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Security Audit Log Cleared",
+          "technique": "T1685.005",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-738609754-2819869699-4189121830-1108\", \"SubjectUserName\": \"bob\", \"SubjectDomainName\": \"insecurebank\", \"SubjectLogonId\": \"0x00000000"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"ComputerAccountChange\": \"-\", \"TargetUserName\": \"ALICE$\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1120\", \"Su"
+        }
+      ],
+      "expected": [
+        "T1098",
+        "T1222.001",
+        "T1558.003"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
+      "records": 4,
+      "events": 4,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Windows Logon Requested by a Non-Windows Process (Browser Credential Check)",
+          "technique": "T1555.003",
+          "level": "medium",
+          "occurrences": 3,
+          "sample": "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+        }
+      ],
+      "expected": [
+        "T1110",
+        "T1078",
+        "T1555.003"
       ],
       "any_alert": true,
       "correct": true
@@ -70,6 +156,26 @@
       ],
       "expected": [
         "T1003.001"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "CA_PetiPotam_etw_rpc_efsr_5_6.evtx",
+      "records": 29109,
+      "events": 29109,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "EFSRPC (PetitPotam) Call to a Remote Host",
+          "technique": "T1187",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"InterfaceUuid\": \"{c681d488-d850-11d0-8c52-00c04fd90f7e}\", \"ProcNum\": \"0\", \"Protocol\": \"2\", \"NetworkAddress\": \"\\\\\\\\10.0.2.14\", \"Endpoint\": \"\\\\pipe\\\\lsarpc\", \"O"
+        }
+      ],
+      "expected": [
+        "T1187"
       ],
       "any_alert": true,
       "correct": true
@@ -390,6 +496,29 @@
       "expected": [
         "T1033",
         "T1012"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
+      "name": "discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx",
+      "records": 9,
+      "events": 9,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "SMB Fan-Out (One Process Connecting to Many Hosts on Port 445)",
+          "technique": "T1018",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1033",
+        "T1087",
+        "T1069",
+        "T1018"
       ],
       "any_alert": true,
       "correct": true
@@ -1278,6 +1407,33 @@
       "correct": true
     },
     {
+      "name": "Sysmon_UACME_32.evtx",
+      "records": 8,
+      "events": 8,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "UAC Bypass via OskSupport.dll Written Outside the Windows Directory",
+          "technique": "T1548.002",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "C:\\Windows\\explorer.exe"
+        },
+        {
+          "rule": "Accessibility Binary Launched from Outside the Windows Directory",
+          "technique": "T1548.002",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "C:\\windows\\system32\\cmd.exe \"C:\\Program Files\\Windows Media Player\\osk.exe\""
+        }
+      ],
+      "expected": [
+        "T1548.002"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
       "name": "temp_scheduled_task_4698_4699.evtx",
       "records": 2,
       "events": 2,
@@ -1298,107 +1454,63 @@
       "correct": true
     },
     {
-      "name": "ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx",
-      "records": 55,
-      "events": 55,
+      "name": "bits_openvpn.evtx",
+      "records": 1537,
+      "events": 1537,
       "skipped": 0,
       "alerts": [
         {
-          "rule": "Security Audit Log Cleared",
-          "technique": "T1685.005",
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
           "level": "high",
           "occurrences": 1,
-          "sample": "{\"SubjectUserSid\": \"S-1-5-21-738609754-2819869699-4189121830-1108\", \"SubjectUserName\": \"bob\", \"SubjectDomainName\": \"insecurebank\", \"SubjectLogonId\": \"0x00000000"
+          "sample": "{\"jobTitle\": \"539cd7d7.png\", \"jobId\": \"{80215064-c6f0-4685-b47e-d332ba28aee8}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
         },
         {
-          "rule": "User or Computer Account Modified by Another User Account",
-          "technique": "T1098",
-          "level": "low",
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
           "occurrences": 1,
-          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+          "sample": "{\"jobTitle\": \"47c090fb.png\", \"jobId\": \"{1d6e3e51-6951-43a4-bbca-90e01dc96b11}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
         },
         {
-          "rule": "User or Computer Account Modified by Another User Account",
-          "technique": "T1098",
-          "level": "low",
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
           "occurrences": 1,
-          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+          "sample": "{\"jobTitle\": \"a056b1a9.png\", \"jobId\": \"{f3d49906-7ab2-4777-aef7-22dbebde83ba}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
         },
         {
-          "rule": "User or Computer Account Modified by Another User Account",
-          "technique": "T1098",
-          "level": "low",
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
           "occurrences": 1,
-          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+          "sample": "{\"jobTitle\": \"aec87e7b.png\", \"jobId\": \"{8f215432-03cf-4e8e-bfc7-b813af2adb72}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
         },
         {
-          "rule": "User or Computer Account Modified by Another User Account",
-          "technique": "T1098",
-          "level": "low",
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
           "occurrences": 1,
-          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+          "sample": "{\"jobTitle\": \"ab170ec9.png\", \"jobId\": \"{3613c02a-20b8-427d-8f52-2f15f3627808}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
         },
         {
-          "rule": "User or Computer Account Modified by Another User Account",
-          "technique": "T1098",
-          "level": "low",
-          "occurrences": 1,
-          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
-        },
-        {
-          "rule": "User or Computer Account Modified by Another User Account",
-          "technique": "T1098",
-          "level": "low",
-          "occurrences": 1,
-          "sample": "{\"ComputerAccountChange\": \"-\", \"TargetUserName\": \"ALICE$\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1120\", \"Su"
-        }
-      ],
-      "expected": [
-        "T1098",
-        "T1222.001",
-        "T1558.003"
-      ],
-      "any_alert": true,
-      "correct": true
-    },
-    {
-      "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
-      "records": 4,
-      "events": 4,
-      "skipped": 0,
-      "alerts": [
-        {
-          "rule": "Windows Logon Requested by a Non-Windows Process (Browser Credential Check)",
-          "technique": "T1555.003",
-          "level": "medium",
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
           "occurrences": 3,
-          "sample": "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
-        }
-      ],
-      "expected": [
-        "T1110",
-        "T1078",
-        "T1555.003"
-      ],
-      "any_alert": true,
-      "correct": true
-    },
-    {
-      "name": "CA_PetiPotam_etw_rpc_efsr_5_6.evtx",
-      "records": 29109,
-      "events": 29109,
-      "skipped": 0,
-      "alerts": [
+          "sample": "{\"jobTitle\": \"745d396d.png\", \"jobId\": \"{21520820-83bb-4478-88ab-58942a960721}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
+        },
         {
-          "rule": "EFSRPC (PetitPotam) Call to a Remote Host",
-          "technique": "T1187",
-          "level": "critical",
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
           "occurrences": 1,
-          "sample": "{\"InterfaceUuid\": \"{c681d488-d850-11d0-8c52-00c04fd90f7e}\", \"ProcNum\": \"0\", \"Protocol\": \"2\", \"NetworkAddress\": \"\\\\\\\\10.0.2.14\", \"Endpoint\": \"\\\\pipe\\\\lsarpc\", \"O"
+          "sample": "{\"jobTitle\": \"efc1a28b.png\", \"jobId\": \"{2655ebaf-2c16-4e2d-90e3-99c5249cc4f3}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
         }
       ],
       "expected": [
-        "T1187"
+        "T1197"
       ],
       "any_alert": true,
       "correct": true
@@ -1408,13 +1520,21 @@
       "records": 20,
       "events": 20,
       "skipped": 0,
-      "alerts": [],
+      "alerts": [
+        {
+          "rule": "Named-Pipe Sweep (One Process Connecting to Many Distinct RPC Pipes in Seconds)",
+          "technique": "T1018",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
       "expected": [
         "T1018",
         "T1135"
       ],
-      "any_alert": false,
-      "correct": false
+      "any_alert": true,
+      "correct": true
     },
     {
       "name": "discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx",
@@ -1428,29 +1548,6 @@
       ],
       "any_alert": false,
       "correct": false
-    },
-    {
-      "name": "discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx",
-      "records": 9,
-      "events": 9,
-      "skipped": 0,
-      "alerts": [
-        {
-          "rule": "SMB Fan-Out (One Process Connecting to Many Hosts on Port 445)",
-          "technique": "T1018",
-          "level": "low",
-          "occurrences": 1,
-          "sample": "(sequence)"
-        }
-      ],
-      "expected": [
-        "T1033",
-        "T1087",
-        "T1069",
-        "T1018"
-      ],
-      "any_alert": true,
-      "correct": true
     },
     {
       "name": "NTLM2SelfRelay-med0x2e-security_4624_4688.evtx",
@@ -1479,44 +1576,9 @@
       ],
       "any_alert": true,
       "correct": false
-    },
-    {
-      "name": "Sysmon_UACME_32.evtx",
-      "records": 8,
-      "events": 8,
-      "skipped": 0,
-      "alerts": [
-        {
-          "rule": "UAC Bypass via OskSupport.dll Written Outside the Windows Directory",
-          "technique": "T1548.002",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "C:\\Windows\\explorer.exe"
-        },
-        {
-          "rule": "Accessibility Binary Launched from Outside the Windows Directory",
-          "technique": "T1548.002",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "C:\\windows\\system32\\cmd.exe \"C:\\Program Files\\Windows Media Player\\osk.exe\""
-        }
-      ],
-      "expected": [
-        "T1548.002"
-      ],
-      "any_alert": true,
-      "correct": true
     }
   ],
   "benign": [
-    {
-      "name": "bits_openvpn.evtx",
-      "records": 1537,
-      "events": 1537,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "mislabeled attack capture"
-    },
     {
       "name": "application_4100.evtx",
       "records": 4153,

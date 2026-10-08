@@ -111,12 +111,6 @@ KNOWN_MISS_CLASSIFICATION: dict[str, dict[str, object]] = {
             "ETW/RPC channel (System.Channel is empty/None on these records, not Sysmon or Security) -- PetiPotam/EFSRPC coercion telemetry isn't in either currently-covered channel."
         ),
     },
-    'bits_openvpn.evtx': {
-        "categories": [2],
-        "reason": (
-            'Mislabeled capture: 1,537 routine Bits-Client events (Windows/Google Update, OneDrive polling) and no malicious or OpenVPN activity. Nothing to detect; run_detection_benchmark.py scores it as a benign file.'
-        ),
-    },
     'Discovery_Remote_System_NamedPipes_Sysmon_18.evtx': {
         "categories": [6],
         "reason": (
@@ -401,7 +395,7 @@ def _write_markdown(records: list[FixtureRecord], out_path: Path) -> None:
         "",
         f"**{sum(1 for r in records if r.correct_technique)}/{len(records)} detected with the correct ATT&CK "
         f"technique; {sum(1 for r in records if r.detected)}/{len(records)} raised any alert** "
-        "(the mislabeled bits_openvpn capture counts as an attack here; run_detection_benchmark.py scores it as benign).",
+        "(every capture in detected/ and undetected/ is an attack capture).",
         "",
         "| Fixture | Behavior (from filename) | Channel(s) | Event IDs | Parsed | "
         "Normalized | Covered/Uncovered | Rules matched | Alerts | Incidents | "
