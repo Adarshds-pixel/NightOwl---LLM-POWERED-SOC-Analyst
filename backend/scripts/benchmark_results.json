@@ -1,18 +1,16 @@
 {
   "summary": {
-    "rules_loaded": 59,
+    "rules_loaded": 65,
     "attack_captures": 60,
-    "any_alert": 54,
-    "correct_technique": 52,
+    "any_alert": 58,
+    "correct_technique": 57,
     "benign_files": 40,
     "benign_events": 316874,
-    "false_positive_alerts": 5,
-    "false_positive_matched_events": 6,
-    "benign_files_with_alerts": 1,
-    "false_positives_by_rule": {
-      "Windows Event Log Cleared (System 104)": 5
-    },
-    "elapsed_s": 29.3
+    "false_positive_alerts": 0,
+    "false_positive_matched_events": 0,
+    "benign_files_with_alerts": 0,
+    "false_positives_by_rule": {},
+    "elapsed_s": 86.8
   },
   "attack": [
     {
@@ -87,7 +85,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
         }
       ],
       "expected": [
@@ -148,7 +146,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1108\", \"SubjectUserName\": \"admin01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x00000000"
         },
         {
           "rule": "RDP Logon via Loopback-Tunneled Connection",
@@ -245,7 +243,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-500\", \"SubjectUserName\": \"administrator\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000"
         },
         {
           "rule": "SAM Privileged Group Object Access",
@@ -273,7 +271,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-500\", \"SubjectUserName\": \"Administrator\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000"
         },
         {
           "rule": "Remote SAM/LSA/Server Service Enumeration over IPC$ (BloodHound / net-style recon)",
@@ -379,7 +377,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-500\", \"SubjectUserName\": \"Administrator\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000"
         },
         {
           "rule": "Remote Registry Access over IPC$ (winreg)",
@@ -514,7 +512,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1111\", \"SubjectUserName\": \"admmig\", \"SubjectDomainName\": \"OFFSEC\", \"SubjectLogonId\": \"0x0000000001"
         },
         {
           "rule": "RDP Session Hijacking via tscon (Security 4688)",
@@ -571,7 +569,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-4230534742-2542757381-3142984815-1111\", \"SubjectUserName\": \"admmig\", \"SubjectDomainName\": \"OFFSEC\", \"SubjectLogonId\": \"0x0000000000"
         },
         {
           "rule": "Kernel-Mode Driver Installed as a Windows Service",
@@ -709,7 +707,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-308926384-506822093-3341789130-1106\", \"SubjectUserName\": \"a-jbrown\", \"SubjectDomainName\": \"3B\", \"SubjectLogonId\": \"0x000000000003a1"
         },
         {
           "rule": "Kerberos Password Spray (Multiple Distinct Accounts from One Source)",
@@ -736,7 +734,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
         },
         {
           "rule": "Pass-the-Hash Style Logon (Logon Type 9 via seclogo)",
@@ -804,7 +802,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-500\", \"SubjectUserName\": \"administrator\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000"
         },
         {
           "rule": "Scheduled Task Created with Hidden Flag",
@@ -880,7 +878,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-1587066498-1489273250-1035260531-1106\", \"SubjectUserName\": \"user01\", \"SubjectDomainName\": \"EXAMPLE\", \"SubjectLogonId\": \"0x000000000"
         },
         {
           "rule": "WMIC Used with Explicit Credentials Against a Remote Host",
@@ -1063,7 +1061,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-308926384-506822093-3341789130-1105\", \"SubjectUserName\": \"jbrown\", \"SubjectDomainName\": \"3B\", \"SubjectLogonId\": \"0x00000000001717b6"
         },
         {
           "rule": "Remote Registry Access over IPC$ (winreg)",
@@ -1111,7 +1109,7 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-308926384-506822093-3341789130-1106\", \"SubjectUserName\": \"a-jbrown\", \"SubjectDomainName\": \"3B\", \"SubjectLogonId\": \"0x00000000000364"
         },
         {
           "rule": "Computer Account Created by a User Account",
@@ -1121,11 +1119,32 @@
           "sample": "{\"TargetUserName\": \"DC012$\", \"TargetDomainName\": \"3B\", \"TargetSid\": \"S-1-5-21-308926384-506822093-3341789130-220105\", \"SubjectUserSid\": \"S-1-5-21-308926384-5068"
         },
         {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"ComputerAccountChange\": \"-\", \"TargetUserName\": \"DC012$\", \"TargetDomainName\": \"3B\", \"TargetSid\": \"S-1-5-21-308926384-506822093-3341789130-220105\", \"SubjectUser"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"ComputerAccountChange\": \"-\", \"TargetUserName\": \"01566s-win16-ir\", \"TargetDomainName\": \"3B\", \"TargetSid\": \"S-1-5-21-308926384-506822093-3341789130-220105\", \"Su"
+        },
+        {
           "rule": "Computer Account Renamed Without Its Trailing $ (sAMAccountName Spoofing)",
           "technique": "T1068",
           "level": "high",
           "occurrences": 1,
           "sample": "{\"OldTargetUserName\": \"DC012$\", \"NewTargetUserName\": \"01566s-win16-ir\", \"TargetDomainName\": \"3B\", \"TargetSid\": \"S-1-5-21-308926384-506822093-3341789130-220105\","
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"ComputerAccountChange\": \"-\", \"TargetUserName\": \"DC012\", \"TargetDomainName\": \"3B\", \"TargetSid\": \"S-1-5-21-308926384-506822093-3341789130-220105\", \"SubjectUserS"
         }
       ],
       "expected": [
@@ -1189,6 +1208,13 @@
           "level": "high",
           "occurrences": 2,
           "sample": "{\"RuleName\": null, \"EventType\": \"WmiConsumerEvent\", \"UtcTime\": \"2019-05-11 17:58:23.340\", \"Operation\": \"Created\", \"User\": \"IEWIN7\\\\IEUser\", \"Name\": \"\\\"BotConsum"
+        },
+        {
+          "rule": "Process Spawned by the WMI Provider Host (Sysmon)",
+          "technique": "T1047",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "c:\\Windows\\System32\\cmd.exe"
         },
         {
           "rule": "Suspicious LSASS Process Memory Access",
@@ -1282,7 +1308,49 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-738609754-2819869699-4189121830-1108\", \"SubjectUserName\": \"bob\", \"SubjectDomainName\": \"insecurebank\", \"SubjectLogonId\": \"0x00000000"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"Dummy\": \"-\", \"TargetUserName\": \"alice\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1107\", \"SubjectUserSid\": \"S"
+        },
+        {
+          "rule": "User or Computer Account Modified by Another User Account",
+          "technique": "T1098",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "{\"ComputerAccountChange\": \"-\", \"TargetUserName\": \"ALICE$\", \"TargetDomainName\": \"insecurebank\", \"TargetSid\": \"S-1-5-21-738609754-2819869699-4189121830-1120\", \"Su"
         }
       ],
       "expected": [
@@ -1291,33 +1359,49 @@
         "T1558.003"
       ],
       "any_alert": true,
-      "correct": false
+      "correct": true
     },
     {
       "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
       "records": 4,
       "events": 4,
       "skipped": 0,
-      "alerts": [],
+      "alerts": [
+        {
+          "rule": "Windows Logon Requested by a Non-Windows Process (Browser Credential Check)",
+          "technique": "T1555.003",
+          "level": "medium",
+          "occurrences": 3,
+          "sample": "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+        }
+      ],
       "expected": [
         "T1110",
         "T1078",
         "T1555.003"
       ],
-      "any_alert": false,
-      "correct": false
+      "any_alert": true,
+      "correct": true
     },
     {
       "name": "CA_PetiPotam_etw_rpc_efsr_5_6.evtx",
       "records": 29109,
       "events": 29109,
       "skipped": 0,
-      "alerts": [],
+      "alerts": [
+        {
+          "rule": "EFSRPC (PetitPotam) Call to a Remote Host",
+          "technique": "T1187",
+          "level": "critical",
+          "occurrences": 1,
+          "sample": "{\"InterfaceUuid\": \"{c681d488-d850-11d0-8c52-00c04fd90f7e}\", \"ProcNum\": \"0\", \"Protocol\": \"2\", \"NetworkAddress\": \"\\\\\\\\10.0.2.14\", \"Endpoint\": \"\\\\pipe\\\\lsarpc\", \"O"
+        }
+      ],
       "expected": [
         "T1187"
       ],
-      "any_alert": false,
-      "correct": false
+      "any_alert": true,
+      "correct": true
     },
     {
       "name": "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
@@ -1350,15 +1434,23 @@
       "records": 9,
       "events": 9,
       "skipped": 0,
-      "alerts": [],
+      "alerts": [
+        {
+          "rule": "SMB Fan-Out (One Process Connecting to Many Hosts on Port 445)",
+          "technique": "T1018",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
       "expected": [
         "T1033",
         "T1087",
         "T1069",
         "T1018"
       ],
-      "any_alert": false,
-      "correct": false
+      "any_alert": true,
+      "correct": true
     },
     {
       "name": "NTLM2SelfRelay-med0x2e-security_4624_4688.evtx",
@@ -1371,7 +1463,14 @@
           "technique": "T1685.005",
           "level": "high",
           "occurrences": 1,
-          "sample": "{}"
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-482804190-775995292-3801157738-1002\", \"SubjectUserName\": \"admin\", \"SubjectDomainName\": \"WIND10\", \"SubjectLogonId\": \"0x000000000047e"
+        },
+        {
+          "rule": "Process Spawned by the WMI Provider Host (Security 4688)",
+          "technique": "T1047",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "C:\\Windows\\System32\\notepad.exe"
         }
       ],
       "expected": [
@@ -1386,12 +1485,27 @@
       "records": 8,
       "events": 8,
       "skipped": 0,
-      "alerts": [],
+      "alerts": [
+        {
+          "rule": "UAC Bypass via OskSupport.dll Written Outside the Windows Directory",
+          "technique": "T1548.002",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "C:\\Windows\\explorer.exe"
+        },
+        {
+          "rule": "Accessibility Binary Launched from Outside the Windows Directory",
+          "technique": "T1548.002",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "C:\\windows\\system32\\cmd.exe \"C:\\Program Files\\Windows Media Player\\osk.exe\""
+        }
+      ],
       "expected": [
         "T1548.002"
       ],
-      "any_alert": false,
-      "correct": false
+      "any_alert": true,
+      "correct": true
     }
   ],
   "benign": [
@@ -1632,43 +1746,7 @@
       "records": 5088,
       "events": 5088,
       "skipped": 0,
-      "alerts": [
-        {
-          "rule": "Windows Event Log Cleared (System 104)",
-          "technique": "T1685.005",
-          "level": "high",
-          "occurrences": 2,
-          "sample": "{}"
-        },
-        {
-          "rule": "Windows Event Log Cleared (System 104)",
-          "technique": "T1685.005",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{}"
-        },
-        {
-          "rule": "Windows Event Log Cleared (System 104)",
-          "technique": "T1685.005",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{}"
-        },
-        {
-          "rule": "Windows Event Log Cleared (System 104)",
-          "technique": "T1685.005",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{}"
-        },
-        {
-          "rule": "Windows Event Log Cleared (System 104)",
-          "technique": "T1685.005",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{}"
-        }
-      ],
+      "alerts": [],
       "corpus": "NightOwl-Benign-Dataset"
     },
     {

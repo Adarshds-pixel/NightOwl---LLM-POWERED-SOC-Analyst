@@ -434,7 +434,8 @@ The frontend has one build-time variable, `VITE_API_BASE_URL`. No secret is ever
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                  # 740 offline tests
+./venv/Scripts/python -m pytest                  # 774 offline tests
+./venv/Scripts/python scripts/upload_sweep.py    # every sample file's verdict
 ./venv/Scripts/python -m pytest -m integration   # 5 tests: real KB/embeddings, Postgres
 cd ../frontend && npx tsc -b && npm run lint && npm run build
 ```
@@ -456,7 +457,7 @@ The default run excludes tests marked `integration` and runs against in-memory S
 ## 14. Measuring detection accuracy
 
 `backend/sample_logs/real_world_fixtures/` holds real, independently sourced EVTX captures:
-- **`detected/`** (52) and **`undetected/`** (9): attack captures, split by the current rules' results. The split is an *output* of `build_failure_matrix.py`, which rescans both folders every run.
+- **`detected/`** (57) and **`undetected/`** (4): attack captures, split by the current rules' results. The split is an *output* of `build_failure_matrix.py`, which rescans both folders every run.
 - **`NightOwl-Benign-Dataset/`** (31 EVTX + `manifest.json`): real workstation and server captures, used as the false-positive corpus and as the ML baseline.
 
 The expected techniques per capture are in `backend/scripts/fixture_ground_truth.json`.
@@ -471,13 +472,26 @@ cd backend
 
 | | |
 |---|---|
-| Attack captures detected with the correct ATT&CK technique | **52/60** |
-| Attack captures raising any alert | 54/60 |
-| False-positive alerts on 40 benign captures (316,874 events) | **5**, all System 104 log clears on one benign machine |
+| Attack captures detected with the correct ATT&CK technique | **57/60** |
+| Attack captures raising any alert | 58/60 |
+| False-positive alerts on 40 benign captures (316,874 events) | **0** |
 
 The failure matrix lists 61 captures because it also counts `bits_openvpn.evtx`. That capture is mislabelled: it contains only routine BITS traffic, so the benchmark scores it as benign.
 
+The three remaining misses: two named-pipe discovery captures (`System` connecting to `\lsass` / `\srvsvc`, indistinguishable from normal SMB traffic at this log level, so a rule would false-alarm; they read **Review recommended**) and the NTLM self-relay capture, which is flagged for its WMI process execution and a log clear but whose relay itself is not visible in those events.
+
 These are **development-set figures**: every attack capture informed rule development. Each miss in `failure_matrix.md` is classified (`channel_provider_gap`, `rule_missing`, `insufficient_telemetry`, `ambiguous_behavior`, ...) from the real field values.
+
+### The upload sweep: what every sample file shows
+
+`backend/scripts/upload_sweep.py` runs the real engine, detectors, coverage classification and advisory patterns over every EVTX under `sample_logs` and prints the verdict an upload would show. It exits non-zero if a benign file is not **Normal** or an attack file is **Normal**.
+
+| Group | Result |
+|---|---|
+| 42 benign files (the benign dataset, the real-world benign set, the synthetic noise, `sample.evtx`, `sysmon_demo.evtx`, the mislabelled BITS capture) | **42 Normal** |
+| 60 attack captures | 58 Suspicious, 2 Review recommended |
+
+**Caveat:** the "everyday" event lists were derived from, and are checked against, the same benign corpus. A machine that behaves differently can still show Review recommended. Re-run the sweep on any new benign logs; every file that is not Normal is either a new everyday event type to add to `detection/coverage.py` (with its reason) or a real finding.
 
 ### Quick API checks
 
@@ -571,6 +585,7 @@ Not built, on purpose:
 | Sequence detectors added | 33/39 |
 | Corpus grew again | 50/61 |
 | 2026-10 audit | 52/60 |
+| 2026-10-08 upload audit (coverage split, 7 new rules, UserData and RPC parsing) | 57/60, 0 false positives |
 
 The 2026-10 audit changed how detection is scored. A capture now counts only when the alert carries the *correct technique*, and the clean corpus became the 40-capture benign set. Under that scoring the earlier 50/61 was 38/60 with 42 false-positive alerts. Rule fixes and 14 new rules brought it to 52/60 with 5 false positives.
 

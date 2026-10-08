@@ -75,6 +75,9 @@ class DemoFixturesResponse(BaseModel):
     fixtures: list[DemoFixtureInfo]
 
 
+DEMO_MAX_FIXTURE_BYTES = 2 * 1024 * 1024
+
+
 @router.get("/demo/fixtures", response_model=DemoFixturesResponse)
 def list_demo_fixtures() -> DemoFixturesResponse:
     """Every real-world fixture the *current* rule set detects WITH THE CORRECT
@@ -106,6 +109,11 @@ def list_demo_fixtures() -> DemoFixturesResponse:
         # route should never advertise a file it can't then serve.
         if entry.get("correct_technique", entry.get("detected"))
         and (DETECTED_FIXTURES_DIR / entry["name"]).is_file()
+        # A demo click must finish in seconds: python-evtx parses about 100
+        # records per second, so a multi-megabyte capture (the 10 MB PetitPotam
+        # trace takes minutes) would hang the walkthrough. It stays a detected
+        # fixture for the benchmark and for manual upload, just not a demo pick.
+        and (DETECTED_FIXTURES_DIR / entry["name"]).stat().st_size <= DEMO_MAX_FIXTURE_BYTES
     ]
     return DemoFixturesResponse(fixtures=fixtures)
 
