@@ -25,6 +25,13 @@ const VERDICT_META: Record<VerdictKind, { accent: Accent; icon: typeof AlertTria
  * borrow Sysmon's vocabulary and instead falls back to the bare "Event
  * <id>" form.
  */
+/** First few names plus a count, so a machine with 47 log providers does not
+ *  turn one stat tile into a screen-high column. */
+function summarizeList(items: string[], max: number): string {
+  if (items.length <= max) return items.join(', ')
+  return `${items.slice(0, max).join(', ')} and ${items.length - max} more`
+}
+
 function groupLabel(group: EventIdCoverageGroup): string {
   return eventTypeLabel(group.event_id, group.channel)
 }
@@ -132,7 +139,7 @@ export function TelemetryProfilePanel({
           <MiniStat
             label="Providers"
             value={ingest.providers.length}
-            note={ingest.providers.join(', ') || 'None recorded'}
+            note={summarizeList(ingest.providers, 6) || 'None recorded'}
           />
           <MiniStat label="Event types" value={ingest.event_id_breakdown.length} />
           <MiniStat
