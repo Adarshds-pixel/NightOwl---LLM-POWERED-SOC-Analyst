@@ -476,6 +476,7 @@ A Postman collection is in `docs/postman/`.
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Login always fails in Docker but works locally | Unquoted bcrypt hash in `.env`; Compose expanded its `$` parts | `ADMIN_PASSWORD_HASH='$2b$12$...'` (single quotes) |
 | Backend exits at start with a settings error | Outside local mode without a valid `SESSION_SECRET_KEY`/`ADMIN_PASSWORD_HASH` | Set both, or `APP_ENV=local` for development |
 | `docker compose up` complains about `POSTGRES_PASSWORD` | Not set in `.env` | Set it |
 | `failed to connect to the docker API` | Docker Desktop is not running | Start it and retry |

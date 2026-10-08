@@ -14,6 +14,9 @@ COPY backend/requirements.txt ./backend/requirements.txt
 # e.g. "--trusted-host pypi.org --trusted-host files.pythonhosted.org"
 # without weakening every other build.
 ARG PIP_EXTRA_ARGS=""
+# CPU-only torch first: sentence-transformers would otherwise pull the CUDA
+# build and ~3 GB of NVIDIA libraries the container never uses.
+RUN pip install --no-cache-dir ${PIP_EXTRA_ARGS} torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir ${PIP_EXTRA_ARGS} -r backend/requirements.txt
 
 # ---- runtime ----

@@ -56,6 +56,8 @@ python -c "import secrets; print(secrets.token_hex(32))"
 docker compose up --build
 ```
 
+Put the bcrypt hash in single quotes in `.env` (`ADMIN_PASSWORD_HASH='$2b$12$...'`). Without them Docker Compose reads each `$` as a variable reference and corrupts the hash.
+
 Open http://localhost:5173 and sign in. On first start the backend applies database migrations and builds the knowledge base (this needs network access once, to download the embedding model). The backend refuses to start outside `APP_ENV=local` with a missing or short session secret or password hash.
 
 ## Local development
