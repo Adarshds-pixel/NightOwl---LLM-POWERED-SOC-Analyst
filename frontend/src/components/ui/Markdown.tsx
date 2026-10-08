@@ -34,14 +34,17 @@ export function Markdown({ content, className }: { content: string; className?: 
         if (block.kind === 'ordered') {
           return (
             <ol key={index} className="flex flex-col gap-1.5">
-              {block.lines.map((line, i) => (
-                <li key={i} className="flex gap-2.5">
-                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-accent-violet/15 font-mono text-[10px] text-accent-violet">
-                    {i + 1}
-                  </span>
-                  <span className="min-w-0">{inline(line)}</span>
-                </li>
-              ))}
+              {block.lines.map((line, i) => {
+                const number = block.numbers?.[i] ?? String(i + 1)
+                return (
+                  <li key={i} className="flex gap-2.5">
+                    <span className="mt-0.5 flex h-4 min-w-4 shrink-0 items-center justify-center rounded bg-accent-violet/15 px-0.5 font-mono text-[10px] text-accent-violet">
+                      {number}
+                    </span>
+                    <span className="min-w-0">{inline(line)}</span>
+                  </li>
+                )
+              })}
             </ol>
           )
         }
@@ -99,7 +102,7 @@ export function Markdown({ content, className }: { content: string; className?: 
   )
 }
 
-type Block = { kind: 'heading' | 'ordered' | 'bullet' | 'table' | 'paragraph'; lines: string[] }
+type Block = { kind: 'heading' | 'ordered' | 'bullet' | 'table' | 'paragraph'; lines: string[]; numbers?: string[] }
 
 function parseBlocks(content: string): Block[] {
   const blocks: Block[] = []
@@ -136,13 +139,16 @@ function parseBlocks(content: string): Block[] {
       continue
     }
 
-    const ordered = /^\s*\d+[.)]\s+(.*)$/.exec(line)
+    const ordered = /^\s*(\d+)[.)]\s+(.*)$/.exec(line)
     if (ordered) {
       if (current?.kind !== 'ordered') {
         push()
         current = { kind: 'ordered', lines: [] }
       }
-      current.lines.push(ordered[1])
+      // Keep the model's own number: a list interrupted by bullets would
+      // otherwise restart at 1 in every block.
+      current.lines.push(ordered[2])
+      current.numbers = [...(current.numbers ?? []), ordered[1]]
       continue
     }
 
