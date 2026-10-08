@@ -60,7 +60,7 @@ DEFAULT_K = 3
 # selection (not this module) is what guarantees these are one-per-
 # distinct-(channel,event_id)-group before any group gets a second; this
 # cap only bounds the total payload/prompt size, same as before.
-MAX_SAMPLE_EVENTS = 5
+MAX_SAMPLE_EVENTS = 8
 
 # A retrieved KB chunk's metadata["source_type"] value for a real MITRE
 # ATT&CK technique document (see ai/tools/build_kb.py) -- the other value,

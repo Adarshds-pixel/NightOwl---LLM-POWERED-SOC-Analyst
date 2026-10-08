@@ -49,12 +49,23 @@ def _extract_host(system: dict) -> str:
     return host.strip().upper()[:255]
 
 
+_RPC_PROVIDER = "Microsoft-Windows-RPC"
+
+
 def _extract_channel(system: dict) -> str | None:
     """Non-raising, unlike host/event_id/timestamp: channel is used for
     scoping/coverage honesty, not required to build a valid Event row, so
     its absence must never fail an otherwise-good record."""
     channel = system.get("Channel")
-    return channel.strip()[:255] if isinstance(channel, str) and channel.strip() else None
+    if isinstance(channel, str) and channel.strip():
+        return channel.strip()[:255]
+    # Raw ETW traces (e.g. a PetitPotam capture) carry no Channel at all. The
+    # RPC provider is the one such source with attack-relevant content (which
+    # RPC interface was called), so it is given a channel of its own instead of
+    # being lost in the unrecognised bucket.
+    provider = system.get("Provider")
+    name = provider.get("@Name") if isinstance(provider, dict) else None
+    return name if name == _RPC_PROVIDER else None
 
 
 def _extract_event_record_id(system: dict) -> int | None:
@@ -133,6 +144,8 @@ CHANNEL_PATTERNS: dict[str, tuple[frozenset[str], tuple[str, ...]]] = {
     "system": (frozenset({"system"}), ()),
     "bits": (frozenset({"bits"}), ("microsoft-windows-bits-client/",)),
     "application": (frozenset({"application"}), ()),
+    # Raw ETW RPC trace (see _extract_channel): RPC interface calls, no log file.
+    "rpc": (frozenset({"rpc", "microsoft-windows-rpc"}), ()),
 }
 
 
@@ -252,6 +265,27 @@ def _data_dict(event_data: dict | None) -> dict[str, str | None]:
     return result
 
 
+def _user_data_dict(user_data: dict | None) -> dict[str, str | None]:
+    """Flattens `Event.UserData.<Element>.<field>` into {field: value}.
+
+    UserData wraps a single provider-specific element (e.g. `LogFileCleared`
+    holding SubjectUserName / Channel). Attributes (xmlns) are skipped and
+    nested values are kept as text, so the account that cleared a log is
+    available to rules and to the console instead of being dropped.
+    """
+    if not isinstance(user_data, dict):
+        return {}
+    result: dict[str, str | None] = {}
+    for element in user_data.values():
+        if not isinstance(element, dict):
+            continue
+        for key, value in element.items():
+            if isinstance(key, str) and not key.startswith("@"):
+                result[key] = _as_text(value)
+        break
+    return result
+
+
 def _nested_value(item: dict):
     """A `<Data>` element with child elements parses to a dict whose payload
     is not under "#text"; keep the children rather than losing them."""
@@ -293,6 +327,14 @@ def _normalize_security_process_creation(data: dict[str, str | None]) -> dict:
     aliased to ParentImage; older captures have only the creator PID, so
     parent_process stays None there rather than being guessed."""
     return _normalize_process_creation(data)
+
+
+def _normalize_log_cleared(data: dict[str, str | None]) -> dict:
+    name = data.get("SubjectUserName")
+    domain = data.get("SubjectDomainName")
+    if not name:
+        return {}
+    return {"user": f"{domain}\\{name}" if domain else name}
 
 
 def _normalize_network_connection(data: dict[str, str | None]) -> dict:
@@ -446,7 +488,8 @@ _CHANNEL_DISPATCH_TABLES: dict[str | None, dict[int, Callable[[dict[str, str | N
     # System / Bits / Application share event ids with Sysmon (e.g. System
     # EID 1 is a kernel time change) but none of Sysmon's field semantics, so
     # they get no extractor -- their EventData still reaches event_data.
-    "system": {},
+    # 104 "an event log was cleared": promote who did it (read from UserData).
+    "system": {104: lambda data: _normalize_log_cleared(data)},
     "bits": {},
     "application": {},
 }
@@ -467,6 +510,10 @@ def normalize_event(record: dict) -> NormalizedEvent:
     event_record_id = _extract_event_record_id(system)
 
     data = _data_dict(event.get("EventData"))
+    if not data:
+        # Some providers (System 104 "log cleared", many Windows-internal
+        # events) put their fields under UserData instead of EventData.
+        data = _user_data_dict(event.get("UserData"))
     token = canonical_channel(channel)
     # Sysmon EID 2 is "file creation time changed"; the same number on any
     # other channel means something else entirely.

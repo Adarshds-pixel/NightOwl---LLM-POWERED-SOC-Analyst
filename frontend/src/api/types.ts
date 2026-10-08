@@ -198,7 +198,18 @@ export interface EventIdCoverageGroup {
   channel: string | null
   event_id: number
   count: number
+  /** True only when a rule or sequence detector evaluates this event type. */
   covered: boolean
+  /** checked = a rule/detector evaluates it; routine = everyday activity that
+   *  needs no rule; unchecked = security-relevant but nothing evaluates it. */
+  kind?: 'checked' | 'routine' | 'unchecked'
+}
+
+/** Something worth knowing about a file that is not a detection. */
+export interface IngestNotice {
+  kind: string
+  message: string
+  count: number
 }
 
 export interface IngestResponse {
@@ -219,8 +230,16 @@ export interface IngestResponse {
   // "rule_matches === 0" alone never distinguishes "scanned, genuinely
   // clean" from "no loaded rule could evaluate this event's channel/type
   // at all" -- these three fields make that explicit. See routes_ingest.py.
+  /** Event types a rule or sequence detector evaluates. */
   covered_events: number
+  /** Everyday activity (credential reads, process exits...) that needs no rule. */
+  routine_events: number
+  /** Security-relevant events nothing evaluates -- the only ones worth a review. */
   uncovered_events: number
+  /** Events matching a narrow advisory pattern, too noisy for a rule. */
+  advisory_hits: number
+  /** Informational notes (e.g. a log was cleared by <account>); never alerts. */
+  notices: IngestNotice[]
   uncovered_breakdown: UncoveredEventGroup[]
   // Non-null whenever at least one uncovered event was in this ingest
   // (regardless of rule_matches -- a real detection elsewhere in the file
@@ -412,4 +431,45 @@ export interface SystemStatusResponse {
   ml_anomaly_layer: ComponentStatus
   attack_dataset: ComponentStatus
   demo_mode_enabled: boolean
+}
+
+/** One poll of an upload running in the background (POST /ingest/async). */
+export interface IngestJobStatus {
+  job_id: string
+  filename: string
+  /** reading -> analysing -> done | failed */
+  status: 'reading' | 'analysing' | 'done' | 'failed'
+  records_read: number
+  result: IngestResponse | null
+  error: string | null
+  error_status: number | null
+}
+
+/** GET /ml/model -- what the experimental anomaly layer was trained on. */
+export interface MlHeldOutResult {
+  test_windows: number
+  flagged: number
+  alerts_per_host_day: number
+}
+
+export interface MlFamilyInfo {
+  family: string
+  train_windows: number
+  train_hosts: string[]
+  features_fitted: number
+  features_dropped: number
+  threshold_medium: number
+  threshold_high: number
+  held_out: MlHeldOutResult | null
+}
+
+export interface MlModelResponse {
+  mode: 'advisory' | 'alert' | 'off'
+  ready: boolean
+  detail: string
+  trained_at: string | null
+  training_source: string | null
+  min_window_events: number | null
+  families: MlFamilyInfo[]
+  explanation: string
 }

@@ -28,6 +28,7 @@ from app.api.routes_incidents import router as incidents_router
 from app.api.routes_ingest import router as ingest_router
 from app.api.routes_rules import router as rules_router
 from app.api.routes_mitre import router as mitre_router
+from app.api.routes_ml import router as ml_router
 from app.api.routes_system import router as system_router
 from app.core.auth import CSRF_HEADER, require_api_key, require_session_auth
 from app.core.config import resolve_session_secret, settings, validate_production_settings
@@ -88,6 +89,7 @@ app.include_router(
 )
 app.include_router(ai_opinions_router, dependencies=[Depends(require_api_key), Depends(require_session_auth)])
 app.include_router(system_router, dependencies=[Depends(require_api_key), Depends(require_session_auth)])
+app.include_router(ml_router, dependencies=[Depends(require_api_key), Depends(require_session_auth)])
 
 
 @app.get("/health")

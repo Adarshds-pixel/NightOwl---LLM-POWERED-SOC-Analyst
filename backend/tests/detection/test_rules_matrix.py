@@ -14,6 +14,7 @@ import pytest
 from app.detection import rule_loader
 from app.detection.engine import evaluate_event
 from app.schemas.event import NormalizedEvent
+from tests.detection.test_new_rules_2026_10 import NEW_RULE_CASES
 
 # (rule_title, event_id, matching event_data, benign look-alike event_data)
 RULE_CASES = [
@@ -393,6 +394,7 @@ def test_every_loaded_rule_is_covered_by_this_matrix():
         | {title for title, *_ in POWERSHELL_RULE_CASES}
         | {title for title, *_ in SYSTEM_RULE_CASES}
         | {title for title, *_ in APPLICATION_RULE_CASES}
+        | {title for title, *_ in NEW_RULE_CASES}
     )
     assert covered_titles == {r.title for r in rules}
 
@@ -679,8 +681,8 @@ def test_sysmon_rules_do_not_fire_on_security_channel_event_id_collision():
     assert not any(m.title == "Suspicious Access to Protected System Process" for m in matches)
 
 
-# System and Application channel rules (7045 / 104 service + log-clear, MSI 1040).
-SYSTEM_RULE_CASES = [('Service Installed with a Shell or Script Command as Its Binary (System 7045)', 7045, {'ServiceName': 'BTOBTO', 'ImagePath': '%COMSPEC% /Q /c echo cd ^> \\\\127.0.0.1\\C$\\__output 2^>^&1'}, {'ServiceName': 'Backup', 'ImagePath': '"C:\\Program Files\\Backup\\agent.exe"'}), ('Windows Event Log Cleared (System 104)', 104, {'Channel': 'System'}, None)]
+# System and Application channel rules (7045 service install, MSI 1040). System 104 (log cleared) is a notice, not a rule -- see test_coverage.py.
+SYSTEM_RULE_CASES = [('Service Installed with a Shell or Script Command as Its Binary (System 7045)', 7045, {'ServiceName': 'BTOBTO', 'ImagePath': '%COMSPEC% /Q /c echo cd ^> \\\\127.0.0.1\\C$\\__output 2^>^&1'}, {'ServiceName': 'Backup', 'ImagePath': '"C:\\Program Files\\Backup\\agent.exe"'})]
 APPLICATION_RULE_CASES = [('Windows Installer Package Installed from a URL', 1040, {'UnnamedEventData': '<string>http://officemysuppbox.com/staterepository</string>\n<string>2600</string>'}, {'UnnamedEventData': '<string>C:\\Program Files\\Google\\Update\\GoogleUpdateHelper.msi</string>'})]
 
 

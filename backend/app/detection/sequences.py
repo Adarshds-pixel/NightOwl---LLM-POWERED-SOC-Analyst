@@ -126,6 +126,25 @@ BULK_GROUP_ADDITION = SequencePattern(
     level="medium",
 )
 
+# The (channel token, event id) pairs the detectors above read. Coverage
+# reporting counts these as CHECKED: before, a failed logon (4625) or a Kerberos
+# event (4768/4771) was reported as "no rule coverage" although the brute-force
+# and password-spray detectors evaluate it on every upload.
+SEQUENCE_INPUTS: frozenset[tuple[str | None, int]] = frozenset(
+    {("sysmon", event_id) for event_id in (3, 7, 10, 11, 18)}
+    | {("security", event_id) for event_id in (4625, 4728, 4732, 4756, 5145)}
+    | {("security", event_id) for event_id in (4768, 4771)}
+    | {("application", 18456)}
+)
+
+SMB_FAN_OUT = SequencePattern(
+    rule_id="sequence-smb-fan-out",
+    title="SMB Fan-Out (One Process Connecting to Many Hosts on Port 445)",
+    technique_id="T1018",  # Remote System Discovery
+    tactics=["discovery"],
+    level="low",
+)
+
 # rule_id -> SequencePattern, for any read path that resolves an Alert's
 # rule_id to a human title/technique but only ever queried
 # rule_loader.get_loaded_rules() before (routes_alerts.py, routes_events.py,
@@ -139,7 +158,19 @@ SEQUENCE_PATTERNS: dict[str, SequencePattern] = {
     MASS_PROCESS_ACCESS.rule_id: MASS_PROCESS_ACCESS,
     GROUP_SELF_ADD.rule_id: GROUP_SELF_ADD,
     BULK_GROUP_ADDITION.rule_id: BULK_GROUP_ADDITION,
+    SMB_FAN_OUT.rule_id: SMB_FAN_OUT,
 }
+
+# SMB fan-out: one process on one host opening port-445 connections to this
+# many DISTINCT addresses within the window. UserHunter / share scanners touch
+# a whole subnet in seconds; an ordinary client talks to one or two file
+# servers. Measured on the benign corpus: 106 Sysmon network events, none on
+# port 445 -- so the threshold is a conservative judgement, not a calibrated
+# one. Backup or management servers that legitimately fan out will trip it,
+# which is why it is low severity. Re-calibrate when more benign network data
+# is collected (see ML.md "How to make it better").
+_SMB_FAN_OUT_WINDOW = timedelta(seconds=60)
+_SMB_FAN_OUT_DISTINCT_HOSTS = 5
 
 # 4728 / 4732 / 4756: member added to a global / local / universal security group.
 _GROUP_ADD_EVENT_IDS = frozenset({4728, 4732, 4756})
@@ -525,6 +556,32 @@ def _detect_mass_process_access(rows: list[EventRow]) -> list[tuple[Event, RuleM
     return matches
 
 
+def _detect_smb_fan_out(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
+    by_process: dict[tuple[str, str], list[EventRow]] = defaultdict(list)
+    for event, normalized in rows:
+        if not (_is_sysmon(normalized) and normalized.event_id == 3):
+            continue
+        data = normalized.event_data
+        if data.get("DestinationPort") != "445" or (data.get("Initiated") or "").lower() == "false":
+            continue
+        address = _normalize_ip(data.get("DestinationIp"))
+        if not address or address in ("::1", "127.0.0.1"):
+            continue
+        by_process[(normalized.host, (data.get("Image") or "").lower())].append((event, normalized))
+
+    def _is_burst(view: list[EventRow]) -> bool:
+        return len({_normalize_ip(n.event_data.get("DestinationIp")) for _e, n in view}) >= _SMB_FAN_OUT_DISTINCT_HOSTS
+
+    matches: list[tuple[Event, RuleMatch]] = []
+    for group in by_process.values():
+        if len(group) < _SMB_FAN_OUT_DISTINCT_HOSTS:
+            continue
+        group.sort(key=lambda pair: pair[1].timestamp)
+        for anchor, _n in _sliding_bursts(group, _SMB_FAN_OUT_WINDOW, _is_burst):
+            matches.append((anchor, _match(SMB_FAN_OUT)))
+    return matches
+
+
 def _detect_group_membership_abuse(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
     """Two checks a single Sigma rule cannot express: a field compared with
     another field (the subject adding ITSELF -- someone who can modify a
@@ -570,5 +627,6 @@ def detect_sequences(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
         + _detect_authentication_brute_force(rows)
         + _detect_remote_sam_enumeration(rows)
         + _detect_mass_process_access(rows)
+        + _detect_smb_fan_out(rows)
         + _detect_group_membership_abuse(rows)
     )

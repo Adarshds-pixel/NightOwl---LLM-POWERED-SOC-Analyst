@@ -54,6 +54,7 @@ activity they recorded genuinely happened close together.
 
 import logging
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -62,7 +63,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.detection.rule_loader import get_loaded_rules
 from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts
 from app.ingestion.normalizer import EventNormalizationError, normalize_event
@@ -73,6 +74,7 @@ from app.services.ai_opinion_service import (
     create_pending_opinion,
     fill_in_opinion,
 )
+from app.services import ingest_jobs
 from app.services.ingest_service import ingest_records
 
 logger = logging.getLogger(__name__)
@@ -97,11 +99,20 @@ class UncoveredEventGroup(BaseModel):
     count: int
 
 
+class IngestNoticeModel(BaseModel):
+    kind: str
+    message: str
+    count: int
+
+
 class EventIdCoverageGroup(BaseModel):
     channel: str | None
     event_id: int
     count: int
     covered: bool
+    # "checked" (a rule/detector evaluates it) | "routine" (everyday activity,
+    # no rule needed) | "unchecked" (security-relevant, nothing evaluates it).
+    kind: str = "unchecked"
 
 
 class IngestResponse(BaseModel):
@@ -127,8 +138,16 @@ class IngestResponse(BaseModel):
     # from "no loaded rule could look at this event's channel/type at all"
     # -- these three fields make that distinction explicit instead of
     # letting the frontend (or a demo audience) assume the former.
+    # covered_events = CHECKED; routine_events = everyday activity that needs
+    # no rule; uncovered_events = UNCHECKED only (the events worth a review).
     covered_events: int
+    routine_events: int = 0
     uncovered_events: int
+    # Events matching a narrow advisory pattern (named-pipe discovery, an
+    # ordinary-service install): too noisy for a rule, worth a human look.
+    advisory_hits: int = 0
+    # Informational notes about the file (never alerts), e.g. a log clear.
+    notices: list[IngestNoticeModel] = []
     uncovered_breakdown: list[UncoveredEventGroup]
     # Non-null only when this ingest had zero rule matches AND at least one
     # uncovered event -- see the trigger condition below. Advisory only:
@@ -190,57 +209,51 @@ async def check_upload_size_limit(request: Request):
         )
 
 
-@router.post("/ingest", response_model=IngestResponse, dependencies=[Depends(check_upload_size_limit)])
-def ingest_evtx(
-    background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db)
-) -> IngestResponse:
+_COPY_CHUNK_BYTES = 1024 * 1024  # 1MB
+
+
+class IngestJobAccepted(BaseModel):
+    job_id: str
+    filename: str
+
+
+class IngestJobStatus(BaseModel):
+    job_id: str
+    filename: str
+    # reading -> analysing -> done | failed
+    status: str
+    records_read: int
+    result: IngestResponse | None = None
+    error: str | None = None
+    # HTTP status the synchronous route would have returned for a failure
+    # (e.g. 400 for an unreadable file), so the console can word it the same way.
+    error_status: int | None = None
+
+
+def _stage_upload(file: UploadFile) -> Path:
+    """Validates the upload and copies it to a temp .evtx file the parser can
+    seek in. The caller owns (and must delete) the returned path.
+
+    Note on what this can and can't protect against: Starlette has already
+    fully received and spooled the upload before this runs, so the size limit
+    here (and the early Content-Length check in `check_upload_size_limit`)
+    stops oversized uploads from being processed, not from being received.
+    Production deployments must also cap request size upstream (proxy or load
+    balancer); core/upload_guard.py enforces the same limit before the body is
+    read at all. The copy is chunked so the whole upload is never one Python
+    object, and the limit is enforced as bytes are copied.
+    """
     filename = file.filename or ""
     if not filename.lower().endswith(ALLOWED_EXTENSION):
         raise HTTPException(
             status_code=400,
             detail=f"unsupported file type: expected '{ALLOWED_EXTENSION}', got '{filename or '<no filename>'}'",
         )
-
-    # Fast path: Starlette already knows the size once the upload is fully
-    # received, so this avoids reading anything just to measure it.
     if file.size is not None and file.size > MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
             detail=f"file too large: {file.size} bytes exceeds the {MAX_UPLOAD_BYTES}-byte limit",
         )
-
-    # Note on what this route can and can't protect against: Starlette's
-    # multipart parser (FastAPI's `File(...)` dependency) has already fully
-    # received and spooled the entire upload to a SpooledTemporaryFile
-    # before this route function body even runs.
-    #
-    # APPLICATION-LEVEL FILE LIMIT: What this code *can* control is what
-    # happens after spooling. We enforce MAX_UPLOAD_BYTES as chunks are
-    # read below.
-    #
-    # PRE-RECEIVE NETWORK REQUEST LIMIT: The `check_upload_size_limit`
-    # dependency provides early rejection based on Content-Length. However,
-    # if Content-Length is omitted or forged, Starlette will still spool
-    # the request. Because there is no hook in FastAPI/Starlette to cap
-    # size *during* multipart parsing without a custom parser, production
-    # deployments MUST enforce an upstream request-size limit (e.g., via
-    # a proxy, load balancer, or ingress) before the application receives
-    # an unbounded multipart request. Do not rely solely on route-level
-    # validation to prevent disk exhaustion.
-    #
-    # read_records_as_dicts() requires a real file on disk (python-
-    # evtx needs random-access seeking, confirmed via evtx_reader.py --
-    # in-memory bytes/a stream won't do), so the already-spooled upload
-    # still has to become a second on-disk file for the parser to read.
-    # The previous version of this code read the *entire* spooled upload
-    # into one contiguous Python `bytes` object first (`file.file.read()`)
-    # and only then wrote that to the new temp file -- a full, avoidable
-    # third in-memory copy of the whole upload with no purpose beyond
-    # staging. Copying directly from the already-spooled file object to the
-    # new temp file in bounded chunks avoids ever holding the full upload
-    # as one Python object, and lets the size limit be enforced as bytes
-    # are copied rather than only after a full second copy already exists.
-    _COPY_CHUNK_BYTES = 1024 * 1024  # 1MB
 
     tmp_path: Path | None = None
     try:
@@ -255,132 +268,206 @@ def ingest_evtx(
                         detail=f"file too large: exceeds the {MAX_UPLOAD_BYTES}-byte limit",
                     )
                 tmp.write(chunk)
-
         if total_bytes == 0:
             raise HTTPException(status_code=400, detail="uploaded file is empty")
-
-        try:
-            records = list(read_records_as_dicts(tmp_path))
-        except EvtxReadError as e:
-            raise HTTPException(status_code=400, detail=f"failed to parse EVTX file: {e}") from e
-
-        # `ingest_records(matched_at=None)` groups incidents by each record's
-        # own event time and requires ascending order (see its docstring).
-        # EVTX chunk order is usually close to chronological but is not
-        # guaranteed, so this sorts explicitly rather than trusting file
-        # order. A record that fails to normalize here sorts last -- it
-        # doesn't matter where it lands, since ingest_records' own
-        # normalization pass will skip it for real and count it.
-        _DISTANT_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
-
-        def _timestamp_sort_key(record: dict) -> datetime:
-            try:
-                return normalize_event(record).timestamp
-            except EventNormalizationError:
-                return _DISTANT_FUTURE
-
-        records.sort(key=_timestamp_sort_key)
-
-        outcome = ingest_records(
-            db,
-            records,
-            rules=get_loaded_rules(),
-            matched_at=None,
-        )
-
-        logger.info(
-            "ingest %s: %d records read, %d events ingested, %d skipped, %d duplicates skipped, "
-            "%d rule matches, %d alerts created, %d incidents involved",
-            filename,
-            outcome.records_read,
-            outcome.events_ingested,
-            outcome.events_skipped,
-            outcome.duplicate_events_skipped,
-            outcome.rule_matches,
-            outcome.alerts_created,
-            len(outcome.incident_ids),
-        )
-        ai_opinion_id: int | None = None
-        # Advisory second opinion, from two independent triggers:
-        #   1. Some events had no rule that could even evaluate them --
-        #      regardless of whether OTHER events in the same file matched a
-        #      real rule. A real detection explains only the events it
-        #      matched; it says nothing about the rest of the file. Proven
-        #      live against a real capture: 2 rule matches alongside 1,531
-        #      uncovered events used to suppress this opinion entirely,
-        #      leaving those 1,531 events with zero analysis. When
-        #      `matched_rule_titles` is non-empty, it's passed into the
-        #      prompt as known context (see fill_in_opinion) so the opinion
-        #      stays scoped to the *remaining* uncovered slice rather than
-        #      re-litigating what a rule already caught -- advisory,
-        #      additive, never a competing verdict.
-        #   2. A narrow, verified advisory pattern was flagged (see
-        #      advisory_patterns.py) -- independent of coverage/matches,
-        #      since the pattern (e.g. a \lsass/\srvsvc named-pipe connect,
-        #      or a Security 4697 service install whose ServiceType the one
-        #      loaded 4697 rule doesn't evaluate) isn't represented as an
-        #      Alert anywhere else in the file and still deserves a second
-        #      look even if other, unrelated activity in the same file
-        #      already matched a real rule -- "covered by a rule's
-        #      logsource" is not the same claim as "this event's content
-        #      was actually judged."
-        # Advisory-pattern events go FIRST: the opinion only ever sees the
-        # first MAX_SAMPLE_EVENTS ids, and with uncovered ids first any file
-        # with 5+ uncovered events silently dropped the very 4697 / named-pipe
-        # event that triggered the advisory.
-        sample_reasons: dict[int, str] = {}
-        for event_id in outcome.named_pipe_discovery_event_ids:
-            sample_reasons.setdefault(event_id, REASON_NAMED_PIPE)
-        for event_id in outcome.service_installation_event_ids:
-            sample_reasons.setdefault(event_id, REASON_SERVICE_INSTALL)
-        advisory_sample_ids = list(sample_reasons)
-        if outcome.uncovered_events > 0:
-            for event_id in outcome.uncovered_event_ids:
-                sample_reasons.setdefault(event_id, REASON_UNCOVERED)
-            advisory_sample_ids = list(dict.fromkeys(advisory_sample_ids + outcome.uncovered_event_ids))
-        if advisory_sample_ids:
-            opinion = create_pending_opinion(db, filename, advisory_sample_ids)
-            ai_opinion_id = opinion.id
-            background_tasks.add_task(
-                fill_in_opinion,
-                opinion.id,
-                filename,
-                advisory_sample_ids,
-                outcome.matched_rule_titles,
-                outcome.uncovered_breakdown,
-                sample_reasons,
-                outcome.ml_anomaly_titles,
-            )
-
-        db.commit()
-
-        return IngestResponse(
-            filename=filename,
-            records_read=outcome.records_read,
-            events_ingested=outcome.events_ingested,
-            events_skipped=outcome.events_skipped,
-            duplicate_events_skipped=outcome.duplicate_events_skipped,
-            rule_matches=outcome.rule_matches,
-            matched_rule_titles=outcome.matched_rule_titles,
-            alerts_created=outcome.alerts_created,
-            incident_ids=outcome.incident_ids,
-            covered_events=outcome.covered_events,
-            uncovered_events=outcome.uncovered_events,
-            uncovered_breakdown=[
-                UncoveredEventGroup(channel=g.channel, event_id=g.event_id, count=g.count)
-                for g in outcome.uncovered_breakdown
-            ],
-            ai_opinion_id=ai_opinion_id,
-            channels=outcome.channels,
-            providers=outcome.providers,
-            event_id_breakdown=[
-                EventIdCoverageGroup(channel=g.channel, event_id=g.event_id, count=g.count, covered=g.covered)
-                for g in outcome.event_id_breakdown
-            ],
-            ml_anomalies=outcome.ml_anomalies,
-            ml_anomaly_titles=outcome.ml_anomaly_titles,
-            ml_mode=settings.ml_mode,
-        )
-    finally:
+        return tmp_path
+    except BaseException:
         if tmp_path is not None and tmp_path.exists():
             tmp_path.unlink()
+        raise
+
+
+def _read_sorted_records(tmp_path: Path, on_progress=None) -> list[dict]:
+    try:
+        records: list[dict] = []
+        for record in read_records_as_dicts(tmp_path):
+            records.append(record)
+            if on_progress is not None and len(records) % 200 == 0:
+                on_progress(len(records))
+        if on_progress is not None:
+            on_progress(len(records))
+    except EvtxReadError as e:
+        raise HTTPException(status_code=400, detail=f"failed to parse EVTX file: {e}") from e
+
+    # `ingest_records(matched_at=None)` groups incidents by each record's own
+    # event time and requires ascending order (see its docstring). EVTX chunk
+    # order is usually close to chronological but is not guaranteed, so sort
+    # explicitly. A record that fails to normalize sorts last; ingest_records'
+    # own normalization pass will skip and count it.
+    distant_future = datetime.max.replace(tzinfo=timezone.utc)
+
+    def _timestamp_sort_key(record: dict) -> datetime:
+        try:
+            return normalize_event(record).timestamp
+        except EventNormalizationError:
+            return distant_future
+
+    records.sort(key=_timestamp_sort_key)
+    return records
+
+
+def _process_records(db: Session, records: list[dict], filename: str, schedule) -> IngestResponse:
+    """Detection, correlation, persistence and the advisory AI review for one
+    already-read file. `schedule(fn, *args)` runs the AI task after the
+    response is built (a FastAPI background task for the synchronous route, a
+    thread for upload jobs)."""
+    outcome = ingest_records(db, records, rules=get_loaded_rules(), matched_at=None)
+
+    logger.info(
+        "ingest %s: %d records read, %d events ingested, %d skipped, %d duplicates skipped, "
+        "%d rule matches, %d alerts created, %d incidents involved",
+        filename,
+        outcome.records_read,
+        outcome.events_ingested,
+        outcome.events_skipped,
+        outcome.duplicate_events_skipped,
+        outcome.rule_matches,
+        outcome.alerts_created,
+        len(outcome.incident_ids),
+    )
+
+    # Advisory AI review, from two independent triggers:
+    #   1. Security-relevant events that no rule or detector checks (everyday
+    #      activity never triggers it -- see detection/coverage.py). A real
+    #      detection explains only the events it matched, so this still runs
+    #      when other events in the file matched; `matched_rule_titles` is
+    #      passed to the prompt as known context so the review stays scoped to
+    #      the remaining slice.
+    #   2. A narrow advisory pattern (advisory_patterns.py): named-pipe
+    #      discovery or an ordinary-service install, too noisy for a rule.
+    # Advisory-pattern events go FIRST: the review only sees the first
+    # MAX_SAMPLE_EVENTS ids, and with unchecked ids first a file with many of
+    # them would silently drop the very event that triggered the advisory.
+    ai_opinion_id: int | None = None
+    sample_reasons: dict[int, str] = {}
+    for event_id in outcome.named_pipe_discovery_event_ids:
+        sample_reasons.setdefault(event_id, REASON_NAMED_PIPE)
+    for event_id in outcome.service_installation_event_ids:
+        sample_reasons.setdefault(event_id, REASON_SERVICE_INSTALL)
+    advisory_sample_ids = list(sample_reasons)
+    if outcome.uncovered_events > 0:
+        for event_id in outcome.uncovered_event_ids:
+            sample_reasons.setdefault(event_id, REASON_UNCOVERED)
+        advisory_sample_ids = list(dict.fromkeys(advisory_sample_ids + outcome.uncovered_event_ids))
+    if advisory_sample_ids:
+        opinion = create_pending_opinion(db, filename, advisory_sample_ids)
+        ai_opinion_id = opinion.id
+        schedule(
+            fill_in_opinion,
+            opinion.id,
+            filename,
+            advisory_sample_ids,
+            outcome.matched_rule_titles,
+            outcome.uncovered_breakdown,
+            sample_reasons,
+            outcome.ml_anomaly_titles,
+        )
+
+    db.commit()
+
+    return IngestResponse(
+        filename=filename,
+        records_read=outcome.records_read,
+        events_ingested=outcome.events_ingested,
+        events_skipped=outcome.events_skipped,
+        duplicate_events_skipped=outcome.duplicate_events_skipped,
+        rule_matches=outcome.rule_matches,
+        matched_rule_titles=outcome.matched_rule_titles,
+        alerts_created=outcome.alerts_created,
+        incident_ids=outcome.incident_ids,
+        covered_events=outcome.covered_events,
+        routine_events=outcome.routine_events,
+        notices=[IngestNoticeModel(kind=n.kind, message=n.message, count=n.count) for n in outcome.notices],
+        advisory_hits=len(outcome.named_pipe_discovery_event_ids) + len(outcome.service_installation_event_ids),
+        uncovered_events=outcome.uncovered_events,
+        uncovered_breakdown=[
+            UncoveredEventGroup(channel=g.channel, event_id=g.event_id, count=g.count)
+            for g in outcome.uncovered_breakdown
+        ],
+        ai_opinion_id=ai_opinion_id,
+        channels=outcome.channels,
+        providers=outcome.providers,
+        event_id_breakdown=[
+            EventIdCoverageGroup(channel=g.channel, event_id=g.event_id, count=g.count, covered=g.covered, kind=g.kind)
+            for g in outcome.event_id_breakdown
+        ],
+        ml_anomalies=outcome.ml_anomalies,
+        ml_anomaly_titles=outcome.ml_anomaly_titles,
+        ml_mode=settings.ml_mode,
+    )
+
+
+@router.post("/ingest", response_model=IngestResponse, dependencies=[Depends(check_upload_size_limit)])
+def ingest_evtx(
+    background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db)
+) -> IngestResponse:
+    """Synchronous upload: the response is the finished result. Fine for small
+    files and for scripts; the console uses /ingest/async instead so a large
+    file cannot hit a browser timeout."""
+    filename = file.filename or ""
+    tmp_path = _stage_upload(file)
+    try:
+        records = _read_sorted_records(tmp_path)
+        return _process_records(db, records, filename, background_tasks.add_task)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
+
+
+def _run_ingest_job(job_id: str, tmp_path: Path, filename: str) -> None:
+    job = ingest_jobs.get_job(job_id)
+    if job is None:
+        return
+    db = SessionLocal()
+
+    def _start_thread(fn, *args) -> None:
+        threading.Thread(target=fn, args=args, daemon=True).start()
+
+    def _progress(count: int) -> None:
+        job.records_read = count
+
+    try:
+        records = _read_sorted_records(tmp_path, _progress)
+        job.status = "analysing"
+        response = _process_records(db, records, filename, _start_thread)
+        job.result = response.model_dump()
+        job.status = "done"
+    except HTTPException as e:
+        db.rollback()
+        job.error, job.error_status, job.status = str(e.detail), e.status_code, "failed"
+    except Exception as e:  # noqa: BLE001 -- a background job must record, not raise
+        logger.exception("ingest job %s failed", job_id)
+        db.rollback()
+        job.error, job.error_status, job.status = f"internal error while ingesting ({type(e).__name__})", 500, "failed"
+    finally:
+        db.close()
+        if tmp_path.exists():
+            tmp_path.unlink()
+
+
+@router.post("/ingest/async", response_model=IngestJobAccepted, status_code=202, dependencies=[Depends(check_upload_size_limit)])
+def ingest_evtx_async(background_tasks: BackgroundTasks, file: UploadFile = File(...)) -> IngestJobAccepted:
+    """Upload now, process in the background: returns a job id immediately and
+    `GET /ingest/jobs/{id}` reports progress and, when finished, the same
+    payload `POST /ingest` returns."""
+    filename = file.filename or ""
+    tmp_path = _stage_upload(file)
+    job = ingest_jobs.create_job(filename)
+    background_tasks.add_task(_run_ingest_job, job.id, tmp_path, filename)
+    return IngestJobAccepted(job_id=job.id, filename=filename)
+
+
+@router.get("/ingest/jobs/{job_id}", response_model=IngestJobStatus)
+def get_ingest_job(job_id: str) -> IngestJobStatus:
+    job = ingest_jobs.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="upload job not found (it may have expired or the server restarted)")
+    return IngestJobStatus(
+        job_id=job.id,
+        filename=job.filename,
+        status=job.status,
+        records_read=job.records_read,
+        result=IngestResponse(**job.result) if job.result is not None else None,
+        error=job.error,
+        error_status=job.error_status,
+    )

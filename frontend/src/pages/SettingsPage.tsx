@@ -12,6 +12,7 @@ import {
 } from '../components/ui'
 import { useAuth } from '../context/auth/useAuth'
 import { useHealth } from '../context/health/useHealth'
+import { useMlModel } from '../hooks/useMlModel'
 import { useSystemStatus } from '../hooks/useSystemStatus'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useMitreCatalog } from '../context/mitre/useMitreCatalog'
@@ -48,6 +49,7 @@ function SettingsPage() {
   const { username } = useAuth()
   const { status, latencyMs, samples } = useHealth()
   const { status: system, error: systemError } = useSystemStatus()
+  const { model: mlModel, error: mlError } = useMlModel()
   const { rules } = useRules()
   const { techniques } = useMitreCatalog()
   const { meta } = useIncidentsSnapshot()
@@ -283,6 +285,64 @@ function SettingsPage() {
                   </dl>
                 ) : (
                   <p className="mt-2 text-meta text-text-muted">{systemError ?? 'Checking...'}</p>
+                )}
+              </div>
+              <div className="mt-5">
+                <p className="text-micro font-medium tracking-[0.1em] text-text-faint uppercase">
+                  ML model (experimental)
+                </p>
+                {mlModel ? (
+                  <div className="mt-2 flex flex-col gap-3">
+                    <p className="text-meta text-text-dim">{mlModel.explanation}</p>
+                    {mlModel.families.length > 0 && (
+                      <>
+                        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          <KeyValue label="Mode" value={mlModel.mode} />
+                          <KeyValue
+                            label="Trained"
+                            value={mlModel.trained_at ? mlModel.trained_at.slice(0, 10) : '--'}
+                          />
+                          <KeyValue
+                            label="Smallest window scored"
+                            value={mlModel.min_window_events ? `${mlModel.min_window_events} events` : '--'}
+                          />
+                        </dl>
+                        <div className="overflow-x-auto rounded-control border border-line-soft">
+                          <table className="w-full min-w-[560px] border-collapse text-left text-meta">
+                            <thead>
+                              <tr className="bg-surface-2/50 text-micro tracking-wide text-text-faint uppercase">
+                                <th className="px-2.5 py-1.5 font-medium">Log family</th>
+                                <th className="px-2.5 py-1.5 font-medium">Trained on</th>
+                                <th className="px-2.5 py-1.5 font-medium">Flags above</th>
+                                <th className="px-2.5 py-1.5 font-medium">False alarms on held-out benign data</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {mlModel.families.map((family) => (
+                                <tr key={family.family} className="border-t border-line-soft align-top">
+                                  <td className="px-2.5 py-1.5 font-medium text-text capitalize">{family.family}</td>
+                                  <td className="px-2.5 py-1.5 text-text-dim">
+                                    {family.train_windows.toLocaleString()} windows from {family.train_hosts.length}{' '}
+                                    machine{family.train_hosts.length === 1 ? '' : 's'}
+                                  </td>
+                                  <td className="px-2.5 py-1.5 font-mono text-text-dim tabular-nums">
+                                    {family.threshold_medium} / {family.threshold_high}
+                                  </td>
+                                  <td className="px-2.5 py-1.5 text-text-dim">
+                                    {family.held_out
+                                      ? `${family.held_out.flagged} of ${family.held_out.test_windows} windows (about ${family.held_out.alerts_per_host_day} per machine per day)`
+                                      : 'not evaluated'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-meta text-text-muted">{mlError ?? 'Checking...'}</p>
                 )}
               </div>
             </Card>

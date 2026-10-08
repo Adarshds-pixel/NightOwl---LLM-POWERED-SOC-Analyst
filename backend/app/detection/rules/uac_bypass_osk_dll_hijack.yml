@@ -1,0 +1,30 @@
+title: UAC Bypass via OskSupport.dll Written Outside the Windows Directory
+id: 4b8e2f91-6d03-4c57-a1e4-7f09c3d5b862
+status: experimental
+description: >
+  Detects a file named OskSupport.dll created outside C:\Windows. The
+  real OskSupport.dll lives in System32 and is loaded by the on-screen
+  keyboard (osk.exe). Writing a copy into a user-writable folder such as
+  Temp is the staging step of UACME method 32 (UIPI bypass / UAC bypass via
+  an osk.exe DLL hijack).
+
+  Verified against real content: Sysmon_UACME_32.evtx (explorer.exe wrote
+  C:\Users\IEUser\AppData\Local\Temp\OskSupport.dll). The filename is rare
+  enough that no benign file creation of it exists in the benign corpus.
+author: NightOwl
+date: 2026-10-08
+references:
+  - https://attack.mitre.org/techniques/T1548/002/
+tags:
+  - attack.privilege_escalation
+  - attack.t1548.002
+logsource:
+  category: file_event
+  service: sysmon
+detection:
+  selection:
+    TargetFilename|endswith: '\OskSupport.dll'
+  filter_windows_dir:
+    TargetFilename|startswith: 'C:\Windows\'
+  condition: selection and not filter_windows_dir
+level: high

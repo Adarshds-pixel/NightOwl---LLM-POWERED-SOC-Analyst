@@ -473,13 +473,36 @@ def covered_event_ids(rules: list[LoadedRule]) -> frozenset[tuple[str | None, in
     """
     pairs: set[tuple[str | None, int]] = set()
     for rule in rules:
-        if not rule.category:
-            continue
-        event_ids = CATEGORY_TO_EVENT_ID.get(rule.category)
-        if not event_ids:
-            continue
+        if rule.category:
+            event_ids = CATEGORY_TO_EVENT_ID.get(rule.category, frozenset())
+        else:
+            # A rule scoped by an explicit `EventID` selection instead of a
+            # category (the loader accepts both) covers exactly those ids.
+            event_ids = explicit_event_ids(rule.detections)
         pairs.update((rule.channel, event_id) for event_id in event_ids)
     return frozenset(pairs)
+
+
+def explicit_event_ids(detections: dict[str, object]) -> frozenset[int]:
+    """Every integer EventID named in a rule's selections."""
+    found: set[int] = set()
+
+    def walk(body: object) -> None:
+        if isinstance(body, list):
+            for item in body:
+                walk(item)
+        elif isinstance(body, dict):
+            for key, value in body.items():
+                if isinstance(key, str) and key.split("|")[0] in ("EventID", "event_id"):
+                    for item in value if isinstance(value, list) else [value]:
+                        if isinstance(item, int) and not isinstance(item, bool):
+                            found.add(item)
+                else:
+                    walk(value)
+
+    for body in detections.values():
+        walk(body)
+    return frozenset(found)
 
 
 def evaluate_event(event: NormalizedEvent, rules: list[LoadedRule]) -> list[RuleMatch]:

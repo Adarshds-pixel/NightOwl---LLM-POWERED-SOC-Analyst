@@ -1,0 +1,49 @@
+title: Windows Logon Requested by a Non-Windows Process (Browser Credential Check)
+id: 7c3d1b58-2e94-4a6f-b0c7-91d5a3e8f240
+status: experimental
+description: >
+  Detects Security logon events (4624 success, 4625 failure) whose
+  LogonProcessName is not one of the logon processes Windows itself uses
+  (Advapi, User32, Winlogon, NtLmSsp, Kerberos, seclogo, Negotiat, ...).
+  A browser such as Chrome shows up here when it asks Windows to verify an
+  account password -- the step before revealing or stealing saved browser
+  passwords (Credentials from Web Browsers).
+
+  Verified against real content: CA_4624_4625_LogonType2_LogonProc_chrome.evtx
+  (LogonProcessName = Chrome, LogonType 2, ProcessName chrome.exe). Measured
+  on the benign corpus: 8,100+ logon events, every LogonProcessName was one
+  of the standard values listed in the filter. Low severity because a user
+  revealing their own saved password produces the same event; the rule says
+  "a browser asked Windows to check credentials", not "credentials were stolen".
+author: NightOwl
+date: 2026-10-08
+references:
+  - https://attack.mitre.org/techniques/T1555/003/
+tags:
+  - attack.credential_access
+  - attack.t1555.003
+logsource:
+  service: security
+detection:
+  selection:
+    EventID:
+      - 4624
+      - 4625
+    LogonProcessName|re: '\S'
+  filter_windows_logon_processes:
+    LogonProcessName:
+      - 'Advapi'
+      - 'User32'
+      - 'Winlogon'
+      - 'NtLmSsp'
+      - 'Kerberos'
+      - 'seclogo'
+      - 'Negotiat'
+      - 'Negotiate'
+      - 'IKE'
+      - 'Schannel'
+      - 'CredPro'
+      - 'CredProv'
+      - '-'
+  condition: selection and not filter_windows_logon_processes
+level: low

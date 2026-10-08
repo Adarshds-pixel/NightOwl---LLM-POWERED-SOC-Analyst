@@ -135,7 +135,7 @@
       "name": "Ingest",
       "item": [
         {
-          "name": "Upload EVTX",
+          "name": "Upload EVTX (synchronous)",
           "request": {
             "method": "POST",
             "header": [],
@@ -148,7 +148,7 @@
                 "ingest"
               ]
             },
-            "description": "Returns counts, telemetry profile, incident ids, ml_anomalies.",
+            "description": "Returns counts (checked/routine/unchecked), notices, telemetry profile, incident ids, ml_anomalies.",
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -160,6 +160,56 @@
                 }
               ]
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload EVTX (background job)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ingest/async",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ingest",
+                "async"
+              ]
+            },
+            "description": "Returns 202 {job_id} at once; poll the job below. Use for large files.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Pick an .evtx, e.g. backend/sample_logs/real_world_fixtures/detected/*.evtx"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload job status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ingest/jobs/{{job_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ingest",
+                "jobs",
+                "{{job_id}}"
+              ]
+            },
+            "description": "reading -> analysing -> done | failed; the result is the same payload as the synchronous upload."
           },
           "response": []
         }
@@ -487,12 +537,79 @@
             "description": "Id comes from the ingest response (ai_opinion_id)."
           },
           "response": []
+        },
+        {
+          "name": "AI opinion - retry a failed one",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ai-opinions/{{opinion_id}}/retry",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-opinions",
+                "{{opinion_id}}",
+                "retry"
+              ]
+            },
+            "description": "Only a failed opinion (e.g. rate limit) can be retried."
+          },
+          "response": []
+        },
+        {
+          "name": "Events - unchecked only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/events?coverage=unchecked&limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "coverage",
+                  "value": "unchecked"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "coverage = checked | routine | unchecked."
+          },
+          "response": []
         }
       ]
     },
     {
       "name": "Reference",
       "item": [
+        {
+          "name": "ML model summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ml/model",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ml",
+                "model"
+              ]
+            },
+            "description": "Mode, training windows/machines per family, thresholds, held-out false-alarm rates."
+          },
+          "response": []
+        },
         {
           "name": "Rules",
           "request": {

@@ -1,0 +1,34 @@
+title: Process Spawned by the WMI Provider Host (Sysmon)
+id: 91f3c0a5-7b24-4e86-9d18-c4a6e2b70f53
+status: experimental
+description: >
+  Detects a process started by WmiPrvSE.exe, the WMI provider host. WMI's
+  Win32_Process.Create method -- used by wmic, PowerShell and lateral-movement
+  tooling to run a command on this machine from another -- starts the new
+  process as a child of WmiPrvSE.exe. Ordinary WMI queries do not start
+  processes.
+
+  Verified against real content: NTLM2SelfRelay-med0x2e-security_4624_4688.evtx
+  (WmiPrvSE.exe spawned notepad.exe as Administrator after remote network
+  logons). Measured on the benign corpus: no process was ever started by
+  WmiPrvSE.exe. WerFault and conhost are excluded as the usual crash-handler
+  and console children.
+author: NightOwl
+date: 2026-10-08
+references:
+  - https://attack.mitre.org/techniques/T1047/
+tags:
+  - attack.execution
+  - attack.t1047
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection:
+    ParentImage|endswith: '\WmiPrvSE.exe'
+  filter_helpers:
+    Image|endswith:
+      - '\WerFault.exe'
+      - '\conhost.exe'
+  condition: selection and not filter_helpers
+level: medium

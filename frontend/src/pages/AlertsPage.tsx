@@ -1,6 +1,6 @@
 import { Bell, ExternalLink, Eye, Siren } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { AlertRow, Severity } from '../api'
 import {
   Badge,
@@ -40,7 +40,8 @@ import { ACCENT } from '../lib/tokens'
  * detections, and never count toward an alert total.
  */
 function AlertsPage() {
-  const [view, setView] = useState<'detection' | 'ml'>('detection')
+  const [searchParams] = useSearchParams()
+  const [view, setView] = useState<'detection' | 'ml'>(searchParams.get('view') === 'ml' ? 'ml' : 'detection')
   const navigate = useNavigate()
   const { prefs } = usePreferences()
   const [search, setSearch] = useState('')

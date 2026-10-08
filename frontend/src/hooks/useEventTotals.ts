@@ -26,8 +26,10 @@ import { getEvents } from '../api'
 export function useEventTotals() {
   const [eventTotal, setEventTotal] = useState(0)
   const [alertTotal, setAlertTotal] = useState(0)
-  // Events no loaded rule could ever evaluate -- distinct from "evaluated,
-  // no match" (genuinely clean). See ListEventsParams.covered's doc comment.
+  // Three kinds of non-alerting event (see backend detection/coverage.py):
+  // routine = everyday activity that needs no rule; unchecked = security-
+  // relevant events nothing evaluates. Everything else was checked.
+  const [routineTotal, setRoutineTotal] = useState(0)
   const [uncoveredTotal, setUncoveredTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const requestId = useRef(0)
@@ -38,13 +40,15 @@ export function useEventTotals() {
     Promise.all([
       getEvents({ limit: 1 }),
       getEvents({ limit: 1, alert_only: true }),
-      getEvents({ limit: 1, covered: false }),
+      getEvents({ limit: 1, coverage: 'unchecked' }),
+      getEvents({ limit: 1, coverage: 'routine' }),
     ])
-      .then(([all, alerting, uncovered]) => {
+      .then(([all, alerting, uncovered, routine]) => {
         if (thisRequest !== requestId.current) return
         setEventTotal(all.total)
         setAlertTotal(alerting.total)
         setUncoveredTotal(uncovered.total)
+        setRoutineTotal(routine.total)
       })
       .catch(() => {
         // Totals are supporting context, never the only thing on screen --
@@ -60,5 +64,5 @@ export function useEventTotals() {
     load()
   }, [load])
 
-  return { eventTotal, alertTotal, uncoveredTotal, loading, refresh: load }
+  return { eventTotal, alertTotal, routineTotal, uncoveredTotal, loading, refresh: load }
 }

@@ -6,7 +6,7 @@ the server spool an arbitrarily large upload to temp disk and only then get a
 401, and a missing or forged Content-Length bypassed the size check entirely.
 
 This pure ASGI middleware runs inside SessionMiddleware (it reads
-scope["session"]) and, for POST /ingest only:
+scope["session"]) and, for POST /ingest and POST /ingest/async only:
   1. 401s unless the request carries a logged-in session cookie or the
      configured API key (the cheap claim check -- the full server-side
      session validation still runs in the route dependency);
@@ -20,7 +20,7 @@ import json
 
 from app.core.config import settings
 
-INGEST_PATH = "/ingest"
+INGEST_PATHS = frozenset({"/ingest", "/ingest/async"})
 # Multipart boundaries and part headers on top of the file itself.
 MULTIPART_OVERHEAD_BYTES = 1024 * 1024
 
@@ -53,7 +53,7 @@ class UploadGuardMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope.get("method") != "POST" or scope.get("path") != INGEST_PATH:
+        if scope["type"] != "http" or scope.get("method") != "POST" or scope.get("path") not in INGEST_PATHS:
             await self.app(scope, receive, send)
             return
 

@@ -159,7 +159,11 @@ function DashboardPage() {
         {/* A clean upload creates no incident, so the page stays in this
             branch -- its coverage verdict and AI opinion must still show. */}
         <TelemetryProfilePanel ingest={lastIngest} hasAiOpinion={aiOpinionId !== null} />
-        <AiOpinionPanel opinionId={aiOpinionId} hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0} />
+        <AiOpinionPanel
+        opinionId={aiOpinionId}
+        hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0}
+        hasDetections={(lastIngest?.rule_matches ?? 0) > 0}
+      />
         <Card>
           <EmptyState
             message="Nothing ingested yet"
@@ -184,7 +188,11 @@ function DashboardPage() {
           this is inert on every load that isn't immediately following that
           upload. */}
       <TelemetryProfilePanel ingest={lastIngest} hasAiOpinion={aiOpinionId !== null} />
-      <AiOpinionPanel opinionId={aiOpinionId} hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0} />
+      <AiOpinionPanel
+        opinionId={aiOpinionId}
+        hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0}
+        hasDetections={(lastIngest?.rule_matches ?? 0) > 0}
+      />
 
       <KpiRow incidents={incidents} meta={meta} alerts={alertsQuery.alerts} alertTotal={alertsQuery.total} now={activityNow} />
 

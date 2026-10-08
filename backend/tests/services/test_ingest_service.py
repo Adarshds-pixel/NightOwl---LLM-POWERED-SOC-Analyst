@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from app.detection import rule_loader
 from app.detection.rule_loader import LoadedRule
 from app.models.alert import Alert
 from app.models.event import Event
@@ -176,7 +177,7 @@ def test_covered_and_uncovered_events_classified_across_two_channels_with_same_e
 def test_uncovered_breakdown_groups_by_channel_and_event_id(api_client):
     _client, SessionLocal = api_client
     records = [
-        _record(f"2026-08-28T09:00:0{i}+00:00", channel="Application", command_line=None) for i in range(3)
+        _record(f"2026-08-28T09:00:0{i}+00:00", channel="Security", command_line=None) for i in range(3)
     ]
 
     with SessionLocal() as db:
@@ -191,7 +192,7 @@ def test_uncovered_breakdown_groups_by_channel_and_event_id(api_client):
 # -- uncovered_event_ids sampling (round-robin, bounded) --------------------
 
 
-def _uncovered_record(system_time: str, event_id: int, channel: str = "Application") -> dict:
+def _uncovered_record(system_time: str, event_id: int, channel: str = "Security") -> dict:
     return {
         "Event": {
             "System": {
@@ -696,3 +697,69 @@ def test_duplicate_records_within_the_same_batch_are_deduplicated_too(api_client
 
         assert outcome.events_ingested == 1
         assert outcome.duplicate_events_skipped == 1
+
+
+# -- three-way coverage: checked / routine / unchecked ----------------------
+
+
+def _plain_record(system_time: str, event_id: int, channel: str, record_id: int) -> dict:
+    return {
+        "Event": {
+            "System": {
+                "EventID": event_id,
+                "TimeCreated": {"@SystemTime": system_time},
+                "Computer": "SERVER002",
+                "Channel": channel,
+                "EventRecordID": record_id,
+            },
+            "EventData": {"Data": []},
+        }
+    }
+
+
+def test_everyday_events_do_not_count_as_unchecked_and_never_reach_the_ai_sample(api_client):
+    _client, SessionLocal = api_client
+    stamps = _timestamps(11)  # ingest_records needs ascending timestamps
+    records = (
+        [_plain_record(stamps[i], 5379, "Security", i) for i in range(6)]  # routine
+        + [_plain_record(stamps[6 + i], 5, "Microsoft-Windows-Sysmon/Operational", 100 + i) for i in range(4)]
+        + [_plain_record(stamps[10], 5136, "Security", 900)]  # security-relevant, nothing checks it
+    )
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[], matched_at=None)
+
+        assert outcome.routine_events == 10
+        assert outcome.uncovered_events == 1
+        assert outcome.covered_events == 0
+        assert len(outcome.uncovered_event_ids) == 1  # the AI only ever sees the unchecked one
+        kinds = {(g.channel, g.event_id): g.kind for g in outcome.event_id_breakdown}
+        assert kinds[("Security", 5379)] == "routine"
+        assert kinds[("Security", 5136)] == "unchecked"
+
+
+def test_a_cleared_system_log_is_a_notice_naming_the_account_not_an_alert(api_client):
+    _client, SessionLocal = api_client
+    cleared = {
+        "Event": {
+            "System": {
+                "EventID": 104,
+                "TimeCreated": {"@SystemTime": "2024-09-23T12:38:28+00:00"},
+                "Computer": "SERVER002",
+                "Channel": "System",
+                "EventRecordID": 1,
+            },
+            "UserData": {
+                "LogFileCleared": {"SubjectUserName": "lplui", "SubjectDomainName": "SERVER002", "Channel": "System"}
+            },
+        }
+    }
+    with SessionLocal() as db:
+        outcome = ingest_records(db, [cleared], rules=rule_loader.get_loaded_rules(), matched_at=None)
+
+        assert outcome.rule_matches == 0
+        assert outcome.alerts_created == 0
+        assert outcome.incident_ids == []
+        assert [n.kind for n in outcome.notices] == ["log_cleared"]
+        assert "SERVER002\lplui" in outcome.notices[0].message
+        assert "System log was cleared" in outcome.notices[0].message
+        assert outcome.uncovered_events == 0  # it was evaluated -- reported as a notice

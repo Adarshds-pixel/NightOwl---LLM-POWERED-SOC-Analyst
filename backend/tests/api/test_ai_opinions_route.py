@@ -59,3 +59,35 @@ def test_get_ai_opinion_returns_structured_fields_once_ready(api_client):
     body = response.json()
     assert body["limitations"] == "- Small sample."
     assert body["attack_candidate_ids"] == ["T1059.001"]
+
+
+def test_retry_reruns_only_a_failed_opinion(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    calls = []
+    monkeypatch.setattr(
+        "app.api.routes_ai_opinions.fill_in_opinion",
+        lambda opinion_id, filename, sample_ids, *rest: calls.append((opinion_id, filename, sample_ids)),
+    )
+    with SessionLocal() as db:
+        opinion = ai_opinion_service.create_pending_opinion(db, "quota.evtx", sample_event_ids=[3, 4])
+        opinion.status = "failed"
+        opinion.error = "AI request failed: the AI provider's rate limit was reached"
+        db.commit()
+        opinion_id = opinion.id
+
+    response = client.post(f"/ai-opinions/{opinion_id}/retry")
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "pending"
+    assert response.json()["error"] is None
+    assert calls == [(opinion_id, "quota.evtx", [3, 4])]
+
+
+def test_retry_refuses_an_opinion_that_is_not_failed(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    monkeypatch.setattr("app.api.routes_ai_opinions.fill_in_opinion", lambda *a, **k: None)
+    with SessionLocal() as db:
+        opinion_id = ai_opinion_service.create_pending_opinion(db, "fine.evtx", sample_event_ids=[1]).id
+
+    assert client.post(f"/ai-opinions/{opinion_id}/retry").status_code == 409
+    assert client.post("/ai-opinions/999999/retry").status_code == 404

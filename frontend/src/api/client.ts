@@ -10,6 +10,8 @@ import type {
   EventListResponse,
   ExplainResponse,
   IncidentDetailResponse,
+  IngestJobStatus,
+  MlModelResponse,
   IncidentListResponse,
   IncidentStatusUpdateRequest,
   IncidentStatusUpdateResponse,
@@ -167,6 +169,10 @@ export function getHealth() {
 /** What is actually configured and loaded (LLM key, knowledge base, rules,
  *  ML model) -- the honest source for status badges; /health only proves the
  *  API process answers. */
+export function getMlModel() {
+  return apiFetch<MlModelResponse>('/ml/model')
+}
+
 export function getSystemStatus() {
   return apiFetch<SystemStatusResponse>('/system/status')
 }
@@ -267,17 +273,17 @@ const DEFAULT_UPLOAD_TIMEOUT_MS = 300_000
  * stopped" rule). Retrying blindly risks a duplicate ingest of the same
  * file; check the Incidents/Logs page for it before re-uploading.
  */
-export function ingestEvtxFileWithProgress(
+function uploadEvtxAsJob(
   file: File,
   onProgress: (fraction: number) => void,
   timeoutMs: number = DEFAULT_UPLOAD_TIMEOUT_MS,
-): Promise<IngestResponse> {
+): Promise<{ job_id: string; filename: string }> {
   return new Promise((resolve, reject) => {
     const form = new FormData()
     form.append('file', file)
 
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${API_BASE_URL}/ingest`)
+    xhr.open('POST', `${API_BASE_URL}/ingest/async`)
     // rawFetch sets `credentials: 'include'` for the same reason (see its
     // own comment) -- XHR has no equivalent default-include behavior, so
     // without this the session cookie is silently omitted and every
@@ -310,7 +316,7 @@ export function ingestEvtxFileWithProgress(
         // non-JSON body -- fall through to the statusText-based error below
       }
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(body as IngestResponse)
+        resolve(body as { job_id: string; filename: string })
         return
       }
       const detail =
@@ -335,6 +341,45 @@ export function ingestEvtxFileWithProgress(
   })
 }
 
+const JOB_POLL_INTERVAL_MS = 2000
+// Parsing runs at roughly 100 records per second, so even the largest
+// accepted upload finishes well inside this; it only stops a poll that can
+// never end (for example a server restart that lost the job).
+const JOB_MAX_WAIT_MS = 60 * 60 * 1000
+
+export function getIngestJob(jobId: string) {
+  return apiFetch<IngestJobStatus>(`/ingest/jobs/${jobId}`)
+}
+
+/**
+ * Uploads an EVTX and returns the finished ingest result.
+ *
+ * The file is sent to POST /ingest/async (real transfer progress through
+ * `onProgress`), which answers immediately with a job id; the server parses
+ * and analyses in the background and this polls GET /ingest/jobs/{id},
+ * reporting each status through `onJobStatus`. Because no single HTTP request
+ * waits for the parse, a 20-60 MB capture that takes several minutes no longer
+ * hits a browser timeout and loses its result.
+ */
+export async function ingestEvtxFileWithProgress(
+  file: File,
+  onProgress: (fraction: number) => void,
+  onJobStatus?: (status: IngestJobStatus) => void,
+): Promise<IngestResponse> {
+  const { job_id } = await uploadEvtxAsJob(file, onProgress)
+  const deadline = Date.now() + JOB_MAX_WAIT_MS
+  while (Date.now() < deadline) {
+    const job = await getIngestJob(job_id)
+    onJobStatus?.(job)
+    if (job.status === 'done' && job.result) return job.result
+    if (job.status === 'failed') {
+      throw new ApiError(job.error_status ?? 500, job.error ?? 'The upload could not be processed.')
+    }
+    await new Promise((resolve) => setTimeout(resolve, JOB_POLL_INTERVAL_MS))
+  }
+  throw new ApiError(0, 'Still processing after an hour. Check Logs for the result before uploading again.')
+}
+
 export interface ListEventsParams {
   host?: string
   start_date?: string
@@ -344,6 +389,10 @@ export interface ListEventsParams {
    *  no loaded rule could ever evaluate it. Never conflate with alert_only:
    *  a covered event can simply not match anything (genuinely clean). */
   covered?: boolean
+  /** Three-way coverage: checked (a rule/detector evaluates it), routine
+   *  (everyday activity, no rule needed) or unchecked (security-relevant,
+   *  nothing evaluates it). */
+  coverage?: 'checked' | 'routine' | 'unchecked'
   /** Only events carrying an alert of this severity. Server-side, so a
    *  filtered page's `total` is the real total for that filter. */
   severity?: Severity
@@ -368,6 +417,11 @@ export function getEvent(id: number) {
 
 export function getAiOpinion(id: number) {
   return apiFetch<AiOpinionResponse>(`/ai-opinions/${id}`)
+}
+
+/** Re-run a failed AI opinion (e.g. after the free-tier rate limit resets). */
+export function retryAiOpinion(id: number) {
+  return apiFetch<AiOpinionResponse>(`/ai-opinions/${id}/retry`, { method: 'POST' })
 }
 
 export interface ListAlertsParams {

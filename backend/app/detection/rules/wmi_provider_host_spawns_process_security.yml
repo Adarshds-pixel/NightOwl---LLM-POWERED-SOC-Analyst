@@ -1,0 +1,30 @@
+title: Process Spawned by the WMI Provider Host (Security 4688)
+id: 5e08b7d3-a419-4c62-8f35-1d9c4a6e7b20
+status: experimental
+description: >
+  Same behaviour as wmi_provider_host_spawns_process_sysmon.yml, for hosts
+  that log process creation to the Security log (event 4688) instead of
+  Sysmon. A process started by WmiPrvSE.exe is the signature of remote
+  execution through WMI (Win32_Process.Create).
+
+  Verified against real content: NTLM2SelfRelay-med0x2e-security_4624_4688.evtx.
+  Measured on the benign corpus: no process was ever started by WmiPrvSE.exe.
+author: NightOwl
+date: 2026-10-08
+references:
+  - https://attack.mitre.org/techniques/T1047/
+tags:
+  - attack.execution
+  - attack.t1047
+logsource:
+  category: process_creation
+  service: security
+detection:
+  selection:
+    ParentImage|endswith: '\WmiPrvSE.exe'
+  filter_helpers:
+    Image|endswith:
+      - '\WerFault.exe'
+      - '\conhost.exe'
+  condition: selection and not filter_helpers
+level: medium

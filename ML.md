@@ -81,6 +81,18 @@ A feature is dropped when it is non-zero in under 2% of benign windows: with no 
 
 **Conclusion.** With two baseline hosts the layer cannot separate "attack" from "unfamiliar machine", and on a familiar machine it still produces 1–4.5 false windows per day. That is why the default mode is advisory.
 
+## Checking the ML layer visually
+
+Everything the model does is visible in the console:
+
+1. **Settings -> About -> ML model (experimental)** shows the mode, the training date, how many 10-minute windows and machines each log family was trained on, the two thresholds, and the false-alarm rate measured on held-out benign data (`GET /ml/model`).
+2. **On every upload**, the Telemetry profile adds an "ML check (experimental)" line when windows looked unusual, with a link to the ML view.
+3. **Alerts -> ML anomalies (experimental)** lists every record; the eye icon opens its evidence: the log family, the distance against both thresholds, the window and its event count, the features that drove the score (this window against the baseline median, with each feature's share of the distance) and any event types never seen in training.
+4. **A visual test you can repeat:**
+   - Upload a benign file such as `NightOwl-Benign-Dataset/system_baseline.evtx`: expect no or very few ML records.
+   - Upload an attack capture the model flags, such as `detected/de_unmanagedpowershell_psinject_sysmon_7_8_10.evtx`, and open the record. Read the "What drove the score" table before trusting the flag: on the sample captures it is mostly driven by what is *missing* (for example no process-exit events where the baseline has about 16 per window), because these captures are short excerpts, not a whole machine's activity. That is the layer's honest limitation today: it detects "this window looks different from the machines I was trained on", not "this is an attack".
+   - Upload one of your own benign machines' logs: a record there is a false alarm, and it is exactly what the retraining step (below) is meant to reduce.
+
 ## How to make it better
 
 The binding constraint is data, not the algorithm:

@@ -195,7 +195,11 @@ function IncidentsPage() {
       />
 
       <TelemetryProfilePanel ingest={lastIngest} hasAiOpinion={aiOpinionId !== null} />
-      <AiOpinionPanel opinionId={aiOpinionId} hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0} />
+      <AiOpinionPanel
+        opinionId={aiOpinionId}
+        hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0}
+        hasDetections={(lastIngest?.rule_matches ?? 0) > 0}
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 xl:grid-cols-5">
         <StatCard

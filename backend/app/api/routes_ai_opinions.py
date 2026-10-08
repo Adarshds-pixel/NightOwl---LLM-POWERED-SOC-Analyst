@@ -7,12 +7,13 @@ as a background task, this route just reports whatever state it's in.
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.ai_opinion import AiOpinion
+from app.services.ai_opinion_service import fill_in_opinion
 
 router = APIRouter()
 
@@ -38,11 +39,7 @@ class AiOpinionResponse(BaseModel):
     attack_candidate_ids: list[str] | None = None
 
 
-@router.get("/ai-opinions/{opinion_id}", response_model=AiOpinionResponse)
-def get_ai_opinion(opinion_id: int, db: Session = Depends(get_db)) -> AiOpinionResponse:
-    opinion = db.get(AiOpinion, opinion_id)
-    if opinion is None:
-        raise HTTPException(status_code=404, detail=f"ai opinion {opinion_id} not found")
+def _to_response(opinion: AiOpinion) -> AiOpinionResponse:
     return AiOpinionResponse(
         id=opinion.id,
         filename=opinion.filename,
@@ -55,3 +52,31 @@ def get_ai_opinion(opinion_id: int, db: Session = Depends(get_db)) -> AiOpinionR
         limitations=opinion.limitations,
         attack_candidate_ids=opinion.attack_candidate_ids,
     )
+
+
+@router.get("/ai-opinions/{opinion_id}", response_model=AiOpinionResponse)
+def get_ai_opinion(opinion_id: int, db: Session = Depends(get_db)) -> AiOpinionResponse:
+    opinion = db.get(AiOpinion, opinion_id)
+    if opinion is None:
+        raise HTTPException(status_code=404, detail=f"ai opinion {opinion_id} not found")
+    return _to_response(opinion)
+
+
+@router.post("/ai-opinions/{opinion_id}/retry", response_model=AiOpinionResponse, status_code=202)
+def retry_ai_opinion(
+    opinion_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+) -> AiOpinionResponse:
+    """Re-run a failed opinion (typically the free-tier rate limit) over the
+    same stored sample events. Only a failed opinion can be retried; a pending
+    or finished one is left alone. The retry sees the sampled events but not
+    the original run's matched-rule context, which is not stored."""
+    opinion = db.get(AiOpinion, opinion_id)
+    if opinion is None:
+        raise HTTPException(status_code=404, detail=f"ai opinion {opinion_id} not found")
+    if opinion.status != "failed":
+        raise HTTPException(status_code=409, detail="only a failed opinion can be retried")
+    opinion.status = "pending"
+    opinion.error = None
+    db.commit()
+    background_tasks.add_task(fill_in_opinion, opinion.id, opinion.filename, list(opinion.sample_event_ids))
+    return _to_response(opinion)

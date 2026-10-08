@@ -1,0 +1,28 @@
+title: Accessibility Binary Launched from Outside the Windows Directory
+id: d2a7e468-1b35-4f90-8c62-e5f7a0b3d914
+status: experimental
+description: >
+  Detects a command line that launches osk.exe, sethc.exe, utilman.exe,
+  magnify.exe or narrator.exe from a path that is not under C:\Windows.
+  These binaries are targets for UAC bypass and logon-screen backdoors, and
+  a copy placed in another folder (for example Program Files\Windows Media
+  Player) exists to be hijacked.
+
+  Verified against real content: Sysmon_UACME_32.evtx (cmd.exe running
+  "C:\Program Files\Windows Media Player\osk.exe"). Measured on the benign
+  corpus: no process start of these binaries from outside the Windows folder.
+author: NightOwl
+date: 2026-10-08
+references:
+  - https://attack.mitre.org/techniques/T1548/002/
+tags:
+  - attack.privilege_escalation
+  - attack.t1548.002
+logsource:
+  category: process_creation
+  service: sysmon
+detection:
+  selection:
+    CommandLine|re: '(?i)[a-z]:\\(?!windows\\)[^"]*\\(osk|sethc|utilman|magnify|narrator)\.exe'
+  condition: selection
+level: high

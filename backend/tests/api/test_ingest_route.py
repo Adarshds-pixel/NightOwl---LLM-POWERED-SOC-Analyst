@@ -48,7 +48,10 @@ def test_ingest_sysmon_demo_happy_path(api_client):
         "alerts_created": 0,
         "incident_ids": [],
         "covered_events": 4,
+        "routine_events": 0,
         "uncovered_events": 0,
+        "advisory_hits": 0,
+        "notices": [],
         "uncovered_breakdown": [],
         "ai_opinion_id": None,
         "channels": ["Microsoft-Windows-Sysmon/Operational"],
@@ -57,8 +60,8 @@ def test_ingest_sysmon_demo_happy_path(api_client):
         "ml_anomaly_titles": [],
         "ml_mode": "advisory",
         "event_id_breakdown": [
-            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 1, "count": 3, "covered": True},
-            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 11, "count": 1, "covered": True},
+            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 1, "count": 3, "covered": True, "kind": "checked"},
+            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 11, "count": 1, "covered": True, "kind": "checked"},
         ],
     }
     with SessionLocal() as db:
@@ -186,7 +189,10 @@ def test_ingest_skips_malformed_records_and_ingests_the_rest(api_client, monkeyp
         "alerts_created": 0,
         "incident_ids": [],
         "covered_events": 2,
+        "routine_events": 0,
         "uncovered_events": 0,
+        "advisory_hits": 0,
+        "notices": [],
         "uncovered_breakdown": [],
         "ai_opinion_id": None,
         "channels": ["Microsoft-Windows-Sysmon/Operational"],
@@ -195,8 +201,8 @@ def test_ingest_skips_malformed_records_and_ingests_the_rest(api_client, monkeyp
         "ml_anomaly_titles": [],
         "ml_mode": "advisory",
         "event_id_breakdown": [
-            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 1, "count": 1, "covered": True},
-            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 11, "count": 1, "covered": True},
+            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 1, "count": 1, "covered": True, "kind": "checked"},
+            {"channel": "Microsoft-Windows-Sysmon/Operational", "event_id": 11, "count": 1, "covered": True, "kind": "checked"},
         ],
     }
     with SessionLocal() as db:
@@ -252,7 +258,7 @@ def test_ingest_triggers_ai_opinion_for_fully_uncovered_zero_match_file(api_clie
     client, SessionLocal = api_client
     monkeypatch.setattr(
         "app.api.routes_ingest.read_records_as_dicts",
-        lambda path: iter([_record("9999", channel="Application")]),
+        lambda path: iter([_record("9999", channel="Security")]),
     )
     # fill_in_opinion (run as a BackgroundTask) opens its own fresh
     # SessionLocal() -- outside FastAPI's get_db dependency-override
@@ -351,7 +357,7 @@ def test_ingest_triggers_ai_opinion_when_a_rule_matches_and_other_events_are_unc
                         },
                     }
                 },
-                _record("9999", channel="Application"),  # guaranteed uncovered on any loaded ruleset
+                _record("9999", channel="Security"),  # guaranteed uncovered on any loaded ruleset
             ]
         ),
     )
@@ -395,7 +401,7 @@ def test_ingest_ai_opinion_sample_stays_bounded_and_round_robins_across_uncovere
     9002 appears once -- first-N-chronological would never sample 9002 at
     all; round-robin must."""
     client, SessionLocal = api_client
-    records = [_record("9001", channel="Application") for _ in range(30)] + [_record("9002", channel="Application")]
+    records = [_record("9001", channel="Security") for _ in range(30)] + [_record("9002", channel="Security")]
     monkeypatch.setattr("app.api.routes_ingest.read_records_as_dicts", lambda path: iter(records))
     monkeypatch.setattr("app.services.ai_opinion_service.SessionLocal", SessionLocal)
     monkeypatch.setattr("app.services.ai_opinion_service.retrieve", lambda query, k: [])

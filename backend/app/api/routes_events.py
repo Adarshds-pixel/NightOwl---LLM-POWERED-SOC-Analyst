@@ -71,6 +71,12 @@ def get_events(
         description="true = event's channel/type has rule coverage (matched or not), "
         "false = no loaded rule could ever evaluate this event -- never conflate with alert_only",
     ),
+    coverage: str | None = Query(
+        default=None,
+        pattern="^(checked|routine|unchecked)$",
+        description="three-way coverage: checked = a rule or sequence detector evaluates it, "
+        "routine = everyday activity that needs no rule, unchecked = security-relevant but nothing evaluates it",
+    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -86,6 +92,7 @@ def get_events(
         offset=offset,
         severity=severity,
         covered=covered,
+        coverage=coverage,
     )
     total = count_events(
         db,
@@ -96,6 +103,7 @@ def get_events(
         q=q,
         severity=severity,
         covered=covered,
+        coverage=coverage,
     )
 
     alerts_by_event_id = get_alerts_for_event_ids(db, [event.id for event in events])

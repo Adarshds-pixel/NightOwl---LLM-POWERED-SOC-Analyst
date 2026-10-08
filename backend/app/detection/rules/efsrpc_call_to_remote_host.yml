@@ -1,0 +1,37 @@
+title: EFSRPC (PetitPotam) Call to a Remote Host
+id: 0c5b8a2d-e631-47f9-b4a0-72d9e1f3a685
+status: experimental
+description: >
+  Detects an RPC client call to the Encrypting File System remote protocol
+  (EFSRPC, MS-EFSR) interface -- {c681d488-d850-11d0-8c52-00c04fd90f7e} over
+  \pipe\lsarpc, or {df1941c5-fe89-4e79-bf10-463657acf44d} over \pipe\efsrpc --
+  aimed at another machine. PetitPotam sends exactly these calls to make a
+  server authenticate to the attacker (forced authentication / NTLM relay).
+
+  Needs the ETW RPC trace (provider Microsoft-Windows-RPC); NightOwl now reads
+  these records as their own "rpc" channel. Verified against real content:
+  CA_PetiPotam_etw_rpc_efsr_5_6.evtx (2 EFSRPC calls to \\10.0.2.14 among
+  29,109 records).
+author: NightOwl
+date: 2026-10-08
+references:
+  - https://attack.mitre.org/techniques/T1187/
+tags:
+  - attack.credential_access
+  - attack.t1187
+logsource:
+  service: rpc
+detection:
+  selection:
+    EventID: 5
+    InterfaceUuid|contains:
+      - 'c681d488-d850-11d0-8c52-00c04fd90f7e'
+      - 'df1941c5-fe89-4e79-bf10-463657acf44d'
+    NetworkAddress|startswith: '\\'
+  filter_local:
+    NetworkAddress|contains:
+      - '127.0.0.1'
+      - '::1'
+      - 'localhost'
+  condition: selection and not filter_local
+level: high

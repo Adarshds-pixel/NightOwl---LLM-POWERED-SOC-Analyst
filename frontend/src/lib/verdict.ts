@@ -1,31 +1,26 @@
 /**
- * The exactly-three-verdict synthesis final_plan.md Phase 13 asks for
- * (pending.md item 5): NightOwl already has both signals this needs --
- * coverage honesty (`covered_events`/`uncovered_events`) and rule matches
- * -- but showed them as separate numbers instead of one synthesized
- * conclusion. "No malicious activity detected" is dishonest when a large
- * share of a file's events had no rule that could ever evaluate them;
- * the correct read is Inconclusive, not Clean.
+ * What an upload shows: one verdict per file, built from what the backend
+ * measured (see backend/app/detection/coverage.py).
  *
- * A fourth kind, `detected_with_uncovered`, was added once the backend
- * stopped suppressing the uncovered-events AI opinion whenever any rule
- * matched (routes_ingest.py's trigger used to require `rule_matches ===
- * 0`, proven live to leave 1,531 uncovered events with zero analysis
- * alongside 2 real matches on one real capture). A real detection still
- * means "detected" -- this kind never softens that -- but it now also
- * flags that other, unrelated events in the same file went unchecked, so
- * the analyst knows to look at the AI opinion below rather than assuming
- * the matched rule(s) explain the whole file.
+ * Every event type in a file is CHECKED (a rule or sequence detector evaluates
+ * it), ROUTINE (everyday activity -- credential-manager reads, process exits,
+ * logoffs -- that needs no rule) or UNCHECKED (security-relevant, nothing
+ * evaluates it). The verdict:
  *
- * Deliberately does NOT take the AI second opinion's *content* as an
- * input (only whether uncovered events exist, a plain count already on
- * IngestResponse): that mechanism is advisory-only by design (see
- * ai_opinion_service.py, AiOpinionPanel.tsx) and must never be able to
- * promote an objectively under-covered ingest to a Clean verdict just
- * because the model's read of a sample happened to say "nothing unusual."
+ *   detected   -- a rule or detector matched real evidence. Never softened.
+ *   review     -- no detection, but unchecked events or an advisory pattern
+ *                 deserve a human look. Never "normal".
+ *   clean      -- nothing matched and everything is checked or routine:
+ *                 "Normal -- no threats detected".
+ *   empty      -- no evaluable events were extracted.
+ *
+ * It deliberately does NOT take the AI second opinion's content as input: that
+ * mechanism is advisory only and must not be able to promote a file to Normal
+ * (or demote it) on its own. backend/scripts/upload_sweep.py mirrors this
+ * function -- keep the two in sync.
  */
 
-export type VerdictKind = "detected" | "detected_with_uncovered" | "inconclusive" | "clean"
+export type VerdictKind = 'detected' | 'detected_with_uncovered' | 'review' | 'clean' | 'empty'
 
 export interface Verdict {
   kind: VerdictKind
@@ -36,48 +31,63 @@ export interface Verdict {
 export function computeVerdict(outcome: {
   rule_matches: number
   covered_events: number
+  routine_events?: number
   uncovered_events: number
+  advisory_hits?: number
 }): Verdict {
+  const routine = outcome.routine_events ?? 0
+  const advisory = outcome.advisory_hits ?? 0
+  const total = outcome.covered_events + routine + outcome.uncovered_events
+
   if (outcome.rule_matches > 0) {
     if (outcome.uncovered_events > 0) {
       return {
-        kind: "detected_with_uncovered",
-        label: "Suspicious activity detected -- coverage incomplete",
+        kind: 'detected_with_uncovered',
+        label: 'Suspicious activity detected',
         explanation:
-          "One or more loaded detection rules matched real evidence in this file. " +
-          `${outcome.uncovered_events.toLocaleString()} other event(s) had no rule that could evaluate them -- ` +
-          "see the advisory analysis below for what those events contain.",
+          'One or more detection rules matched real evidence in this file. ' +
+          `${outcome.uncovered_events.toLocaleString()} other security-relevant event(s) are not checked by any rule -- ` +
+          'see the AI review below for what those contain.',
       }
     }
     return {
-      kind: "detected",
-      label: "Suspicious activity detected",
-      explanation: "One or more loaded detection rules matched real evidence in this file.",
+      kind: 'detected',
+      label: 'Suspicious activity detected',
+      explanation: 'One or more detection rules matched real evidence in this file.',
     }
   }
 
-  const totalClassified = outcome.covered_events + outcome.uncovered_events
-  if (totalClassified === 0) {
+  if (total === 0) {
     return {
-      kind: "inconclusive",
-      label: "Inconclusive",
-      explanation: "No evaluable events were extracted from this file -- there is nothing here to rule anything out from.",
+      kind: 'empty',
+      label: 'No events found',
+      explanation: 'No evaluable events were extracted from this file -- there is nothing here to judge.',
     }
   }
 
-  if (outcome.uncovered_events > 0) {
+  if (outcome.uncovered_events > 0 || advisory > 0) {
+    const parts: string[] = []
+    if (outcome.uncovered_events > 0) {
+      parts.push(`${outcome.uncovered_events.toLocaleString()} security-relevant event(s) that no rule checks`)
+    }
+    if (advisory > 0) {
+      parts.push(`${advisory.toLocaleString()} event(s) matching a pattern that is too noisy for a rule`)
+    }
     return {
-      kind: "inconclusive",
-      label: "Inconclusive",
-      explanation:
-        `${outcome.uncovered_events.toLocaleString()} of ${totalClassified.toLocaleString()} events had no loaded ` +
-        "rule that could ever evaluate them -- available detection coverage was insufficient to rule out malicious activity.",
+      kind: 'review',
+      label: 'Review recommended',
+      explanation: `No detection rule matched, but the file contains ${parts.join(' and ')}.`,
     }
   }
 
+  const checked = outcome.covered_events.toLocaleString()
   return {
-    kind: "clean",
-    label: "No known malicious activity observed",
-    explanation: `Every one of ${totalClassified.toLocaleString()} events was evaluated against the loaded rules and none matched.`,
+    kind: 'clean',
+    label: 'Normal -- no threats detected',
+    explanation:
+      `${checked} event(s) were checked against the detection rules and none matched` +
+      (routine > 0
+        ? `; ${routine.toLocaleString()} more are everyday activity (credential reads, process exits, service and power events) that needs no rule.`
+        : '.'),
   }
 }

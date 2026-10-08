@@ -21,8 +21,8 @@ EVTX upload (one file = one channel)
 Ingestion     evtx_reader -> normalizer -> NormalizedEvent        --> events
    |          (de-duplicated by host + channel + EventRecordID)
    v
-Detection     59 Sigma-style YAML rules, per event
-              + 8 multi-event sequence detectors, per batch       --> alerts
+Detection     65 Sigma-style YAML rules, per event
+              + 9 multi-event sequence detectors, per batch       --> alerts
    |          severity = Sigma level + ATT&CK tactic weight
    |          repeat matches (same rule/host/process, 60 s) fold into one alert
    v
@@ -94,7 +94,9 @@ All routes are mounted at root. `/health` is public. Every other route requires 
 | POST | `/auth/login` | Admin login; creates a server-side session |
 | POST | `/auth/logout` | Revokes the session |
 | GET | `/auth/me` | Current session's username, or 401 |
-| POST | `/ingest` | multipart `.evtx` upload (default cap 100 MB); counts, telemetry profile, incident ids, ML anomalies, AI opinion id |
+| POST | `/ingest` | multipart `.evtx` upload (default cap 100 MB), synchronous: counts (checked / everyday / unchecked), notices, telemetry profile, incident ids, ML anomalies, AI opinion id |
+| POST | `/ingest/async` | same upload, processed in the background: returns `202 {job_id}` at once (the console uses this so a multi-minute parse never hits a browser timeout) |
+| GET | `/ingest/jobs/{id}` | job status (`reading` -> `analysing` -> `done` / `failed`), records read so far and, when done, the same payload `POST /ingest` returns. Jobs live in memory for an hour |
 | GET | `/mitre/techniques` | ATT&CK Enterprise catalog |
 | GET | `/incidents` | `severity`, `status`, `start_date`, `end_date`, `q`, `limit` (≤200), `offset` |
 | GET | `/incidents/{id}` | Incident, alerts and events, resolved techniques |
@@ -103,8 +105,10 @@ All routes are mounted at root. `/health` is public. Every other route requires 
 | POST | `/incidents/{id}/explain` | RAG explanation + recommended response + source chunks |
 | POST/GET | `/incidents/{id}/chat` | Incident-scoped chat turn (≤4,000 chars) / history |
 | GET | `/alerts` | `host`, `start_date`, `end_date`, `severity`, `q`, `kind` (`detection` or `ml`), `limit`, `offset` |
-| GET | `/ai-opinions/{id}` | Advisory LLM second opinion on an upload |
-| GET | `/events` | `host`, `start_date`, `end_date`, `alert_only`, `severity`, `q`, `covered`, `limit`, `offset` |
+| GET | `/ai-opinions/{id}` | Advisory AI review of an upload's unchecked events |
+| POST | `/ai-opinions/{id}/retry` | Re-run a failed review (for example after the free-tier rate limit resets) |
+| GET | `/ml/model` | The anomaly layer's mode, training date, machines and windows per log family, thresholds and held-out false-alarm rates |
+| GET | `/events` | `host`, `start_date`, `end_date`, `alert_only`, `severity`, `q`, `covered`, `coverage`, `limit`, `offset` |
 | GET | `/events/{id}` | One event including `raw_json` |
 | GET | `/rules`, `/rules/{rule_id}` | Sigma rules, sequence detectors and the ML entry (`kind`), with match counts |
 | POST | `/demo/reset` | Deletes all operational rows and clears the response cache |
@@ -121,7 +125,7 @@ Error shape is uniform: `{"detail": ...}`. An LLM provider failure gives 503 wit
 
 ### Sigma-style rules
 
-The rules are 59 YAML files in `backend/app/detection/rules/`, loaded once per process and cached. Restart the backend after you change a rule.
+The rules are 65 YAML files in `backend/app/detection/rules/`, loaded once per process and cached. Restart the backend after you change a rule.
 
 - **pySigma validates; NightOwl evaluates.** pySigma converts rules into query languages for external log stores and has no backend for matching one in-memory event. So `SigmaRule.from_yaml()` validates each rule's structure and `engine.py` evaluates its `detection` block.
 - **Supported subset:**
@@ -136,16 +140,17 @@ The rules are 59 YAML files in `backend/app/detection/rules/`, loaded once per p
   - its logsource category is not scoped to known `(channel, event id)` pairs;
   - its ATT&CK tactic tags do not belong to its technique in ATT&CK v19.2.
 - **Field names are the raw Windows/Sysmon ones** (Image, CommandLine, TargetUserName). SigmaHQ rules that stay inside the supported subset and a scoped category can be adapted. Others, such as those using aggregations, `near` or unsupported modifiers, need rewriting.
-- **Channel coverage** (rules per service): Sysmon 33, Security 20, PowerShell script-block 4104 3, System 2, Application 1. PowerShell module logging (4103) is not covered.
+- **Channel coverage** (rules per service): Sysmon 36, Security 23, PowerShell script-block 4104 3, System 1, Application 1, RPC trace 1. PowerShell module logging (4103) is classed as everyday activity; the script text is judged from 4104.
 
 ### Sequence detectors
 
-`detection/sequences.py` holds 8 multi-event detectors. They run once per ingest batch and feed the same alert path:
+`detection/sequences.py` holds 9 multi-event detectors. They run once per ingest batch and feed the same alert path:
 
 | Detector | Technique |
 |---|---|
 | Process Herpaderping: FileCreate → ProcessAccess → ImageLoad on one ProcessGuid | T1055 |
 | SMB share-enumeration probe | T1135 |
+| SMB fan-out: one process opens port-445 connections to 5 or more distinct hosts within 60 s | T1018 |
 | Kerberos password spray: failed pre-auth across many accounts from one source | T1110.003 |
 | Authentication brute force: repeated failures against one account | T1110 |
 | Remote SAM/LSA enumeration | T1087 |
@@ -154,6 +159,24 @@ The rules are 59 YAML files in `backend/app/detection/rules/`, loaded once per p
 | Bulk group-membership addition | T1098 |
 
 `SEQUENCE_PATTERNS` holds each detector's thresholds and rationale.
+
+### What an upload says: checked, everyday, unchecked
+
+Every event type (channel + event id) in a file is sorted by `detection/coverage.py`:
+
+| Kind | Meaning | Examples |
+|---|---|---|
+| **Checked** | A Sigma rule, a sequence detector or the notice generator evaluates it | Sysmon 1/3/10/11, Security 4625/4768/4771, System 7045, the EFSRPC RPC call |
+| **Everyday** | Routine operating-system activity that no attack rule needs | Security 5379 credential-manager reads, 4672, 4634; Sysmon 5 process exit; System and Application operational events; PowerShell engine start/stop |
+| **Unchecked** | Security-relevant or unknown, and nothing evaluates it | Security 5136, Sysmon 22, events on an unrecognised channel |
+
+The "everyday" lists were measured on the benign corpus; each entry carries its reason in `coverage.py`. The verdict (`frontend/src/lib/verdict.ts`, mirrored by `backend/scripts/upload_sweep.py`):
+
+- a rule or detector matched -> **Suspicious activity detected**;
+- no match, but unchecked events or an advisory pattern -> **Review recommended**;
+- no match, everything checked or everyday -> **Normal -- no threats detected**.
+
+The AI review only ever reads *unchecked* events and advisory-pattern events, so a benign file with nothing unchecked makes no AI call. A System 104 "log cleared" event is reported as an informational **notice** naming the account and log (read from the event's `UserData`); it opens no alert. The Security-log equivalent (1102) remains a detection. `GET /events` accepts `coverage=checked|routine|unchecked` for the same three-way split.
 
 ### Severity, de-duplication and grouping
 

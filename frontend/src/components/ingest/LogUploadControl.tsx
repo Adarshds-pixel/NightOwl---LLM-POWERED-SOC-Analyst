@@ -21,7 +21,7 @@ export function LogUploadControl({
   variant?: 'primary' | 'secondary' | 'ghost'
   label?: string
 }) {
-  const { pending, phase, progress, result, error, upload } = useLogIngest()
+  const { pending, phase, progress, recordsRead, result, error, upload } = useLogIngest()
   const inputRef = useRef<HTMLInputElement>(null)
   const { push } = useToast()
   const reported = useRef<IngestResponse | null>(null)
@@ -54,22 +54,17 @@ export function LogUploadControl({
       // never checked (detected_with_uncovered) -- the match is still real.
       const verdict = computeVerdict(result)
       const isDetected = verdict.kind === 'detected' || verdict.kind === 'detected_with_uncovered'
-      const tone = isDetected ? 'warning' : verdict.kind === 'inconclusive' ? 'info' : 'success'
+      const tone = isDetected ? 'warning' : verdict.kind === 'review' || verdict.kind === 'empty' ? 'info' : 'success'
       const duplicateNote =
         result.duplicate_events_skipped > 0
           ? ` (${result.duplicate_events_skipped.toLocaleString()} already ingested, skipped)`
           : ''
-      const totalClassified = result.covered_events + result.uncovered_events
       const description = isDetected
         ? `${result.alerts_created} alert(s), ${result.incident_ids.length} incident(s) from ${result.filename}${duplicateNote}` +
           (verdict.kind === 'detected_with_uncovered'
-            ? ` — ${result.uncovered_events} other event(s) not evaluated by any loaded rule`
+            ? ` — ${result.uncovered_events} other event(s) not checked by any rule`
             : '')
-        : verdict.kind === 'inconclusive'
-          ? totalClassified > 0
-            ? `${result.covered_events}/${result.events_ingested} events had rule coverage — ${result.uncovered_events} not evaluated by any loaded rule${duplicateNote}`
-            : verdict.explanation
-          : `All ${result.events_ingested.toLocaleString()} events were evaluated against loaded rules — no matches${duplicateNote}`
+        : `${verdict.label}: ${verdict.explanation}${duplicateNote}`
       const anomalyNote =
         result.ml_anomalies > 0
           ? ` · ${result.ml_anomalies} ML anomaly record(s) (experimental, not detections)`
@@ -99,7 +94,13 @@ export function LogUploadControl({
   // fabricated percentage for that phase, since there's no progress signal
   // for it (see client.ts's ingestEvtxFileWithProgress docstring).
   const buttonLabel =
-    phase === 'uploading' ? `Uploading... ${Math.round(progress * 100)}%` : phase === 'processing' ? 'Processing...' : label
+    phase === 'uploading'
+      ? `Uploading... ${Math.round(progress * 100)}%`
+      : phase === 'processing'
+        ? recordsRead > 0
+          ? `Reading... ${recordsRead.toLocaleString()} records`
+          : 'Processing...'
+        : label
 
   return (
     <>

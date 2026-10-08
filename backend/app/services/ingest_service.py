@@ -30,7 +30,8 @@ from typing import Iterable
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.detection.engine import RuleMatch, covered_event_ids, evaluate_event
+from app.detection.coverage import CHECKED, ROUTINE, checked_pairs, classify
+from app.detection.engine import RuleMatch, evaluate_event
 from app.detection.rule_loader import LoadedRule
 from app.detection.sequences import detect_sequences
 from app.core.config import settings
@@ -96,6 +97,17 @@ def _lock_hosts(db: Session, hosts: set[str]) -> None:
 
 
 @dataclass(frozen=True)
+class IngestNotice:
+    """Something worth knowing about a file that is not a detection (e.g. an
+    event log was cleared by a named account). Never opens an alert/incident
+    and never changes the verdict."""
+
+    kind: str
+    message: str
+    count: int
+
+
+@dataclass(frozen=True)
 class UncoveredEventGroup:
     channel: str | None
     event_id: int
@@ -116,6 +128,9 @@ class EventIdCoverageGroup:
     event_id: int
     count: int
     covered: bool
+    # "checked" | "routine" | "unchecked" -- see detection/coverage.py.
+    # `covered` stays (checked only) for older readers.
+    kind: str = "unchecked"
 
 
 @dataclass(frozen=True)
@@ -134,10 +149,15 @@ class IngestOutcome:
     matched_rule_titles: list[str] = field(default_factory=list)
     alerts_created: int = 0
     incident_ids: list[int] = field(default_factory=list)
+    # covered_events = CHECKED (a rule or sequence detector evaluates it);
+    # routine_events = everyday activity that needs no rule; uncovered_events
+    # = UNCHECKED only (security-relevant or unknown, nothing evaluates it).
     covered_events: int = 0
+    routine_events: int = 0
     uncovered_events: int = 0
     uncovered_breakdown: list[UncoveredEventGroup] = field(default_factory=list)
     uncovered_event_ids: list[int] = field(default_factory=list)
+    notices: list[IngestNotice] = field(default_factory=list)
     # Event ids matching a narrow, verified advisory pattern (see
     # advisory_patterns.py) -- independent of coverage/rule_matches, since
     # the pattern can occur in an otherwise fully-covered or already-alerted
@@ -274,8 +294,10 @@ def ingest_records(
     # dedup key -> (index into alert_data, timestamp of the latest fold-in)
     open_alerts: dict[tuple, tuple[int, datetime]] = {}
     incident_ids: list[int] = []
-    covered_pairs = covered_event_ids(rules)
+    covered_pairs = checked_pairs(rules)
     covered_count = 0
+    routine_count = 0
+    log_notice_counter: Counter[tuple[str, str]] = Counter()
     # Counter key uses the raw channel string (not the canonical token) so
     # the breakdown stays human-readable -- e.g. two different unrecognized
     # channels both canonicalize to None but should still list separately.
@@ -301,8 +323,15 @@ def ingest_records(
             if isinstance(provider_name, str) and provider_name:
                 providers_seen.add(provider_name)
 
-        if pair in covered_pairs:
+        if pair == ("system", 104):
+            data = normalized_event.event_data or {}
+            who = normalized_event.user or data.get("SubjectUserName") or "an unknown account"
+            log_notice_counter[(who, data.get("Channel") or "an event log")] += 1
+        kind = classify(pair[0], pair[1], covered_pairs)
+        if kind == CHECKED:
             covered_count += 1
+        elif kind == ROUTINE:
+            routine_count += 1
         else:
             uncovered_counter[(normalized_event.channel, normalized_event.event_id)] += 1
             # uncovered_event_ids itself is built in a second, cheap pass
@@ -461,6 +490,7 @@ def ingest_records(
             event_id=event_id,
             count=count,
             covered=(canonical_channel(channel), event_id) in covered_pairs,
+            kind=classify(canonical_channel(channel), event_id, covered_pairs),
         )
         for (channel, event_id), count in sorted(event_counter.items(), key=lambda item: -item[1])
     ]
@@ -475,6 +505,15 @@ def ingest_records(
         alerts_created=len(alerts),
         incident_ids=incident_ids,
         covered_events=covered_count,
+        routine_events=routine_count,
+        notices=[
+            IngestNotice(
+                kind="log_cleared",
+                message=f"The {log} log was cleared by {who}" + (f" ({count} times)" if count > 1 else ""),
+                count=count,
+            )
+            for (who, log), count in sorted(log_notice_counter.items(), key=lambda item: -item[1])
+        ],
         uncovered_events=sum(uncovered_counter.values()),
         uncovered_breakdown=uncovered_breakdown,
         uncovered_event_ids=uncovered_event_ids,

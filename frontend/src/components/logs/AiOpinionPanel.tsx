@@ -1,11 +1,11 @@
 import { AlertTriangle, HelpCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import type { AiOpinionAssessment } from '../../api'
 import { useAiOpinion } from '../../hooks/useAiOpinion'
-import { AIThinking, Badge, Card, EmptyState, Markdown, type Accent } from '../ui'
+import { AIThinking, Badge, Button, Card, EmptyState, Markdown, type Accent } from '../ui'
 
 const ASSESSMENT_META: Record<AiOpinionAssessment, { label: string; accent: Accent; icon: typeof AlertTriangle }> = {
   worth_reviewing: { label: 'Worth reviewing', accent: 'amber', icon: AlertTriangle },
-  nothing_unusual: { label: 'Nothing unusual noted', accent: 'primary', icon: ShieldCheck },
+  nothing_unusual: { label: 'Nothing unusual in the events reviewed', accent: 'primary', icon: ShieldCheck },
   uncertain: { label: 'Uncertain', accent: 'neutral', icon: HelpCircle },
 }
 
@@ -35,6 +35,7 @@ function stripTrailingHeadings(summary: string): string {
 export function AiOpinionPanel({
   opinionId,
   hasUncoveredEvents,
+  hasDetections = false,
 }: {
   opinionId: number | null
   /** Whether this ingest actually had events no loaded rule could ever
@@ -47,17 +48,21 @@ export function AiOpinionPanel({
    *  been updated to pass this keeps today's copy rather than silently
    *  showing the wrong one. */
   hasUncoveredEvents?: boolean
+  /** The file also has rule detections: this opinion reviews the other events only. */
+  hasDetections?: boolean
 }) {
-  const { opinion, error, stalled } = useAiOpinion(opinionId)
+  const { opinion, error, stalled, retry } = useAiOpinion(opinionId)
 
   if (opinionId === null) return null
 
   const assessment = opinion?.assessment_label ? ASSESSMENT_META[opinion.assessment_label] : null
   const subtitle =
     hasUncoveredEvents ?? true
-      ? 'Not a verified detection — an AI reading of events no rule could evaluate'
-      : 'Not a verified detection — an AI second look at a narrow pattern worth reviewing'
-  const thinkingLabel = hasUncoveredEvents ?? true ? 'Reviewing uncovered events' : 'Reviewing flagged pattern'
+      ? hasDetections
+        ? 'Not a detection — the rule detections are listed above; this AI reads only the other events no rule checks'
+        : 'Not a detection — an AI reading of the security-relevant events no rule checks'
+      : 'Not a detection — an AI second look at a narrow pattern worth reviewing'
+  const thinkingLabel = hasUncoveredEvents ?? true ? 'Reviewing events no rule checks' : 'Reviewing flagged pattern'
 
   // A response that never reached a terminal status (still "pending" or
   // absent) but the poll gave up anyway -- see useAiOpinion's `stalled`
@@ -66,7 +71,7 @@ export function AiOpinionPanel({
   const isStalled = stalled && (!opinion || opinion.status === 'pending')
 
   return (
-    <Card title="AI second opinion" subtitle={subtitle} icon={<Sparkles className="h-4 w-4" />} accent="violet">
+    <Card title="AI review of unchecked events" subtitle={subtitle} icon={<Sparkles className="h-4 w-4" />} accent="violet">
       {isStalled ? (
         <EmptyState
           message="AI opinion timed out"
@@ -80,6 +85,11 @@ export function AiOpinionPanel({
           message="AI opinion unavailable"
           hint={opinion.error ?? error ?? 'The model call failed.'}
           icon={<HelpCircle className="h-5 w-5" />}
+          action={
+            <Button variant="secondary" size="sm" onClick={retry}>
+              Retry
+            </Button>
+          }
         />
       ) : (
         <div className="flex flex-col gap-3">

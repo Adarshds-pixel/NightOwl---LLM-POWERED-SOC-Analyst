@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2, CopyCheck, HelpCircle, Radar, ShieldCheck, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, CircleDot, CopyCheck, HelpCircle, Info, Radar, ShieldCheck, XCircle } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import type { EventIdCoverageGroup, IngestResponse } from '../../api'
 import { eventTypeLabel } from '../../lib/events'
 import { computeVerdict, type VerdictKind } from '../../lib/verdict'
@@ -11,8 +12,9 @@ const VERDICT_META: Record<VerdictKind, { accent: Accent; icon: typeof AlertTria
   // can tell the analyst other, unrelated events in the file weren't
   // checked at all.
   detected_with_uncovered: { accent: 'red', icon: AlertTriangle },
-  inconclusive: { accent: 'amber', icon: HelpCircle },
+  review: { accent: 'amber', icon: HelpCircle },
   clean: { accent: 'green', icon: ShieldCheck },
+  empty: { accent: 'neutral', icon: HelpCircle },
 }
 
 /**
@@ -56,8 +58,8 @@ export function TelemetryProfilePanel({
 }) {
   if (ingest === null) return null
 
-  const totalClassified = ingest.covered_events + ingest.uncovered_events
-  const coveragePercent = totalClassified > 0 ? (ingest.covered_events / totalClassified) * 100 : null
+  const totalClassified = ingest.covered_events + ingest.routine_events + ingest.uncovered_events
+  const checkedPercent = totalClassified > 0 ? (ingest.covered_events / totalClassified) * 100 : null
   // A fully-duplicate re-upload (every record already matched a stored
   // event -- see event_service.find_existing_event_keys) never evaluated
   // anything new: computeVerdict() would otherwise read this as
@@ -94,9 +96,27 @@ export function TelemetryProfilePanel({
                 {verdict.label}
               </Badge>
               <p className="mt-1.5 text-meta text-text-dim">{verdict.explanation}</p>
-              {(verdict.kind === 'inconclusive' || verdict.kind === 'detected_with_uncovered') && hasAiOpinion && (
+              {(verdict.kind === 'review' || verdict.kind === 'detected_with_uncovered') && hasAiOpinion && (
                 <p className="mt-1 text-micro text-text-faint">
-                  An AI second opinion on the uncovered events is below -- advisory context, not a verdict of its own.
+                  An AI review of the events no rule checks is below -- advisory context, not a verdict of its own.
+                </p>
+              )}
+              {ingest.notices.map((notice) => (
+                <p key={notice.message} className="mt-1.5 flex items-start gap-1.5 text-meta text-text-dim">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-primary" />
+                  <span>
+                    <span className="font-medium text-text">Note:</span> {notice.message}. Shown for information; it does
+                    not change the verdict.
+                  </span>
+                </p>
+              ))}
+              {ingest.ml_mode !== 'off' && ingest.ml_anomalies > 0 && (
+                <p className="mt-1.5 text-meta text-text-dim">
+                  <span className="font-medium text-text">ML check (experimental):</span> {ingest.ml_anomalies} unusual
+                  window(s) of activity recorded as supporting evidence, not detections.{' '}
+                  <Link to="/alerts?view=ml" className="text-accent-primary underline-offset-2 hover:underline">
+                    Open the ML view
+                  </Link>
                 </p>
               )}
             </>
@@ -116,9 +136,9 @@ export function TelemetryProfilePanel({
           />
           <MiniStat label="Event types" value={ingest.event_id_breakdown.length} />
           <MiniStat
-            label="Coverage"
-            value={coveragePercent === null ? '--' : `${coveragePercent.toFixed(0)}%`}
-            note="Evaluated by a loaded rule"
+            label="Checked by a rule"
+            value={checkedPercent === null ? '--' : `${checkedPercent.toFixed(0)}%`}
+            note={`${ingest.routine_events.toLocaleString()} everyday · ${ingest.uncovered_events.toLocaleString()} unchecked`}
           />
         </div>
 
@@ -127,14 +147,16 @@ export function TelemetryProfilePanel({
             <ListRow
               key={`${group.channel ?? 'unknown'}-${group.event_id}`}
               marker={
-                group.covered ? (
+                group.kind === 'routine' ? (
+                  <CircleDot className="h-3.5 w-3.5 text-text-faint" />
+                ) : group.covered ? (
                   <CheckCircle2 className="h-3.5 w-3.5 text-accent-green" />
                 ) : (
-                  <XCircle className="h-3.5 w-3.5 text-accent-red" />
+                  <XCircle className="h-3.5 w-3.5 text-accent-amber" />
                 )
               }
               title={groupLabel(group)}
-              meta={group.channel ?? 'Unrecognized channel'}
+              meta={`${group.channel ?? 'Unrecognized channel'} · ${group.kind === 'routine' ? 'everyday, no rule needed' : group.covered ? 'checked' : 'not checked'}`}
               trailing={<span className="font-mono text-meta text-text-muted tabular-nums">{group.count}</span>}
             />
           ))}

@@ -16,7 +16,7 @@ from datetime import datetime
 from sqlalchemy import and_, exists, false, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.detection.engine import covered_event_ids
+from app.detection.coverage import DEFAULT_ROUTINE_CHANNELS, ROUTINE_EVENTS, checked_pairs
 from app.detection.rule_loader import get_loaded_rules
 from app.ingestion.normalizer import CHANNEL_PATTERNS
 from app.ml.rule import ML_RULE_ID
@@ -101,7 +101,7 @@ def save_events(db: Session, events: list[NormalizedEvent]) -> list[Event]:
     return rows
 
 
-def _covered_predicate():
+def _pairs_predicate(pairs):
     """SQL expression matching the `Event.channel`/`Event.event_id`
     combinations at least one currently loaded rule covers -- the
     query-time mirror of engine.py's covered_event_ids() +
@@ -114,7 +114,6 @@ def _covered_predicate():
     False rather than SQL's NULL, which would otherwise silently drop
     those rows from *both* `covered=True` and `covered=False` queries.
     """
-    pairs = covered_event_ids(get_loaded_rules())
     by_token: dict[str | None, set[int]] = defaultdict(set)
     for token, event_id in pairs:
         by_token[token].add(event_id)
@@ -137,6 +136,22 @@ def _covered_predicate():
     return or_(*clauses) if clauses else false()
 
 
+def _covered_predicate():
+    """Events a loaded rule or sequence detector evaluates (CHECKED)."""
+    return _pairs_predicate(checked_pairs(get_loaded_rules()))
+
+
+def _routine_predicate():
+    """Everyday events that are not CHECKED (see detection/coverage.py)."""
+    explicit = {(token, event_id) for token, ids in ROUTINE_EVENTS.items() for event_id in ids}
+    clauses = [_pairs_predicate(explicit)]
+    for token in DEFAULT_ROUTINE_CHANNELS:
+        exact_names, prefixes = CHANNEL_PATTERNS[token]
+        channel_col = func.lower(func.trim(func.coalesce(Event.channel, "")))
+        clauses.append(or_(channel_col.in_(sorted(exact_names)), *(channel_col.like(f"{p}%") for p in prefixes)))
+    return and_(~_covered_predicate(), or_(*clauses))
+
+
 def _filtered_events_stmt(
     host: str | None,
     start_date: datetime | None,
@@ -145,6 +160,7 @@ def _filtered_events_stmt(
     q: str | None = None,
     severity: str | None = None,
     covered: bool | None = None,
+    coverage: str | None = None,
 ):
     """Shared by list_events and count_events so the two never drift out of
     sync -- every filter is optional and additive (AND'd together).
@@ -201,6 +217,14 @@ def _filtered_events_stmt(
         stmt = stmt.where(_covered_predicate())
     elif covered is False:
         stmt = stmt.where(~_covered_predicate())
+    # `coverage` is the three-way form of `covered`: "checked" | "routine" |
+    # "unchecked" (see detection/coverage.py).
+    if coverage == "checked":
+        stmt = stmt.where(_covered_predicate())
+    elif coverage == "routine":
+        stmt = stmt.where(_routine_predicate())
+    elif coverage == "unchecked":
+        stmt = stmt.where(~_covered_predicate(), ~_routine_predicate())
     return stmt
 
 
@@ -215,6 +239,7 @@ def list_events(
     offset: int = 0,
     severity: str | None = None,
     covered: bool | None = None,
+    coverage: str | None = None,
 ) -> list[Event]:
     """Newest-first raw event list for `GET /events`, the full ingested
     timeline -- unlike `GET /incidents`, this includes events that never
@@ -223,7 +248,7 @@ def list_events(
     """
     # id as the tiebreaker: EVTX events routinely share a timestamp, and
     # without a total order Postgres may page the same row twice or skip one.
-    stmt = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity, covered).order_by(
+    stmt = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity, covered, coverage).order_by(
         Event.timestamp.desc(), Event.id.desc()
     )
     if limit is not None:
@@ -240,12 +265,13 @@ def count_events(
     q: str | None = None,
     severity: str | None = None,
     covered: bool | None = None,
+    coverage: str | None = None,
 ) -> int:
     """Total events matching the same filters as list_events, ignoring
     limit/offset -- lets `GET /events` report a page-independent `total`
     alongside the page of results.
     """
-    subq = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity, covered).subquery()
+    subq = _filtered_events_stmt(host, start_date, end_date, alert_only, q, severity, covered, coverage).subquery()
     return db.scalar(select(func.count()).select_from(subq)) or 0
 
 

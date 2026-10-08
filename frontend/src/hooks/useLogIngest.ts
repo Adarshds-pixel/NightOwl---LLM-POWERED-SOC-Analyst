@@ -10,6 +10,7 @@ export function useLogIngest() {
   const [pending, setPending] = useState(false)
   const [phase, setPhase] = useState<IngestPhase>('idle')
   const [progress, setProgress] = useState(0)
+  const [recordsRead, setRecordsRead] = useState(0)
   const [result, setResult] = useState<IngestResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -18,6 +19,7 @@ export function useLogIngest() {
       setPending(true)
       setPhase('uploading')
       setProgress(0)
+      setRecordsRead(0)
       setError(null)
       setResult(null)
       try {
@@ -29,7 +31,7 @@ export function useLogIngest() {
           // label rather than leaving the bar frozen at 100% with no
           // indication anything is still happening.
           if (fraction >= 1) setPhase('processing')
-        })
+        }, (job) => setRecordsRead(job.records_read))
         setResult(res)
         setPhase('done')
         // An ingest changes both the incident snapshot and the per-rule match
@@ -49,5 +51,5 @@ export function useLogIngest() {
     [refresh],
   )
 
-  return { pending, phase, progress, result, error, upload }
+  return { pending, phase, progress, recordsRead, result, error, upload }
 }

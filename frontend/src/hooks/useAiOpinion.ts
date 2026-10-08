@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getAiOpinion, type AiOpinionResponse } from '../api'
+import { getAiOpinion, retryAiOpinion, type AiOpinionResponse } from '../api'
 
 const POLL_INTERVAL_MS = 2000
 // ~60s cap -- comfortably past llm_client.py's own ~30s timeout + one retry,
@@ -30,6 +30,8 @@ export function useAiOpinion(opinionId: number | null) {
   const [error, setError] = useState<string | null>(null)
   const [stalled, setStalled] = useState(false)
   const attemptsRef = useRef(0)
+  // Bumped by retry() so the polling effect below restarts for the same id.
+  const [runKey, setRunKey] = useState(0)
 
   useEffect(() => {
     if (opinionId === null) {
@@ -74,7 +76,15 @@ export function useAiOpinion(opinionId: number | null) {
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [opinionId])
+  }, [opinionId, runKey])
 
-  return { opinion, error, stalled }
+  /** Re-run a failed opinion, then poll it again. */
+  function retry() {
+    if (opinionId === null) return
+    retryAiOpinion(opinionId)
+      .then(() => setRunKey((key) => key + 1))
+      .catch((err: Error) => setError(err.message))
+  }
+
+  return { opinion, error, stalled, retry }
 }

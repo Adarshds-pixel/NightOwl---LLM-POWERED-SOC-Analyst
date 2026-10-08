@@ -1,0 +1,39 @@
+title: User or Computer Account Modified by Another User Account
+id: 3a6d9e71-c082-4b5f-97a4-0e1f8b2c5d36
+status: experimental
+description: >
+  Detects Security events 4738 (user account changed) and 4742 (computer
+  account changed) performed by a person's account rather than by the system
+  or a machine account. Abusing write access to an account object (forcing a
+  password change, adding an SPN, editing attributes) shows up as exactly this.
+
+  Verified against real content: ACL_ForcePwd_SPNAdd_User_Computer_Accounts.evtx
+  (user bob changed alice's account five times and the ALICE$ computer
+  account). Machine-account and SYSTEM actors are excluded: on the benign
+  corpus the only 4738 events (15) are the server's own computer account
+  maintaining a local user. Low severity because helpdesk and admin work
+  produces the same event; it marks account changes worth a human glance.
+author: NightOwl
+date: 2026-10-08
+references:
+  - https://attack.mitre.org/techniques/T1098/
+tags:
+  - attack.persistence
+  - attack.t1098
+logsource:
+  service: security
+detection:
+  selection:
+    EventID:
+      - 4738
+      - 4742
+  filter_system_actors:
+    SubjectUserName|endswith: '$'
+  filter_builtin_actors:
+    SubjectUserName:
+      - '-'
+      - 'SYSTEM'
+      - 'LOCAL SERVICE'
+      - 'NETWORK SERVICE'
+  condition: selection and not filter_system_actors and not filter_builtin_actors
+level: low
