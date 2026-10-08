@@ -286,3 +286,22 @@ def test_chat_records_audit_event(api_client, monkeypatch):
     assert len(events) == 1
     assert events[0].action == "chat"
     assert events[0].actor == "system"
+
+
+def test_chat_audit_actor_is_the_caller(api_client, monkeypatch):
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+    monkeypatch.setattr("app.core.auth.settings.api_key", "test-key")
+    monkeypatch.setattr(
+        "app.api.routes_chat.generate_chat_reply",
+        lambda incident, history, message: ChatReplyResult(reply="Answer.", chunks=[]),
+    )
+
+    response = client.post(
+        f"/incidents/{incident_id}/chat", json={"message": "Why?"}, headers={"X-API-Key": "test-key"}
+    )
+    assert response.status_code == 200
+
+    with SessionLocal() as db:
+        event = db.query(AuditLog).filter_by(entity_id=incident_id, action="chat").one()
+    assert event.actor == "api-key"

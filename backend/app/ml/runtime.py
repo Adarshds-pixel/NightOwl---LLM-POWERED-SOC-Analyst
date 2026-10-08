@@ -46,7 +46,7 @@ def get_detector() -> AnomalyModelBundle | None:
             logger.exception("ML anomaly layer disabled: failed to load %s", MODEL_PATH)
             return None
         families = ", ".join(sorted(_bundle.families))
-        _status = f"loaded: models for {families} (trained {_bundle.created_at})"
+        _status = f"{families} models, trained {str(_bundle.created_at)[:10]}"
         logger.info("ML anomaly layer %s", _status)
         return _bundle
 

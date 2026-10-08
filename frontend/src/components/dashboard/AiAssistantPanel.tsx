@@ -17,7 +17,15 @@ import { Badge, Button, Card, EmptyState, SeverityBadge, TypingDots } from '../u
  * has actually completed. Before a run starts it shows what it is about to
  * do, never a fake transcript of work it has not done.
  */
-export function AiAssistantPanel({ incident }: { incident: IncidentSummary | null }) {
+export function AiAssistantPanel({
+  incident,
+  investigatingCount = 0,
+}: {
+  incident: IncidentSummary | null
+  /** Incidents already being worked: they are not suggested here, but their
+   *  existence changes what the empty state should say. */
+  investigatingCount?: number
+}) {
   const navigate = useNavigate()
   const { status: systemStatus, aiReady } = useSystemStatus()
   const [question, setQuestion] = useState('')
@@ -48,7 +56,11 @@ export function AiAssistantPanel({ incident }: { incident: IncidentSummary | nul
         <EmptyState
           icon={<Sparkles className="h-5 w-5" />}
           message="No open incident to analyse"
-          hint="Ingest logs, then the assistant will pick the highest-severity open incident to work on."
+          hint={
+            investigatingCount > 0
+              ? `${investigatingCount} incident${investigatingCount === 1 ? ' is' : 's are'} already under investigation -- open it from Incidents or the AI Assistant page.`
+              : 'Ingest logs, then the assistant will pick the highest-severity open incident to work on.'
+          }
         />
       ) : (
         <div className="flex flex-col gap-3">

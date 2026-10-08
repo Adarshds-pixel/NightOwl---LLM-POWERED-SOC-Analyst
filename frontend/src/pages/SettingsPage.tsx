@@ -271,8 +271,10 @@ function SettingsPage() {
                         key={label}
                         label={label}
                         value={
-                          <span className="flex items-center gap-1.5">
-                            <StatusDot tone={component.ready ? 'good' : 'bad'} pulse={false} />
+                          <span className="flex items-start gap-1.5 whitespace-normal">
+                            <span className="mt-1.5 shrink-0">
+                              <StatusDot tone={component.ready ? 'good' : 'bad'} pulse={false} />
+                            </span>
                             {component.detail}
                           </span>
                         }

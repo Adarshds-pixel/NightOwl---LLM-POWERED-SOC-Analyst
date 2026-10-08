@@ -203,10 +203,16 @@ function RulesPage() {
         />
         <StatCard
           label="Enabled"
-          value={rules.filter((rule) => rule.enabled).length}
+          value={rules.filter((rule) => rule.kind !== 'ml' && rule.enabled).length}
           icon={<Zap className="h-4 w-4" />}
           accent="magenta"
-          note={`of ${rules.length} detectors${rules.some((rule) => rule.kind === 'ml' && !rule.enabled) ? ' -- ML model not loaded' : ''}`}
+          note={`of ${rules.filter((rule) => rule.kind !== 'ml').length} rules and sequence detectors${
+            rules.some((rule) => rule.kind === 'ml')
+              ? rules.some((rule) => rule.kind === 'ml' && rule.enabled)
+                ? ' -- plus the ML model (advisory)'
+                : ' -- ML model not loaded'
+              : ''
+          }`}
         />
         <StatCard label="Triggered 24h" value={triggeredToday} icon={<Target className="h-4 w-4" />} accent="amber" note="In the 24 h before the latest alert" />
         <StatCard label="Never fired" value={rules.filter((rule) => rule.match_count === 0).length} icon={<CircleSlash className="h-4 w-4" />} accent="neutral" note="No match in the ingested data" />

@@ -69,7 +69,7 @@ function ThreatBanner({ level, activeCount }: { level: ThreatLevel; activeCount:
         Threat level <span className={clsx('font-semibold tracking-wide', style.text)}>{level}</span>
         <span className="text-text-faint">
           {' '}
-          -- {activeCount} active incident{activeCount === 1 ? '' : 's'} require attention
+          -- {activeCount} active incident{activeCount === 1 ? ' requires' : 's require'} attention
         </span>
       </p>
     </div>
@@ -204,7 +204,10 @@ function DashboardPage() {
           <HeatmapGrid incidents={incidents} techniqueById={byId} compact maxRows={7} />
         </Card>
         <div className="xl:col-span-4">
-          <AiAssistantPanel incident={focusIncident} />
+          <AiAssistantPanel
+            incident={focusIncident}
+            investigatingCount={incidents.filter((item) => item.status === 'investigating').length}
+          />
         </div>
       </div>
 

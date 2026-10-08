@@ -194,7 +194,7 @@ class AuditLogResponse(BaseModel):
 
 
 @router.post("/incidents/{incident_id}/explain", response_model=ExplainResponse)
-def explain_incident(incident_id: int, db: Session = Depends(get_db)) -> ExplainResponse:
+def explain_incident(incident_id: int, request: Request, db: Session = Depends(get_db)) -> ExplainResponse:
     incident = db.get(Incident, incident_id)
     if incident is None:
         raise not_found("incident", incident_id)
@@ -206,7 +206,9 @@ def explain_incident(incident_id: int, db: Session = Depends(get_db)) -> Explain
         if settings.response_cache_enabled:
             cache.set_explanation(cache_key, result)
 
-    audit_service.record_event(db, entity_type="incident", entity_id=incident_id, action="explain")
+    audit_service.record_event(
+        db, entity_type="incident", entity_id=incident_id, action="explain", actor=session_actor(request)
+    )
 
     return ExplainResponse(
         incident_id=incident_id,

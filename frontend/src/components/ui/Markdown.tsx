@@ -7,8 +7,8 @@ import type { ReactNode } from 'react'
  * The explain/chat prompts ask for markdown (## headings, numbered response
  * steps, **emphasis**), and printing that raw made the AI surfaces look
  * broken next to the rest of the console. This handles exactly the subset
- * the prompts produce -- headings, ordered and unordered lists, bold, and
- * inline code -- and treats everything else as plain text.
+ * the prompts produce -- headings, ordered and unordered lists, tables, bold,
+ * italics and inline code -- and treats everything else as plain text.
  *
  * Deliberately not a markdown library: this is a few dozen lines against a
  * known, machine-generated input, and it builds React nodes rather than
@@ -46,6 +46,36 @@ export function Markdown({ content, className }: { content: string; className?: 
           )
         }
 
+        if (block.kind === 'table') {
+          const [header, ...rows] = block.lines.map(tableCells)
+          return (
+            <div key={index} className="overflow-x-auto rounded-control border border-line-soft">
+              <table className="w-full border-collapse text-left text-meta">
+                <thead>
+                  <tr className="bg-surface-2/50">
+                    {header.map((cell, i) => (
+                      <th key={i} className="border-b border-line-soft px-2.5 py-1.5 align-top font-semibold text-text">
+                        {cellContent(cell)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, r) => (
+                    <tr key={r} className="border-b border-line-soft last:border-b-0">
+                      {row.map((cell, i) => (
+                        <td key={i} className="px-2.5 py-1.5 align-top">
+                          {cellContent(cell)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+
         if (block.kind === 'bullet') {
           return (
             <ul key={index} className="flex flex-col gap-1.5">
@@ -69,7 +99,7 @@ export function Markdown({ content, className }: { content: string; className?: 
   )
 }
 
-type Block = { kind: 'heading' | 'ordered' | 'bullet' | 'paragraph'; lines: string[] }
+type Block = { kind: 'heading' | 'ordered' | 'bullet' | 'table' | 'paragraph'; lines: string[] }
 
 function parseBlocks(content: string): Block[] {
   const blocks: Block[] = []
@@ -92,6 +122,17 @@ function parseBlocks(content: string): Block[] {
     if (heading) {
       push()
       blocks.push({ kind: 'heading', lines: [heading[1]] })
+      continue
+    }
+
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      // A |---|:---:| separator row only marks the header; it holds no data.
+      if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) continue
+      if (current?.kind !== 'table') {
+        push()
+        current = { kind: 'table', lines: [] }
+      }
+      current.lines.push(line)
       continue
     }
 
@@ -126,11 +167,21 @@ function parseBlocks(content: string): Block[] {
   return blocks
 }
 
-/** Bold and inline code within a line. Split on the markers, then style the
+function tableCells(row: string): string[] {
+  return row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim())
+}
+
+/** Models put <br> inside cells for line breaks; keep them as breaks
+ *  without ever interpreting markup. */
+function cellContent(cell: string): ReactNode[] {
+  return cell.split(/<br\s*\/?>/i).flatMap((part, i) => (i === 0 ? inline(part) : [<br key={`br${i}`} />, ...inline(part)]))
+}
+
+/** Bold, italics and inline code within a line. Split on the markers, then style the
  *  captured groups -- no HTML is ever produced. */
 function inline(text: string): ReactNode[] {
   return text
-    .split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
+    .split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*)/g)
     .filter((part) => part !== '')
     .map((part, index) => {
       if (part.startsWith('**') && part.endsWith('**')) {
@@ -138,6 +189,13 @@ function inline(text: string): ReactNode[] {
           <strong key={index} className="font-semibold text-text">
             {part.slice(2, -2)}
           </strong>
+        )
+      }
+      if (part.length > 2 && part.startsWith('*') && part.endsWith('*')) {
+        return (
+          <em key={index} className="italic">
+            {part.slice(1, -1)}
+          </em>
         )
       }
       if (part.startsWith('`') && part.endsWith('`')) {

@@ -1,7 +1,7 @@
 import { AlertTriangle, HelpCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import type { AiOpinionAssessment } from '../../api'
 import { useAiOpinion } from '../../hooks/useAiOpinion'
-import { AIThinking, Badge, Card, EmptyState, type Accent } from '../ui'
+import { AIThinking, Badge, Card, EmptyState, Markdown, type Accent } from '../ui'
 
 const ASSESSMENT_META: Record<AiOpinionAssessment, { label: string; accent: Accent; icon: typeof AlertTriangle }> = {
   worth_reviewing: { label: 'Worth reviewing', accent: 'amber', icon: AlertTriangle },
@@ -89,9 +89,7 @@ export function AiOpinionPanel({
               {assessment.label}
             </Badge>
           )}
-          <p className="whitespace-pre-wrap text-meta text-text-dim">
-            {opinion.summary ? stripTrailingHeadings(opinion.summary) : opinion.summary}
-          </p>
+          {opinion.summary && <Markdown content={stripTrailingHeadings(opinion.summary)} />}
           {opinion.attack_candidate_ids && opinion.attack_candidate_ids.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <span className="text-micro font-medium uppercase tracking-wide text-text-faint">
@@ -109,7 +107,7 @@ export function AiOpinionPanel({
           {opinion.limitations && (
             <div className="rounded-control border border-line bg-surface-2/40 px-3 py-2">
               <span className="text-micro font-medium uppercase tracking-wide text-text-faint">Limitations</span>
-              <p className="mt-1 whitespace-pre-wrap text-meta text-text-dim">{opinion.limitations}</p>
+              <Markdown content={opinion.limitations} className="mt-1" />
             </div>
           )}
         </div>

@@ -380,6 +380,40 @@ def _apply_security_aliases(data: dict[str, str | None]) -> dict[str, str | None
     return aliased
 
 
+# Authentication events whose account of interest is the one logging on
+# (TargetUserName); on these the Subject is the requesting service or machine
+# account, usually "-" or HOST$.
+_SECURITY_TARGET_ACCOUNT_EVENTS = frozenset({4624, 4625, 4634, 4647, 4648, 4768, 4769, 4771, 4776})
+
+
+def _security_value(data: dict[str, str | None], *names: str) -> str | None:
+    """First non-placeholder value: Security events write "-" for absent fields."""
+    for name in names:
+        value = data.get(name)
+        if value and value.strip() not in ("-", ""):
+            return value
+    return None
+
+
+def _make_security_default(event_id: int) -> Callable[[dict[str, str | None]], dict]:
+    """Every Security event other than 4688: promote the acting account and
+    process so the console, search and incident evidence can show who did it.
+    Rules are unaffected -- they read event_data, which keeps every field."""
+    user_fields = (
+        ("TargetUserName", "SubjectUserName")
+        if event_id in _SECURITY_TARGET_ACCOUNT_EVENTS
+        else ("SubjectUserName",)
+    )
+
+    def extract(data: dict[str, str | None]) -> dict:
+        return {
+            "process": _security_value(data, "ProcessName", "CallerProcessName"),
+            "user": _security_value(data, *user_fields),
+        }
+
+    return extract
+
+
 _SECURITY_EVENT_ID_DISPATCH: dict[int, Callable[[dict[str, str | None]], dict]] = {
     # 4688 (process creation): reuses the Sysmon extractor verbatim -- the
     # aliasing above has already renamed the Security fields onto the
@@ -443,6 +477,8 @@ def normalize_event(record: dict) -> NormalizedEvent:
         data = _apply_security_aliases(data)
     dispatch = _CHANNEL_DISPATCH_TABLES.get(token, _SYSMON_EVENT_ID_DISPATCH)
     extractor = dispatch.get(event_id)
+    if extractor is None and token == "security":
+        extractor = _make_security_default(event_id)
     type_fields = extractor(data) if extractor else {}
 
     return NormalizedEvent(

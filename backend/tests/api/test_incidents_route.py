@@ -368,3 +368,24 @@ def test_get_incident_audit_log_404_when_not_found(api_client):
 
     assert response.status_code == 404
     assert "999" in response.json()["detail"]
+
+
+def test_explain_incident_audit_actor_is_the_caller(api_client, monkeypatch):
+    """The audit actor comes from the authenticated caller, not a fixed
+    "system" placeholder."""
+    client, SessionLocal = api_client
+    incident_id = _insert_incident(SessionLocal)
+    monkeypatch.setattr("app.core.auth.settings.api_key", "test-key")
+    monkeypatch.setattr(
+        "app.api.routes_incidents.generate_explanation",
+        lambda incident: ExplanationResult(
+            explanation=SAMPLE_EXPLANATION, draft=SAMPLE_EXPLANATION, critique=None, chunks=SAMPLE_CHUNKS
+        ),
+    )
+
+    response = client.post(f"/incidents/{incident_id}/explain", headers={"X-API-Key": "test-key"})
+    assert response.status_code == 200
+
+    with SessionLocal() as db:
+        event = db.query(AuditLog).filter_by(entity_id=incident_id, action="explain").one()
+    assert event.actor == "api-key"

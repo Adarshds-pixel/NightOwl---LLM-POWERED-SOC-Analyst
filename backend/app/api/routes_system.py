@@ -49,8 +49,10 @@ def _knowledge_base_status() -> ComponentStatus:
 def _ml_status() -> ComponentStatus:
     from app.ml.runtime import get_detector_status
 
+    if settings.ml_mode == "off":
+        return ComponentStatus(ready=False, detail="disabled (ML_MODE=off)")
     ready, detail = get_detector_status()
-    return ComponentStatus(ready=ready, detail=detail)
+    return ComponentStatus(ready=ready, detail=f"{settings.ml_mode} mode: {detail}" if ready else detail)
 
 
 @router.get("/system/status", response_model=SystemStatusResponse)

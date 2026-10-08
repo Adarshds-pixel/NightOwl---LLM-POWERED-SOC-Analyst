@@ -330,6 +330,10 @@ def build_incident_evidence(db: Session, incident: Incident) -> dict:
     evidence["parent_process"] = primary_event.parent_process
     evidence["command_line"] = primary_event.command_line
     evidence["user"] = primary_event.user
+    # The detection's own time and source: without them the model only saw
+    # related-event timestamps and was observed inventing a different year.
+    evidence["event_time_utc"] = primary_event.timestamp.isoformat()
+    evidence["event_source"] = f"{primary_event.channel or 'unknown channel'} event {primary_event.event_id}"
 
     related = get_related_events(
         db, host=primary_event.host, around=primary_event.timestamp, exclude_event_id=primary_event.id

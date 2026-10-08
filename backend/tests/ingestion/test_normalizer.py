@@ -397,3 +397,32 @@ def test_normalize_event_sysmon_4688_lookalike_does_not_alias():
     )
     normalized = normalize_event(record)
     assert normalized.process is None
+
+
+def test_normalize_event_security_default_promotes_subject_and_caller_process():
+    """Security events other than 4688 still name who did it: 4799 carries
+    the enumerating account and process, which the console and incident
+    evidence need."""
+    record = _record(
+        "4799",
+        {
+            "SubjectUserName": "jbrown",
+            "CallerProcessName": r"C:\Windows\System32\net1.exe",
+            "TargetUserName": "Administrators",
+        },
+        channel="Security",
+    )
+    normalized = normalize_event(record)
+    assert normalized.user == "jbrown"
+    assert normalized.process == r"C:\Windows\System32\net1.exe"
+
+
+def test_normalize_event_security_logon_uses_target_account_and_skips_placeholders():
+    record = _record(
+        "4624",
+        {"SubjectUserName": "-", "TargetUserName": "alice", "ProcessName": "-"},
+        channel="Security",
+    )
+    normalized = normalize_event(record)
+    assert normalized.user == "alice"
+    assert normalized.process is None

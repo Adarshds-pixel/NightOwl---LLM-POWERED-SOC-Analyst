@@ -183,7 +183,7 @@ function MitrePage() {
           value={ruleTechniques.size}
           icon={<Radar className="h-4 w-4" />}
           accent="violet"
-          note={`${rules.length} detection rules loaded`}
+          note={`${rules.filter((rule) => rule.kind !== 'ml').length} rules and sequence detectors loaded`}
         />
         <StatCard
           label="Tactics active"

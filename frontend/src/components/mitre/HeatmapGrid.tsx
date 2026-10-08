@@ -17,7 +17,7 @@ import { EmptyState, FloatingTooltip } from '../ui'
  * leaves it off, because there it is a glanceable summary rather than a
  * coverage assessment.
  *
- * `compact` is the dashboard variant: abbreviated tactic labels, smaller
+ * `compact` is the dashboard variant: smaller
  * cells, a capped number of rows.
  */
 export function HeatmapGrid({
@@ -95,7 +95,7 @@ export function HeatmapGrid({
                       observed ? 'text-text-dim' : 'text-text-faint',
                     )}
                   >
-                    {compact ? shortLabel(tactic) : TACTIC_LABELS[tactic]}
+                    {TACTIC_LABELS[tactic]}
                   </span>
                   {!compact && (
                     <span className="mt-0.5 block truncate font-mono text-[9px] leading-tight text-text-faint tabular-nums">
@@ -180,14 +180,4 @@ export function HeatmapGrid({
       </div>
     </div>
   )
-}
-
-/** Two-letter-ish tactic abbreviations for the dashboard variant, matching
- *  the way the mockup labels its compact matrix columns. */
-function shortLabel(tactic: Tactic): string {
-  return TACTIC_LABELS[tactic]
-    .split(/[\s-]/)
-    .map((word) => word[0])
-    .join('')
-    .toUpperCase()
 }

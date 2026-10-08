@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { ApiError, resetDemoData } from '../api'
 import { DemoTerminal } from '../components/demo/DemoTerminal'
 import { PipelineFlow } from '../components/demo/PipelineFlow'
-import { Button, Card, EmptyState, MiniStat, Modal, PageHeader } from '../components/ui'
+import { Button, Card, EmptyState, Markdown, MiniStat, Modal, PageHeader } from '../components/ui'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { useToast } from '../context/toast/useToast'
 import { useDemoMode } from '../hooks/useDemoMode'
@@ -146,9 +146,9 @@ function DemoModePage() {
           {explainResult && (
             <div className="mt-4">
               <p className="text-micro font-semibold tracking-[0.12em] text-text-faint uppercase">AI explanation</p>
-              <p className="mt-1 line-clamp-4 text-body text-text-dim">
-                {explainResult.explanation.replace(/[#*`]/g, '').trim()}
-              </p>
+              <div className="mt-1 max-h-64 overflow-y-auto rounded-control border border-line-soft bg-surface-2/30 p-3">
+                <Markdown content={explainResult.explanation} />
+              </div>
             </div>
           )}
 
@@ -158,9 +158,9 @@ function DemoModePage() {
               <p className="text-meta text-text-muted">
                 <span className="text-text">Q:</span> {DEMO_CHAT_QUESTION}
               </p>
-              <p className="text-body text-text-dim">
-                <span className="text-text-muted">A:</span> {chatResult.content}
-              </p>
+              <div className="max-h-64 overflow-y-auto rounded-control border border-line-soft bg-surface-2/30 p-3">
+                <Markdown content={chatResult.content} />
+              </div>
             </div>
           )}
 

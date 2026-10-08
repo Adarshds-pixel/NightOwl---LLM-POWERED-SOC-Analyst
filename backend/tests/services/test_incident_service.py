@@ -310,6 +310,23 @@ def test_build_incident_evidence_includes_process_and_rule_from_the_first_alert(
         assert "additional_alerts" not in evidence
 
 
+def test_build_incident_evidence_includes_the_detection_time_and_source():
+    """The model needs the detection's own time to quote; without it, it was
+    seen inventing a different year from the related events' timestamps."""
+    real_rule = get_loaded_rules()[0]
+    with Session(_engine()) as db:
+        event = _insert_event(db, channel="Security", event_id=1102)
+        match = _match(rule_id=real_rule.rule_id, title=real_rule.title)
+        incident = find_or_create_incident(db, "HOST-A", BASE_TIME, match)
+        db.commit()
+        save_alerts(db, [(event.id, match, BASE_TIME, incident.id)])
+
+        evidence = build_incident_evidence(db, incident)
+
+        assert evidence["event_time_utc"].startswith(BASE_TIME.strftime("%Y-%m-%dT%H:%M"))
+        assert evidence["event_source"] == "Security event 1102"
+
+
 def test_build_incident_evidence_includes_parent_process():
     with Session(_engine()) as db:
         event = _insert_event(db, parent_process="explorer.exe")

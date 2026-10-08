@@ -18,10 +18,11 @@ question skips retrieval + the LLM call, and records an audit log event
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.auth import session_actor
 from app.core.config import settings
 from app.core.errors import not_found
 from app.db.session import get_db
@@ -73,7 +74,7 @@ class ChatHistoryResponse(BaseModel):
 
 @router.post("/incidents/{incident_id}/chat", response_model=ChatMessageResponse)
 def chat_with_incident(
-    incident_id: int, payload: ChatMessageRequest, db: Session = Depends(get_db)
+    incident_id: int, payload: ChatMessageRequest, request: Request, db: Session = Depends(get_db)
 ) -> ChatMessageResponse:
     incident = db.get(Incident, incident_id)
     if incident is None:
@@ -98,7 +99,9 @@ def chat_with_incident(
     add_message(db, incident_id, role="user", content=message)
     reply = add_message(db, incident_id, role="assistant", content=result.reply)
 
-    audit_service.record_event(db, entity_type="incident", entity_id=incident_id, action="chat")
+    audit_service.record_event(
+        db, entity_type="incident", entity_id=incident_id, action="chat", actor=session_actor(request)
+    )
 
     return ChatMessageResponse(
         incident_id=incident_id,
