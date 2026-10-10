@@ -2,7 +2,7 @@
 
 Everything about the project in one file: what it is, what you decided, what was built and why, what was measured, where it stands today, and what is left for you to do.
 
-> **Snapshot:** 8 October 2026 · branch `fix/production-readiness` (19 commits, **not pushed**) · 788 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **41** benign sample files read **Normal**.
+> **Snapshot:** 8 October 2026 · branch `fix/production-readiness` (19 commits, **not pushed**) · 787 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **41** benign sample files read **Normal**.
 >
 > This file is the story and the status. For deep technical reference (API tables, data model, environment variables, troubleshooting) see `docs/DOCUMENTATION.md`; for the machine-learning layer see `ML.md`; for the quick start see `README.md`.
 
@@ -208,7 +208,7 @@ Decisions that were made along the way and still stand (technical):
 
 **Verified**
 
-- 788 backend tests pass; frontend type-check and build pass; lint shows warnings only.
+- 787 backend tests pass; frontend type-check and build pass; lint shows warnings only.
 - Clean Docker install in production mode: migrations, knowledge-base build, login, Demo Mode, upload, incident, explain, chat, status change and audit, logout and session revocation.
 - The new routes and rules running **inside the production backend image** against a throwaway database.
 - A headless Chrome run on an isolated copy: Normal verdicts on benign files, log-clear notices with the account, Suspicious on attacks, the ML panel, the ML alerts view, the new Logs cards.
