@@ -410,3 +410,68 @@ def test_build_incident_evidence_counts_additional_alerts_instead_of_detailing_t
         evidence = build_incident_evidence(db, incident)
 
         assert evidence["additional_alerts"] == "1 more rule alert(s) matched on this incident, not individually listed here"
+
+
+def _rule(title):
+    return next(r for r in get_loaded_rules() if r.title == title)
+
+
+def _match_for(title):
+    rule = _rule(title)
+    return RuleMatch(
+        rule_id=rule.rule_id,
+        title=rule.title,
+        level=severity_service.compute_severity(rule.level, rule.tactics),
+        score=severity_service.compute_severity_score(rule.level, rule.tactics),
+        technique_id=rule.technique_id,
+    )
+
+
+LOG_CLEARED = "Security Audit Log Cleared"
+SPOOFING = "Computer Account Renamed Without Its Trailing $ (sAMAccountName Spoofing)"
+REMOTE_REGISTRY = "Remote Registry Access over IPC$ (winreg)"
+
+
+def test_a_cleared_log_never_headlines_an_incident_that_holds_the_attack_itself():
+    """Found in the 10 Oct 2026 fixture audit: seven incidents were titled
+    "Security Audit Log Cleared" while the real attack sat in the tags."""
+    with Session(_engine()) as db:
+        find_or_create_incident(db, "DC1", BASE_TIME, _match_for(SPOOFING))
+        merged = find_or_create_incident(db, "DC1", BASE_TIME + timedelta(seconds=40), _match_for(LOG_CLEARED))
+        db.commit()
+
+        assert merged.title == f"{SPOOFING} on DC1"
+        assert "T1685.005" in merged.mitre_technique_ids
+
+
+def test_a_real_attack_replaces_a_cleared_log_headline_even_at_lower_severity():
+    with Session(_engine()) as db:
+        first = find_or_create_incident(db, "DC1", BASE_TIME, _match_for(LOG_CLEARED))
+        cleared_score = first.severity_score
+        weaker = _match_for(REMOTE_REGISTRY)
+        assert weaker.score < cleared_score  # the case the old score-only rule got wrong
+        merged = find_or_create_incident(db, "DC1", BASE_TIME + timedelta(seconds=5), weaker)
+        db.commit()
+
+        assert merged.title == f"{REMOTE_REGISTRY} on DC1"
+        assert merged.severity_score == cleared_score  # the log clear still raises severity
+
+
+def test_a_stronger_attack_still_takes_the_title_after_a_log_clear_raised_the_score():
+    with Session(_engine()) as db:
+        find_or_create_incident(db, "DC1", BASE_TIME, _match_for(LOG_CLEARED))
+        find_or_create_incident(db, "DC1", BASE_TIME + timedelta(seconds=5), _match_for(REMOTE_REGISTRY))
+        stronger = _match_for(SPOOFING)
+        assert stronger.score > _match_for(REMOTE_REGISTRY).score
+        merged = find_or_create_incident(db, "DC1", BASE_TIME + timedelta(seconds=9), stronger)
+        db.commit()
+
+        assert merged.title == f"{SPOOFING} on DC1"
+
+
+def test_a_cleared_log_on_its_own_still_titles_its_incident():
+    with Session(_engine()) as db:
+        incident = find_or_create_incident(db, "PC01", BASE_TIME, _match_for(LOG_CLEARED))
+        db.commit()
+
+        assert incident.title == f"{LOG_CLEARED} on PC01"

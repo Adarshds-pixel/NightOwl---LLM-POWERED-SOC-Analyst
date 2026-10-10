@@ -48,6 +48,45 @@ RELATED_EVENTS_WINDOW = timedelta(minutes=5)
 RELATED_EVENTS_LIMIT = 5
 
 
+# Cover-up techniques (ATT&CK v19 T1685 family: an audit log cleared, an audit
+# policy weakened). An attacker does these *around* the real attack, and they
+# are rated high, so in the 10 Oct 2026 fixture audit seven incidents were
+# headlined "Security Audit Log Cleared" while the attack itself (sAMAccountName
+# spoofing, pass-the-hash, a remote SAM dump...) sat in the tags. A cover-up
+# detection still raises severity and adds its technique, but it only names the
+# incident when nothing else is in it.
+COVER_UP_TECHNIQUE_PREFIX = "T1685"
+
+
+def _is_cover_up(match: RuleMatch) -> bool:
+    return bool(match.technique_id) and match.technique_id.startswith(COVER_UP_TECHNIQUE_PREFIX)
+
+
+def _rule_behind_title(title: str):
+    """The rule or sequence pattern an incident is currently titled after
+    (titles are always "<rule title> on <host>", see _incident_title), or None
+    for a title this code did not write. Longest rule title wins, so one rule
+    title being a prefix of another cannot pick the wrong one."""
+    candidates = [*get_loaded_rules(), *NON_YAML_RULES.values()]
+    matching = [rule for rule in candidates if title.startswith(f"{rule.title} on ")]
+    return max(matching, key=lambda rule: len(rule.title), default=None)
+
+
+def _new_match_takes_title(existing: Incident, match: RuleMatch) -> bool:
+    current = _rule_behind_title(existing.title)
+    if current is None:
+        return match.score > existing.severity_score
+    current_is_cover_up = bool(current.technique_id) and current.technique_id.startswith(COVER_UP_TECHNIQUE_PREFIX)
+    if _is_cover_up(match) != current_is_cover_up:
+        # a real attack always replaces a cover-up headline; a cover-up never
+        # replaces a real attack's
+        return current_is_cover_up
+    # Compared with the titling rule's own score, not the incident's: the
+    # incident's score may have been raised by a cover-up that does not hold
+    # the title, and a stronger real detection must still be able to take it.
+    return match.score > severity_service.compute_severity_score(current.level, current.tactics)
+
+
 def _incident_title(match: RuleMatch, host: str) -> str:
     title = f"{match.title} on {host}"
     return title if len(title) <= INCIDENT_TITLE_MAX else title[: INCIDENT_TITLE_MAX - 1] + "\u2026"
@@ -80,7 +119,9 @@ def find_or_create_incident(
     On merge: technique id added if new; severity raised to the higher of the
     two; and when the new match is the most severe so far, the title follows
     it, so an incident never stays titled after a low-severity first alert
-    while holding a critical one.
+    while holding a critical one. Cover-up detections (a cleared log) are the
+    exception: they never headline an incident that also holds the attack
+    itself (see _new_match_takes_title).
 
     `advisory=True` (the ML anomaly layer) attaches to an existing incident
     without changing its title, severity or techniques. `create=False`
@@ -111,7 +152,7 @@ def find_or_create_incident(
             return existing
         if match.technique_id and match.technique_id not in existing.mitre_technique_ids:
             existing.mitre_technique_ids = [*existing.mitre_technique_ids, match.technique_id]
-        if match.score > existing.severity_score:
+        if _new_match_takes_title(existing, match):
             existing.title = _incident_title(match, host)
         existing.severity = severity_service.higher_severity(existing.severity, match.level)
         existing.severity_score = max(existing.severity_score, match.score)
