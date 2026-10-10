@@ -46,7 +46,7 @@ In every mode anomalies are excluded from `rule_matches`, `alerts_created`, "ale
 
 ## Training data
 
-`sample_logs/real_world_fixtures/NightOwl-Benign-Dataset/`: 31 EVTX files from **two machines** (`LAPTOP-5GVGMJ14`, `SERVER002`). Overlapping exports are de-duplicated by (host, channel, EventRecordID).
+`sample_logs/real_world_fixtures/NightOwl-Benign-Dataset/`: 17 EVTX files (14 fully redundant overlapping exports were removed on 10 October 2026; every record they held is still in the remaining files, so the training data is unchanged) from **two machines** (`LAPTOP-5GVGMJ14`, `SERVER002`). Overlapping exports are de-duplicated by (host, channel, EventRecordID).
 
 | Family | Benign windows | Features fitted (dropped) | Thresholds medium / high |
 |---|---:|---:|---:|

@@ -1,219 +1,121 @@
 [
     {
-        "File":  "system_baseline.evtx",
-        "Description":  "Baseline system log (covers scenarios 01-09)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "9ed43562ae1bc1c073960004ed7ee67847d2fc0c8da585225a4c42ddddc96848"
+        "File": "system_baseline.evtx",
+        "Description": "Baseline system log (covers scenarios 01-09)",
+        "SizeBytes": 4263936,
+        "SizeMB": 4.07,
+        "SHA256": "9ed43562ae1bc1c073960004ed7ee67847d2fc0c8da585225a4c42ddddc96848"
     },
     {
-        "File":  "system_final_session.evtx",
-        "Description":  "Final session system log (scenario 10)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "5af74fec00853cbdfbc309185333c60a7db37acf70d045648eb07e6b5237421a"
+        "File": "system_final_session.evtx",
+        "Description": "Final session system log (scenario 10)",
+        "SizeBytes": 4263936,
+        "SizeMB": 4.07,
+        "SHA256": "5af74fec00853cbdfbc309185333c60a7db37acf70d045648eb07e6b5237421a"
     },
     {
-        "File":  "application_session_early.evtx",
-        "Description":  "Early session application log (covers scenarios 01-04)",
-        "SizeBytes":  3215360,
-        "SizeMB":  3.07,
-        "SHA256":  "209dfa30b0f570603f5ddc84048cfc2fb83847daa21d665b310d9409c401950d"
+        "File": "application_session_early.evtx",
+        "Description": "Early session application log (covers scenarios 01-04)",
+        "SizeBytes": 3215360,
+        "SizeMB": 3.07,
+        "SHA256": "209dfa30b0f570603f5ddc84048cfc2fb83847daa21d665b310d9409c401950d"
     },
     {
-        "File":  "application_session_mid1.evtx",
-        "Description":  "Mid-session application log 1 (scenario 05)",
-        "SizeBytes":  3215360,
-        "SizeMB":  3.07,
-        "SHA256":  "c077f95963d96989bf3c4057140ca7075e558426b7587718e167b8212063d3f0"
+        "File": "application_session_mid2.evtx",
+        "Description": "Mid-session application log 2 (scenario 06)",
+        "SizeBytes": 3215360,
+        "SizeMB": 3.07,
+        "SHA256": "f3822be5d176bfaa02e9c0dba6035fa6fe888bedfcee20fd2a328b8d0e6c47ed"
     },
     {
-        "File":  "application_session_mid2.evtx",
-        "Description":  "Mid-session application log 2 (scenario 06)",
-        "SizeBytes":  3215360,
-        "SizeMB":  3.07,
-        "SHA256":  "f3822be5d176bfaa02e9c0dba6035fa6fe888bedfcee20fd2a328b8d0e6c47ed"
+        "File": "security_window_02.evtx",
+        "Description": "Security window 02 (15:49-16:00)",
+        "SizeBytes": 4263936,
+        "SizeMB": 4.07,
+        "SHA256": "0996a1c8e9192836a373c3ee93288853043cc96f88ff83b4ab62cdac4187dd72"
     },
     {
-        "File":  "application_session_late.evtx",
-        "Description":  "Late session application log (covers scenarios 07-10)",
-        "SizeBytes":  3215360,
-        "SizeMB":  3.07,
-        "SHA256":  "f34236216779fc856039c9f91b04ca9e2802c29cd4b56274e8bcf8a35dc42888"
+        "File": "security_window_10.evtx",
+        "Description": "Security window 10 (16:30-16:34)",
+        "SizeBytes": 4263936,
+        "SizeMB": 4.07,
+        "SHA256": "38c1663e88a8ce4cd1c8f665b9604cd76ae6e59ed28fd25ae1b63fb09067d9b2"
     },
     {
-        "File":  "security_window_01.evtx",
-        "Description":  "Security window 01 (15:48-15:56)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "8c9531c21837a9cff897b958a4d54d05404bcd660174daf4e22eda72228f43df"
+        "File": "sysmon_window_01.evtx",
+        "Description": "Sysmon window 01 (15:48-16:00)",
+        "SizeBytes": 5312512,
+        "SizeMB": 5.07,
+        "SHA256": "43d7f1cb4c5ca13e3d8fe508f76b62701c8146cc16eae298cdd8308c3275a7f9"
     },
     {
-        "File":  "security_window_02.evtx",
-        "Description":  "Security window 02 (15:49-16:00)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "0996a1c8e9192836a373c3ee93288853043cc96f88ff83b4ab62cdac4187dd72"
+        "File": "sysmon_window_04.evtx",
+        "Description": "Sysmon window 04 (15:59-16:11)",
+        "SizeBytes": 5312512,
+        "SizeMB": 5.07,
+        "SHA256": "7d4b97195e7ab7896845838359357f0e2cdda168e55e44b9a1a03a96d41ec1d9"
     },
     {
-        "File":  "security_window_03.evtx",
-        "Description":  "Security window 03 (15:54-16:02)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "3d3c58125c1c94ad03f720a3fbbb7bccc8f572ce8fcebfa441a65870f615cd0b"
+        "File": "sysmon_window_06.evtx",
+        "Description": "Sysmon window 06 (16:10-16:23, 7.4MB)",
+        "SizeBytes": 7409664,
+        "SizeMB": 7.07,
+        "SHA256": "bf24b66838c57576c3278e6f30511ac1e2e340272aaff31d9920249185b852f5"
     },
     {
-        "File":  "security_window_04.evtx",
-        "Description":  "Security window 04 (15:59-16:10)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "a09335f24c3c1529619ed4755c1367f1f5505eae5a6119106ceaa2dd163ccd71"
+        "File": "sysmon_window_08.evtx",
+        "Description": "Sysmon window 08 (16:14-16:28, 7.4MB)",
+        "SizeBytes": 7409664,
+        "SizeMB": 7.07,
+        "SHA256": "0d0ccd67d3f272e0ef827c6c52291a0711a9a1e9cacc533b43222de7df44d879"
     },
     {
-        "File":  "security_window_05.evtx",
-        "Description":  "Security window 05 (16:14-16:20)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "517fe2935736065524ab9ba2ad6002892589cd0bb4dbaeb096c890e433bf6e7c"
+        "File": "sysmon_window_09.evtx",
+        "Description": "Sysmon window 09 (16:21-16:30)",
+        "SizeBytes": 5312512,
+        "SizeMB": 5.07,
+        "SHA256": "fedfc01c6e7ffb375e392f0aa331e88a49f491ad9b8bff542630651eeb7416db"
     },
     {
-        "File":  "security_window_06.evtx",
-        "Description":  "Security window 06 (16:10-16:21)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "0b32f95fd920cdc1b05efab63e67dfec2d28a5a4c0b1df70e5d43542d89b24f4"
+        "File": "sysmon_window_10.evtx",
+        "Description": "Sysmon window 10 (16:30-16:35, 6.4MB)",
+        "SizeBytes": 6361088,
+        "SizeMB": 6.07,
+        "SHA256": "aea27a6e3bb8567f9c091eb5782fcc34aff64974b5c3059fbd4045f0ac30c01a"
     },
     {
-        "File":  "security_window_07.evtx",
-        "Description":  "Security window 07 (16:16-16:24)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "d75c4cc34fc5fb99dcb92490ad62c695159049cd239c02c6c18f2192cff266c4"
+        "SizeBytes": 4263936,
+        "Description": "New application logs from Server002",
+        "SHA256": "0f0770db3352dfc93d054f4f4deb960bd3ce0564724dcec9784c0ed4e8d25ced",
+        "File": "application_4100.evtx",
+        "SizeMB": 4.07
     },
     {
-        "File":  "security_window_08.evtx",
-        "Description":  "Security window 08 (16:14-16:26)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "887e83d0fd701b595c61d1aec8617ce926d6aa5975b06021d484f7fd8186645c"
+        "SizeBytes": 2166784,
+        "Description": "New PowerShell logs from Server002",
+        "SHA256": "fcac4a4f824a51788317a9f29a03ff355760d334dd524a0be1fe697c9bd1d019",
+        "File": "powershell_820.evtx",
+        "SizeMB": 2.07
     },
     {
-        "File":  "security_window_09.evtx",
-        "Description":  "Security window 09 (16:21-16:28)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "c3fb789b08e53d8da0bac27990a29df7b11c957378b5e72e5aaf40b46c7cca89"
+        "SizeBytes": 21041152,
+        "Description": "New security logs from Server002",
+        "SHA256": "64020ccb9b290b71cb0ab80a12858c6799062226cb40c2f4190845936df742e9",
+        "File": "security_32761.evtx",
+        "SizeMB": 20.07
     },
     {
-        "File":  "security_window_10.evtx",
-        "Description":  "Security window 10 (16:30-16:34)",
-        "SizeBytes":  4263936,
-        "SizeMB":  4.07,
-        "SHA256":  "38c1663e88a8ce4cd1c8f665b9604cd76ae6e59ed28fd25ae1b63fb09067d9b2"
+        "SizeBytes": 58789888,
+        "Description": "New sysmon logs from Server002",
+        "SHA256": "e7c7dfd52cbc5c8a5d15354c0abe8cfe21f25f7946a24db7f43865cac8cc1be0",
+        "File": "sysmon_48113.evtx",
+        "SizeMB": 56.07
     },
     {
-        "File":  "sysmon_window_01.evtx",
-        "Description":  "Sysmon window 01 (15:48-16:00)",
-        "SizeBytes":  5312512,
-        "SizeMB":  5.07,
-        "SHA256":  "43d7f1cb4c5ca13e3d8fe508f76b62701c8146cc16eae298cdd8308c3275a7f9"
-    },
-    {
-        "File":  "sysmon_window_02.evtx",
-        "Description":  "Sysmon window 02 (15:49-16:01)",
-        "SizeBytes":  5312512,
-        "SizeMB":  5.07,
-        "SHA256":  "6916da510927a0aa96ef9fba8bf885ad59570f4687dcae4fbdbfbbef3ff4c883"
-    },
-    {
-        "File":  "sysmon_window_03.evtx",
-        "Description":  "Sysmon window 03 (15:54-16:02)",
-        "SizeBytes":  5312512,
-        "SizeMB":  5.07,
-        "SHA256":  "f3c6b7a39153d0d4d2d1ebdcaf2ada381beb57cc30809971fdfb1bf033ec0557"
-    },
-    {
-        "File":  "sysmon_window_04.evtx",
-        "Description":  "Sysmon window 04 (15:59-16:11)",
-        "SizeBytes":  5312512,
-        "SizeMB":  5.07,
-        "SHA256":  "7d4b97195e7ab7896845838359357f0e2cdda168e55e44b9a1a03a96d41ec1d9"
-    },
-    {
-        "File":  "sysmon_window_05.evtx",
-        "Description":  "Sysmon window 05 (16:14-16:21)",
-        "SizeBytes":  5312512,
-        "SizeMB":  5.07,
-        "SHA256":  "bccf56dc29f124ab70731491565c7567a77dc61aa22f35cabf72ecedc7150bc8"
-    },
-    {
-        "File":  "sysmon_window_06.evtx",
-        "Description":  "Sysmon window 06 (16:10-16:23, 7.4MB)",
-        "SizeBytes":  7409664,
-        "SizeMB":  7.07,
-        "SHA256":  "bf24b66838c57576c3278e6f30511ac1e2e340272aaff31d9920249185b852f5"
-    },
-    {
-        "File":  "sysmon_window_07.evtx",
-        "Description":  "Sysmon window 07 (16:16-16:26)",
-        "SizeBytes":  5312512,
-        "SizeMB":  5.07,
-        "SHA256":  "642bcf6d77d1e6e6f15fed8a7d156dc567b96465cbb5ac1cf0af55a53ef1a0e9"
-    },
-    {
-        "File":  "sysmon_window_08.evtx",
-        "Description":  "Sysmon window 08 (16:14-16:28, 7.4MB)",
-        "SizeBytes":  7409664,
-        "SizeMB":  7.07,
-        "SHA256":  "0d0ccd67d3f272e0ef827c6c52291a0711a9a1e9cacc533b43222de7df44d879"
-    },
-    {
-        "File":  "sysmon_window_09.evtx",
-        "Description":  "Sysmon window 09 (16:21-16:30)",
-        "SizeBytes":  5312512,
-        "SizeMB":  5.07,
-        "SHA256":  "fedfc01c6e7ffb375e392f0aa331e88a49f491ad9b8bff542630651eeb7416db"
-    },
-    {
-        "File":  "sysmon_window_10.evtx",
-        "Description":  "Sysmon window 10 (16:30-16:35, 6.4MB)",
-        "SizeBytes":  6361088,
-        "SizeMB":  6.07,
-        "SHA256":  "aea27a6e3bb8567f9c091eb5782fcc34aff64974b5c3059fbd4045f0ac30c01a"
-    },
-    {
-        "SizeBytes":  4263936,
-        "Description":  "New application logs from Server002",
-        "SHA256":  "0f0770db3352dfc93d054f4f4deb960bd3ce0564724dcec9784c0ed4e8d25ced",
-        "File":  "application_4100.evtx",
-        "SizeMB":  4.07
-    },
-    {
-        "SizeBytes":  2166784,
-        "Description":  "New PowerShell logs from Server002",
-        "SHA256":  "fcac4a4f824a51788317a9f29a03ff355760d334dd524a0be1fe697c9bd1d019",
-        "File":  "powershell_820.evtx",
-        "SizeMB":  2.07
-    },
-    {
-        "SizeBytes":  21041152,
-        "Description":  "New security logs from Server002",
-        "SHA256":  "64020ccb9b290b71cb0ab80a12858c6799062226cb40c2f4190845936df742e9",
-        "File":  "security_32761.evtx",
-        "SizeMB":  20.07
-    },
-    {
-        "SizeBytes":  58789888,
-        "Description":  "New sysmon logs from Server002",
-        "SHA256":  "e7c7dfd52cbc5c8a5d15354c0abe8cfe21f25f7946a24db7f43865cac8cc1be0",
-        "File":  "sysmon_48113.evtx",
-        "SizeMB":  56.07
-    },
-    {
-        "SizeBytes":  3215360,
-        "Description":  "New system logs from Server002",
-        "SHA256":  "96872385d9a05d910ac427b2fe337c5470cd260f730f89edcefc0741c14cb861",
-        "File":  "system_5000.evtx",
-        "SizeMB":  3.07
+        "SizeBytes": 3215360,
+        "Description": "New system logs from Server002",
+        "SHA256": "96872385d9a05d910ac427b2fe337c5470cd260f730f89edcefc0741c14cb861",
+        "File": "system_5000.evtx",
+        "SizeMB": 3.07
     }
 ]

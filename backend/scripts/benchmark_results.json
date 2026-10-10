@@ -1,16 +1,16 @@
 {
   "summary": {
-    "rules_loaded": 66,
+    "rules_loaded": 69,
     "attack_captures": 61,
     "any_alert": 60,
     "correct_technique": 59,
-    "benign_files": 39,
-    "benign_events": 315337,
+    "benign_files": 25,
+    "benign_events": 252594,
     "false_positive_alerts": 0,
     "false_positive_matched_events": 0,
     "benign_files_with_alerts": 0,
     "false_positives_by_rule": {},
-    "elapsed_s": 26.9
+    "elapsed_s": 52.1
   },
   "attack": [
     {
@@ -99,6 +99,68 @@
       "correct": true
     },
     {
+      "name": "bits_openvpn.evtx",
+      "records": 1537,
+      "events": 1537,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"jobTitle\": \"539cd7d7.png\", \"jobId\": \"{80215064-c6f0-4685-b47e-d332ba28aee8}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
+        },
+        {
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"jobTitle\": \"47c090fb.png\", \"jobId\": \"{1d6e3e51-6951-43a4-bbca-90e01dc96b11}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
+        },
+        {
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"jobTitle\": \"a056b1a9.png\", \"jobId\": \"{f3d49906-7ab2-4777-aef7-22dbebde83ba}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
+        },
+        {
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"jobTitle\": \"aec87e7b.png\", \"jobId\": \"{8f215432-03cf-4e8e-bfc7-b813af2adb72}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
+        },
+        {
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"jobTitle\": \"ab170ec9.png\", \"jobId\": \"{3613c02a-20b8-427d-8f52-2f15f3627808}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
+        },
+        {
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
+          "occurrences": 3,
+          "sample": "{\"jobTitle\": \"745d396d.png\", \"jobId\": \"{21520820-83bb-4478-88ab-58942a960721}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
+        },
+        {
+          "rule": "BITS Job Created by a Process That Never Uses BITS",
+          "technique": "T1197",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"jobTitle\": \"efc1a28b.png\", \"jobId\": \"{2655ebaf-2c16-4e2d-90e3-99c5249cc4f3}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
+        }
+      ],
+      "expected": [
+        "T1197"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
       "name": "CA_4624_4625_LogonType2_LogonProc_chrome.evtx",
       "records": 4,
       "events": 4,
@@ -107,7 +169,7 @@
         {
           "rule": "Windows Logon Requested by a Non-Windows Process (Browser Credential Check)",
           "technique": "T1555.003",
-          "level": "medium",
+          "level": "low",
           "occurrences": 3,
           "sample": "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
         }
@@ -501,6 +563,27 @@
       "correct": true
     },
     {
+      "name": "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
+      "records": 20,
+      "events": 20,
+      "skipped": 0,
+      "alerts": [
+        {
+          "rule": "Named-Pipe Sweep (One Process Connecting to Many Distinct RPC Pipes in Seconds)",
+          "technique": "T1018",
+          "level": "low",
+          "occurrences": 1,
+          "sample": "(sequence)"
+        }
+      ],
+      "expected": [
+        "T1018",
+        "T1135"
+      ],
+      "any_alert": true,
+      "correct": true
+    },
+    {
       "name": "discovery_sysmon_3_Invoke_UserHunter_SourceMachine.evtx",
       "records": 9,
       "events": 9,
@@ -552,6 +635,13 @@
       "events": 1,
       "skipped": 0,
       "alerts": [
+        {
+          "rule": "PowerShell Script Block Obfuscated by String Splitting",
+          "technique": "T1027.010",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "{\"MessageNumber\": \"1\", \"MessageTotal\": \"1\", \"ScriptBlockText\": \"$Va5w3n8=(('Q'+'2h')+('w9p'+'1'));&('ne'+'w-'+'item') $eNV:teMP\\\\WOrd\\\\2019\\\\ -itemtype DIrectOr"
+        },
         {
           "rule": "Suspicious PowerShell WebClient Instantiation",
           "technique": "T1105",
@@ -909,7 +999,7 @@
         {
           "rule": "Process Spawned by WinRM/PSRemoting Host",
           "technique": "T1021.006",
-          "level": "high",
+          "level": "medium",
           "occurrences": 1,
           "sample": "\"C:\\Windows\\system32\\HOSTNAME.EXE\""
         }
@@ -985,7 +1075,7 @@
         {
           "rule": "Process Spawned by WinRM/PSRemoting Host",
           "technique": "T1021.006",
-          "level": "high",
+          "level": "medium",
           "occurrences": 1,
           "sample": "C:\\Windows\\system32\\cmd.exe /C ipconfig"
         }
@@ -1142,6 +1232,13 @@
           "level": "high",
           "occurrences": 1,
           "sample": "{\"RuleName\": null, \"UtcTime\": \"2019-05-26 15:47:57.628\", \"SourceProcessGuid\": \"{365abb72-b26b-5cea-0000-0010582a0800}\", \"SourceProcessId\": \"2744\", \"SourceImage\""
+        },
+        {
+          "rule": "Process Started as SYSTEM by a Parent Running as Another Account (Token Theft / Potato)",
+          "technique": "T1134.002",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "(sequence)"
         }
       ],
       "expected": [
@@ -1171,6 +1268,13 @@
           "level": "high",
           "occurrences": 1,
           "sample": "{\"RuleName\": \"Possible PrivEsc attempt - Rogue Spoolss Named Pipe\", \"EventType\": \"ConnectPipe\", \"UtcTime\": \"2020-05-02 18:01:54.863\", \"ProcessGuid\": \"{747f3d96-"
+        },
+        {
+          "rule": "Process Started as SYSTEM by a Parent Running as Another Account (Token Theft / Potato)",
+          "technique": "T1134.002",
+          "level": "high",
+          "occurrences": 1,
+          "sample": "(sequence)"
         }
       ],
       "expected": [
@@ -1198,6 +1302,13 @@
           "level": "medium",
           "occurrences": 2,
           "sample": "{\"SubjectUserSid\": \"S-1-5-21-308926384-506822093-3341789130-220106\", \"SubjectUserName\": \"samir\", \"SubjectDomainName\": \"3B\", \"SubjectLogonId\": \"0x000000000056751"
+        },
+        {
+          "rule": "Registry Hive Saved to an Admin Share (Remote SAM Dump)",
+          "technique": "T1003.002",
+          "level": "critical",
+          "occurrences": 6,
+          "sample": "{\"SubjectUserSid\": \"S-1-5-21-308926384-506822093-3341789130-220106\", \"SubjectUserName\": \"samir\", \"SubjectDomainName\": \"3B\", \"SubjectLogonId\": \"0x000000000056775"
         }
       ],
       "expected": [
@@ -1366,6 +1477,13 @@
       "skipped": 0,
       "alerts": [
         {
+          "rule": "Script or Executable Dropped in a Startup Folder",
+          "technique": "T1547.001",
+          "level": "medium",
+          "occurrences": 1,
+          "sample": "C:\\Windows\\system32\\cmd.exe"
+        },
+        {
           "rule": "File Creation Timestamp Backdated (Timestomping)",
           "technique": "T1070.006",
           "level": "medium",
@@ -1454,89 +1572,6 @@
       "correct": true
     },
     {
-      "name": "bits_openvpn.evtx",
-      "records": 1537,
-      "events": 1537,
-      "skipped": 0,
-      "alerts": [
-        {
-          "rule": "BITS Job Created by a Process That Never Uses BITS",
-          "technique": "T1197",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{\"jobTitle\": \"539cd7d7.png\", \"jobId\": \"{80215064-c6f0-4685-b47e-d332ba28aee8}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
-        },
-        {
-          "rule": "BITS Job Created by a Process That Never Uses BITS",
-          "technique": "T1197",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{\"jobTitle\": \"47c090fb.png\", \"jobId\": \"{1d6e3e51-6951-43a4-bbca-90e01dc96b11}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
-        },
-        {
-          "rule": "BITS Job Created by a Process That Never Uses BITS",
-          "technique": "T1197",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{\"jobTitle\": \"a056b1a9.png\", \"jobId\": \"{f3d49906-7ab2-4777-aef7-22dbebde83ba}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
-        },
-        {
-          "rule": "BITS Job Created by a Process That Never Uses BITS",
-          "technique": "T1197",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{\"jobTitle\": \"aec87e7b.png\", \"jobId\": \"{8f215432-03cf-4e8e-bfc7-b813af2adb72}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
-        },
-        {
-          "rule": "BITS Job Created by a Process That Never Uses BITS",
-          "technique": "T1197",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{\"jobTitle\": \"ab170ec9.png\", \"jobId\": \"{3613c02a-20b8-427d-8f52-2f15f3627808}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
-        },
-        {
-          "rule": "BITS Job Created by a Process That Never Uses BITS",
-          "technique": "T1197",
-          "level": "high",
-          "occurrences": 3,
-          "sample": "{\"jobTitle\": \"745d396d.png\", \"jobId\": \"{21520820-83bb-4478-88ab-58942a960721}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
-        },
-        {
-          "rule": "BITS Job Created by a Process That Never Uses BITS",
-          "technique": "T1197",
-          "level": "high",
-          "occurrences": 1,
-          "sample": "{\"jobTitle\": \"efc1a28b.png\", \"jobId\": \"{2655ebaf-2c16-4e2d-90e3-99c5249cc4f3}\", \"jobOwner\": \"MSEDGEWIN10\\\\IEUser\", \"processPath\": \"C:\\\\Windows\\\\SysWOW64\\\\notepa"
-        }
-      ],
-      "expected": [
-        "T1197"
-      ],
-      "any_alert": true,
-      "correct": true
-    },
-    {
-      "name": "Discovery_Remote_System_NamedPipes_Sysmon_18.evtx",
-      "records": 20,
-      "events": 20,
-      "skipped": 0,
-      "alerts": [
-        {
-          "rule": "Named-Pipe Sweep (One Process Connecting to Many Distinct RPC Pipes in Seconds)",
-          "technique": "T1018",
-          "level": "low",
-          "occurrences": 1,
-          "sample": "(sequence)"
-        }
-      ],
-      "expected": [
-        "T1018",
-        "T1135"
-      ],
-      "any_alert": true,
-      "correct": true
-    },
-    {
       "name": "discovery_sysmon_18_Invoke_UserHunter_NetSessionEnum_DC-srvsvc.evtx",
       "records": 1,
       "events": 1,
@@ -1596,22 +1631,6 @@
       "corpus": "NightOwl-Benign-Dataset"
     },
     {
-      "name": "application_session_late.evtx",
-      "records": 5000,
-      "events": 5000,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "application_session_mid1.evtx",
-      "records": 5000,
-      "events": 5000,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
       "name": "application_session_mid2.evtx",
       "records": 5002,
       "events": 5002,
@@ -1636,73 +1655,9 @@
       "corpus": "NightOwl-Benign-Dataset"
     },
     {
-      "name": "security_window_01.evtx",
-      "records": 5000,
-      "events": 5000,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
       "name": "security_window_02.evtx",
       "records": 5018,
       "events": 5018,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "security_window_03.evtx",
-      "records": 5001,
-      "events": 5001,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "security_window_04.evtx",
-      "records": 5001,
-      "events": 5001,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "security_window_05.evtx",
-      "records": 5004,
-      "events": 5004,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "security_window_06.evtx",
-      "records": 5000,
-      "events": 5000,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "security_window_07.evtx",
-      "records": 5000,
-      "events": 5000,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "security_window_08.evtx",
-      "records": 5000,
-      "events": 5000,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "security_window_09.evtx",
-      "records": 5000,
-      "events": 5000,
       "skipped": 0,
       "alerts": [],
       "corpus": "NightOwl-Benign-Dataset"
@@ -1732,22 +1687,6 @@
       "corpus": "NightOwl-Benign-Dataset"
     },
     {
-      "name": "sysmon_window_02.evtx",
-      "records": 3048,
-      "events": 3048,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "sysmon_window_03.evtx",
-      "records": 3048,
-      "events": 3048,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
       "name": "sysmon_window_04.evtx",
       "records": 3096,
       "events": 3096,
@@ -1756,25 +1695,9 @@
       "corpus": "NightOwl-Benign-Dataset"
     },
     {
-      "name": "sysmon_window_05.evtx",
-      "records": 3316,
-      "events": 3316,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
       "name": "sysmon_window_06.evtx",
       "records": 5069,
       "events": 5069,
-      "skipped": 0,
-      "alerts": [],
-      "corpus": "NightOwl-Benign-Dataset"
-    },
-    {
-      "name": "sysmon_window_07.evtx",
-      "records": 3325,
-      "events": 3325,
       "skipped": 0,
       "alerts": [],
       "corpus": "NightOwl-Benign-Dataset"

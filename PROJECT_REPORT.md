@@ -2,7 +2,7 @@
 
 Everything about the project in one file: what it is, what you decided, what was built and why, what was measured, where it stands today, and what is left for you to do.
 
-> **Snapshot:** 8 October 2026 · branch `fix/production-readiness` (21 commits, **not pushed**) · 788 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **41** benign sample files read **Normal**.
+> **Snapshot:** 10 October 2026 · branch `fix/production-readiness` (30 commits, **not pushed**) · 807 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
 >
 > This file is the story and the status. For deep technical reference (API tables, data model, environment variables, troubleshooting) see `docs/DOCUMENTATION.md`; for the machine-learning layer see `ML.md`; for the quick start see `README.md`.
 
@@ -84,7 +84,7 @@ It is not "a SOC platform that detects every attack". It is an evidence-driven i
 ```
 EVTX upload (one file = one channel)
   → read & normalise (UTC time, channel, fields incl. UserData)       → events
-  → detect: 66 Sigma-style rules per event + 10 sequence detectors     → alerts
+  → detect: 69 Sigma-style rules per event + 11 sequence detectors     → alerts
   → classify every event type: checked / everyday / unchecked
   → correlate: sliding 1-hour window per host                         → incidents
   → ML anomaly layer (advisory): unusual 10-minute windows            → alerts (kind=ml)
@@ -189,8 +189,8 @@ Decisions that were made along the way and still stand (technical):
 |---|---|---|
 | Attack captures with the **correct ATT&CK technique** | **59 / 61** (was 52 / 60) | `run_detection_benchmark.py` |
 | Attack captures raising any alert | 60 / 61 | same |
-| False alarms on 39 benign captures (315,337 events) | **0** (was 5) | same |
-| Verdict for each of the 102 sample files | 41 benign → **Normal**; 60 attack → Suspicious; 1 → Review recommended | `upload_sweep.py` |
+| False alarms on 25 benign captures (252,594 events) | **0** (was 5) | same |
+| Verdict for each of the 88 sample files | 27 benign → **Normal**; 60 attack → Suspicious; 1 → Review recommended | `upload_sweep.py` |
 | Backend tests | 778 offline + 5 integration | `pytest` |
 | ML false windows per machine per day (held-out benign) | 1.3 – 4.5 | `eval_ml_model.py` |
 
@@ -208,7 +208,7 @@ Decisions that were made along the way and still stand (technical):
 
 **Verified**
 
-- 788 backend tests pass; frontend type-check and build pass; lint shows warnings only.
+- 807 backend tests pass; frontend type-check and build pass; lint shows warnings only.
 - Clean Docker install in production mode: migrations, knowledge-base build, login, Demo Mode, upload, incident, explain, chat, status change and audit, logout and session revocation.
 - The new routes and rules running **inside the production backend image** against a throwaway database.
 - A headless Chrome run on an isolated copy: Normal verdicts on benign files, log-clear notices with the account, Suspicious on attacks, the ML panel, the ML alerts view, the new Logs cards.
@@ -220,6 +220,24 @@ Decisions that were made along the way and still stand (technical):
 - The last frontend tweak (shortened provider list) is built into your container but not re-screenshotted.
 
 **Your running stack** (http://localhost:5173) is rebuilt with all of this. Its database still holds the audit uploads; use Demo Mode → Reset demo data for a clean slate.
+
+---
+
+## 7b. The 10 October 2026 fixture audit and what it changed
+
+All 95 real-world captures were judged independently from their raw content, the data was reset, every file was uploaded through the Logs page in Chrome, and the two were compared. NightOwl's verdict matched on every file (59 attack captures Suspicious, the NTLM relay capture Suspicious, one ambiguous single-event capture Review recommended, 34 benign captures Normal). The audit found five problems; four are fixed, one needs data.
+
+| Problem found | Fix | Commit |
+|---|---|---|
+| Seven incidents were titled "Security Audit Log Cleared" while the real attack sat in the tags | A cover-up detection (the T1685 family) never headlines an incident that also holds the attack; it still raises severity and adds its technique | `0da23e3` |
+| Five detections named a weaker technique than the evidence | Four new detections: registry hive saved to an admin share (T1003.002), PowerShell obfuscated by string splitting (T1027.010), script or executable dropped in a Startup folder (T1547.001), SYSTEM process started by a parent running as another account (T1134.002). The Meterpreter process-listing capture was left as is: the tool does open LSASS with memory-read access | `28e5be4` |
+| The AI second opinion was wrong or misleading on 5 of 10 opinions | It now receives a real name for every event type and for documented RPC interfaces; pipe events of a burst a detector already flagged are no longer sent to it; when a file has detections it gets no technique documents to borrow from; the prompt forbids identifying an unnamed identifier | `e9bc4d9` |
+| Two rules were one severity step too loud | Browser credential-check logon is now low; a single WinRM command is now medium | `c4914ec` |
+| ML raised 36 unusual windows on benign files and 23 on attack files | Not fixed. It stays advisory until retrained on benign logs from more machines | pending data |
+
+**Duplicate fixtures removed.** 14 files in `NightOwl-Benign-Dataset` were fully redundant overlapping exports (`security_window_01, 03–09`, `sysmon_window_02, 03, 05, 07`, `application_session_late`, `application_session_mid1`). Every record they held is in a file that remains, and ML training already de-duplicates by host, channel and record ID, so the training data is unchanged. The dataset is now 17 files; the benchmark's benign corpus is 25 captures (252,594 events).
+
+**Known gaps from the audit run.** The browser tab froze once right after the 56 MB upload completed on the server, while the audit's upload script was holding two very large files in memory; a fresh tab handled the 63 MB file normally. It was not reproduced, and not proven to be the script.
 
 ---
 

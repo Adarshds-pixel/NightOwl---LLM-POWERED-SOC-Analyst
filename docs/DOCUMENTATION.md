@@ -21,7 +21,7 @@ EVTX upload (one file = one channel)
 Ingestion     evtx_reader -> normalizer -> NormalizedEvent        --> events
    |          (de-duplicated by host + channel + EventRecordID)
    v
-Detection     66 Sigma-style YAML rules, per event
+Detection     69 Sigma-style YAML rules, per event
               + 10 multi-event sequence detectors, per batch      --> alerts
    |          severity = Sigma level + ATT&CK tactic weight
    |          repeat matches (same rule/host/process, 60 s) fold into one alert
@@ -459,7 +459,7 @@ The default run excludes tests marked `integration` and runs against in-memory S
 
 `backend/sample_logs/real_world_fixtures/` holds real, independently sourced EVTX captures:
 - **`detected/`** (59) and **`undetected/`** (2): attack captures, split by the current rules' results. The split is an *output* of `build_failure_matrix.py`, which rescans both folders every run.
-- **`NightOwl-Benign-Dataset/`** (31 EVTX + `manifest.json`): real workstation and server captures, used as the false-positive corpus and as the ML baseline.
+- **`NightOwl-Benign-Dataset/`** (17 EVTX + `manifest.json`): real workstation and server captures, used as the false-positive corpus and as the ML baseline.
 
 The expected techniques per capture are in `backend/scripts/fixture_ground_truth.json`.
 
@@ -475,7 +475,7 @@ cd backend
 |---|---|
 | Attack captures detected with the correct ATT&CK technique | **59/61** |
 | Attack captures raising any alert | 60/61 |
-| False-positive alerts on 39 benign captures (315,337 events) | **0** |
+| False-positive alerts on 25 benign captures (252,594 events) | **0** |
 
 **Correction (2026-10-08):** `bits_openvpn.evtx` was earlier written off as a mislabelled benign capture. It is malicious: a 32-bit `SysWOW64
 otepad.exe` (which never uses BITS) creates BITS jobs with random names that download `https://i.imgur.com/IFpvPlt.png` every few minutes. Classing the whole BITS log as "everyday" briefly made it read Normal. BITS is no longer everyday, and a rule flags BITS jobs created by processes that never use BITS.
@@ -490,7 +490,7 @@ These are **development-set figures**: every attack capture informed rule develo
 
 | Group | Result |
 |---|---|
-| 41 benign files (the benign dataset, the real-world benign set, the synthetic noise, `sample.evtx`, `sysmon_demo.evtx`) | **41 Normal** |
+| 27 benign files (the benign dataset, the real-world benign set, the synthetic noise, `sample.evtx`, `sysmon_demo.evtx`) | **27 Normal** |
 | 61 attack captures | 60 Suspicious, 1 Review recommended |
 
 **Caveat:** the "everyday" event lists were derived from, and are checked against, the same benign corpus. A machine that behaves differently can still show Review recommended. Re-run the sweep on any new benign logs; every file that is not Normal is either a new everyday event type to add to `detection/coverage.py` (with its reason) or a real finding.

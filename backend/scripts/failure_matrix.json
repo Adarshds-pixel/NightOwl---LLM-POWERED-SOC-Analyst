@@ -1223,26 +1223,30 @@
     "uncovered_count": 0,
     "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "4e8a1c73-6d2f-4b95-a7c8-3e0d5f9b2a48"
+      "4e8a1c73-6d2f-4b95-a7c8-3e0d5f9b2a48",
+      "c4e8a1d6-3f72-4b95-a0c8-2e6d9b1f5a37"
     ],
     "matched_rule_titles": [
+      "PowerShell Script Block Obfuscated by String Splitting",
       "Suspicious PowerShell WebClient Instantiation"
     ],
     "matched_technique_ids": [
+      "T1027.010",
       "T1105"
     ],
-    "alerts_created": 1,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1027.010",
       "T1105"
     ],
     "detected": true,
     "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Suspicious PowerShell WebClient Instantiation",
+    "reason": "detected -- PowerShell Script Block Obfuscated by String Splitting, Suspicious PowerShell WebClient Instantiation",
     "manual_review_needed": false
   },
   {
@@ -2392,26 +2396,30 @@
     "uncovered_count": 0,
     "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "034c5169-8d14-43af-9061-b7417bc636ca"
+      "034c5169-8d14-43af-9061-b7417bc636ca",
+      "sequence-system-child-of-user-process"
     ],
     "matched_rule_titles": [
+      "Process Started as SYSTEM by a Parent Running as Another Account (Token Theft / Potato)",
       "Remote Thread Creation from Scripting Engine or Web Server Process"
     ],
     "matched_technique_ids": [
-      "T1055"
+      "T1055",
+      "T1134.002"
     ],
-    "alerts_created": 1,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1055"
+      "T1055",
+      "T1134.002"
     ],
     "detected": true,
     "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Remote Thread Creation from Scripting Engine or Web Server Process",
+    "reason": "detected -- Process Started as SYSTEM by a Parent Running as Another Account (Token Theft / Potato), Remote Thread Creation from Scripting Engine or Web Server Process",
     "manual_review_needed": false
   },
   {
@@ -2444,26 +2452,30 @@
       }
     ],
     "matched_rule_ids": [
-      "01a199bd-19b8-46ac-a89a-ece738b3a5e5"
+      "01a199bd-19b8-46ac-a89a-ece738b3a5e5",
+      "sequence-system-child-of-user-process"
     ],
     "matched_rule_titles": [
+      "Process Started as SYSTEM by a Parent Running as Another Account (Token Theft / Potato)",
       "Rogue Named Pipe with a Nested \\pipe\\ Path (PrintSpoofer / Potato)"
     ],
     "matched_technique_ids": [
-      "T1134.001"
+      "T1134.001",
+      "T1134.002"
     ],
-    "alerts_created": 2,
+    "alerts_created": 3,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1134.001"
+      "T1134.001",
+      "T1134.002"
     ],
     "detected": true,
     "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Rogue Named Pipe with a Nested \\pipe\\ Path (PrintSpoofer / Potato)",
+    "reason": "detected -- Process Started as SYSTEM by a Parent Running as Another Account (Token Theft / Potato), Rogue Named Pipe with a Nested \\pipe\\ Path (PrintSpoofer / Potato)",
     "manual_review_needed": false
   },
   {
@@ -2510,21 +2522,25 @@
     ],
     "matched_rule_ids": [
       "1e6b8a34-9f27-4c60-a3d5-2b7e4f9c8d15",
+      "7d2b9e4a-6c13-4f85-b7a2-1e5c8d0f3a69",
       "8f1c6a3e-2d5b-4e9a-9c7f-1a3b5d7e9f21"
     ],
     "matched_rule_titles": [
+      "Registry Hive Saved to an Admin Share (Remote SAM Dump)",
       "Remote Registry Access over IPC$ (winreg)",
       "Security Audit Log Cleared"
     ],
     "matched_technique_ids": [
+      "T1003.002",
       "T1012",
       "T1685.005"
     ],
-    "alerts_created": 2,
+    "alerts_created": 3,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
+      "T1003.002",
       "T1012",
       "T1685.005"
     ],
@@ -2532,7 +2548,7 @@
     "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- Remote Registry Access over IPC$ (winreg), Security Audit Log Cleared",
+    "reason": "detected -- Registry Hive Saved to an Admin Share (Remote SAM Dump), Remote Registry Access over IPC$ (winreg), Security Audit Log Cleared",
     "manual_review_needed": false
   },
   {
@@ -2831,26 +2847,30 @@
     "uncovered_count": 0,
     "uncovered_breakdown": [],
     "matched_rule_ids": [
-      "49c6ddee-506c-4b31-9370-57437f62a3cf"
+      "49c6ddee-506c-4b31-9370-57437f62a3cf",
+      "5b0f3c7e-9a41-4d2c-8e16-7c2d4f6a8b10"
     ],
     "matched_rule_titles": [
-      "File Creation Timestamp Backdated (Timestomping)"
+      "File Creation Timestamp Backdated (Timestomping)",
+      "Script or Executable Dropped in a Startup Folder"
     ],
     "matched_technique_ids": [
-      "T1070.006"
+      "T1070.006",
+      "T1547.001"
     ],
-    "alerts_created": 1,
+    "alerts_created": 2,
     "incident_ids": [
       1
     ],
     "mitre_technique_ids": [
-      "T1070.006"
+      "T1070.006",
+      "T1547.001"
     ],
     "detected": true,
     "correct_technique": true,
     "classification_codes": [],
     "classification_labels": [],
-    "reason": "detected -- File Creation Timestamp Backdated (Timestomping)",
+    "reason": "detected -- File Creation Timestamp Backdated (Timestomping), Script or Executable Dropped in a Startup Folder",
     "manual_review_needed": false
   },
   {
