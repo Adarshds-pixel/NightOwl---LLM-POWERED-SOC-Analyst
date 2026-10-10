@@ -4,22 +4,22 @@ Enable with NIGHTOWL_EVTX_BACKEND=rust on Linux / Docker (on a case-insensitive
 filesystem its `evtx` package collides with python-evtx's `Evtx` directory, so
 on Windows it reports itself unavailable).
 
-Measured over all 102 sample captures (257,241 records): it parses them in
-about 4 s in total instead of minutes -- but it is NOT output-equivalent to
-python-evtx, which is why it is not the default:
-  * only 10 of 97 comparable files normalize identically;
+Measured over all 102 sample captures (348,188 records, 10 October 2026): it
+reads them in 16 s in total instead of many minutes -- but a record-by-record
+comparison found 0 records identical to python-evtx, which is why it is off:
+  * 55% of record timestamps differ by 1-2 microseconds (python-evtx computes
+    them in floating point; the Rust output lacks the digits to reproduce it);
   * hex numbers are not zero-padded (`0x3e7` vs `0x00000000000003e7`);
-  * timestamps inside EventData are ISO ("...T07:36:48.809649Z") rather than
-    python-evtx's "YYYY-MM-DD HH:MM:SS+00:00";
-  * typed GUIDs are bare uppercase (handled below);
-  * EventData blocks without field names render differently;
-  * a few captures are rejected outright (the caller falls back to python-evtx);
-  * record timestamps differ by at most 1 microsecond (rounding).
+  * typed GUIDs are bare uppercase (the one difference handled below);
+  * booleans are lowercase, empty attributes are omitted, binary data is hex
+    rather than base64, string lists are separate elements;
+  * typed timestamps inside EventData are ISO ("...T07:36:48.809649Z");
+  * 19 records are not well-formed XML (stray control characters);
+  * some files end with an unused chunk the parser raises on after the last
+    record (all records are still returned before that).
 Rules, sequence detectors and the ML features were all built and benchmarked on
-python-evtx output, so switching backends changes what they see. Before ever
-making this the default, the differences above must be closed and
-`scripts/check_evtx_backend_equivalence.py` (run on Linux, where both parsers
-import) must report zero differing records.
+python-evtx output, so the project decision is to keep python-evtx. This module
+is kept only so the measurement can be repeated.
 """
 
 import re
