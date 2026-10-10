@@ -126,6 +126,14 @@ BULK_GROUP_ADDITION = SequencePattern(
     level="medium",
 )
 
+SYSTEM_CHILD_OF_USER_PROCESS = SequencePattern(
+    rule_id="sequence-system-child-of-user-process",
+    title="Process Started as SYSTEM by a Parent Running as Another Account (Token Theft / Potato)",
+    technique_id="T1134.002",  # Create Process with Token
+    tactics=["privilege_escalation"],
+    level="high",
+)
+
 # The (channel token, event id) pairs the detectors above read. Coverage
 # reporting counts these as CHECKED: before, a failed logon (4625) or a Kerberos
 # event (4768/4771) was reported as "no rule coverage" although the brute-force
@@ -168,6 +176,7 @@ SEQUENCE_PATTERNS: dict[str, SequencePattern] = {
     BULK_GROUP_ADDITION.rule_id: BULK_GROUP_ADDITION,
     SMB_FAN_OUT.rule_id: SMB_FAN_OUT,
     NAMED_PIPE_SWEEP.rule_id: NAMED_PIPE_SWEEP,
+    SYSTEM_CHILD_OF_USER_PROCESS.rule_id: SYSTEM_CHILD_OF_USER_PROCESS,
 }
 
 # SMB fan-out: one process on one host opening port-445 connections to this
@@ -654,6 +663,46 @@ def _detect_group_membership_abuse(rows: list[EventRow]) -> list[tuple[Event, Ru
     return matches
 
 
+# A process running as SYSTEM whose parent runs as a different account. Windows
+# itself starts SYSTEM processes from SYSTEM parents (services.exe, svchost.exe,
+# wininit.exe); a user or a service account producing a SYSTEM child means the
+# parent got hold of a SYSTEM token -- the end state of the "potato" family and
+# of PrintSpoofer. Verified against privesc_rotten_potato_...sysmon_1_8_3.evtx
+# (notepad.exe as IIS APPPOOL\DefaultAppPool -> notepad.exe as SYSTEM) and
+# privesc_seimpersonate_tosys_spoolsv_sysmon_17_18.evtx (PrintSpoofer.exe as
+# IEUser -> powershell.exe as SYSTEM). Measured on all 95 real-world fixtures on
+# 2026-10-10: those two processes match and none of the 60,000+ benign process
+# starts does. A parent whose account is unknown ("-", or a parent started
+# before the capture and a Sysmon too old to log ParentUser) is never guessed at.
+_SYSTEM_ACCOUNT = "nt authority\\system"
+
+
+def _detect_system_child_of_user_process(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
+    user_of: dict[tuple[str, str], str] = {}
+    creations: list[EventRow] = []
+    for event, normalized in rows:
+        if not (_is_sysmon(normalized) and normalized.event_id == 1):
+            continue
+        creations.append((event, normalized))
+        guid = normalized.event_data.get("ProcessGuid")
+        user = (normalized.event_data.get("User") or "").strip().lower()
+        if guid and user:
+            user_of[(normalized.host, guid)] = user
+
+    matches: list[tuple[Event, RuleMatch]] = []
+    for event, normalized in creations:
+        data = normalized.event_data
+        if (data.get("User") or "").strip().lower() != _SYSTEM_ACCOUNT:
+            continue
+        parent_user = (data.get("ParentUser") or "").strip().lower()
+        if parent_user in ("", "-"):
+            parent_user = user_of.get((normalized.host, data.get("ParentProcessGuid") or ""), "")
+        if parent_user in ("", "-", _SYSTEM_ACCOUNT):
+            continue
+        matches.append((event, _match(SYSTEM_CHILD_OF_USER_PROCESS)))
+    return matches
+
+
 def detect_sequences(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
     """Runs all three patterns over one ingest batch's (Event row,
     NormalizedEvent) pairs. Returns (anchor_event, RuleMatch) pairs in the
@@ -672,4 +721,5 @@ def detect_sequences(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
         + _detect_smb_fan_out(rows)
         + _detect_named_pipe_sweep(rows)
         + _detect_group_membership_abuse(rows)
+        + _detect_system_child_of_user_process(rows)
     )

@@ -57,7 +57,49 @@ def test_every_sequence_detector_input_counts_as_checked():
     checked = _checked()
     for pair in (("sysmon", 3), ("sysmon", 18), ("security", 4625), ("security", 5145), ("application", 18456)):
         assert pair in checked
-    assert len(SEQUENCE_PATTERNS) == 10  # eight originals + SMB fan-out + named-pipe sweep
+    # eight originals + SMB fan-out + named-pipe sweep + SYSTEM child of a user process
+    assert len(SEQUENCE_PATTERNS) == 11
+
+
+def _process(user, guid, parent_guid, parent_user=None, image="C:\\Windows\\System32\\notepad.exe"):
+    data = {"User": user, "ProcessGuid": guid, "ParentProcessGuid": parent_guid, "Image": image}
+    if parent_user is not None:
+        data["ParentUser"] = parent_user
+    return _row(1, data)
+
+
+def _token_theft_matches(rows):
+    from app.detection.sequences import SYSTEM_CHILD_OF_USER_PROCESS
+
+    return [m for _a, m in detect_sequences(rows) if m.rule_id == SYSTEM_CHILD_OF_USER_PROCESS.rule_id]
+
+
+def test_system_child_of_a_service_account_process_is_token_theft():
+    # the real shape of the rotten-potato capture: no ParentUser field, so the
+    # parent's account comes from its own earlier process-creation event
+    rows = [
+        _process("IIS APPPOOL\\DefaultAppPool", "{p1}", "{w3wp}"),
+        _process("NT AUTHORITY\\SYSTEM", "{c1}", "{p1}"),
+    ]
+    matches = _token_theft_matches(rows)
+    assert len(matches) == 1
+    assert matches[0].technique_id == "T1134.002"
+
+
+def test_system_child_is_detected_from_the_parent_user_field_too():
+    rows = [_process("NT AUTHORITY\\SYSTEM", "{c1}", "{gone}", parent_user="MSEDGEWIN10\\IEUser")]
+    assert len(_token_theft_matches(rows)) == 1
+
+
+def test_system_child_of_system_or_of_an_unknown_parent_is_not_flagged():
+    rows = [
+        _process("NT AUTHORITY\\SYSTEM", "{svc}", "{init}"),
+        _process("NT AUTHORITY\\SYSTEM", "{c1}", "{svc}"),  # SYSTEM -> SYSTEM: ordinary
+        _process("NT AUTHORITY\\SYSTEM", "{c2}", "{never-seen}"),  # parent account unknown
+        _process("NT AUTHORITY\\SYSTEM", "{c3}", "{never-seen}", parent_user="-"),  # the benign-corpus shape
+        _process("LAPTOP\\Adarsh", "{u1}", "{svc}"),  # a user process from SYSTEM: a normal logon
+    ]
+    assert _token_theft_matches(rows) == []
 
 
 def test_user_data_fields_are_read_so_a_log_clear_names_who_did_it():

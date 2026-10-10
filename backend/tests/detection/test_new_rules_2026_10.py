@@ -76,6 +76,35 @@ NEW_RULE_CASES = [
         {"InterfaceUuid": "{c681d488-d850-11d0-8c52-00c04fd90f7e}", "NetworkAddress": "\\\\10.0.2.14", "ProcNum": "0"},
         {"InterfaceUuid": "{367abb81-9844-35f1-ad32-98f038001003}", "NetworkAddress": "\\\\10.0.2.14", "ProcNum": "0"},
     ),
+    # Added after the 2026-10-10 fixture audit: detections that named a weaker
+    # technique than the evidence supports.
+    (
+        "Script or Executable Dropped in a Startup Folder",
+        SYSMON,
+        11,
+        {
+            "Image": "C:\\Windows\\system32\\cmd.exe",
+            "TargetFilename": "C:\\Users\\IEUser\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\bs.ps1",
+        },
+        {
+            "Image": "C:\\Program Files\\App\\setup.exe",
+            "TargetFilename": "C:\\Users\\IEUser\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\App.lnk",
+        },
+    ),
+    (
+        "PowerShell Script Block Obfuscated by String Splitting",
+        "Microsoft-Windows-PowerShell/Operational",
+        4104,
+        {"ScriptBlockText": "$a=(('Q'+'2h')+('w9p'+'1'));&('ne'+'w-'+'item') $env:temp\\x;$b=('t'+'ls'+'1'+('2, tl'+'s')+'11'+(', '+'tls'));$c=(('D'+'yx')+('x'+'ur4g')+'x')"},
+        {"ScriptBlockText": "$name = 'Interface' + 'Alias'; if ($PSBoundParameters.ContainsKey($name)) { $q.FilterByProperty('InterfaceAlias', $values, $true, 'Default') }"},
+    ),
+    (
+        "Registry Hive Saved to an Admin Share (Remote SAM Dump)",
+        "Security",
+        5145,
+        {"ShareName": "\\\\*\\C$", "RelativeTargetName": "Users\\PSAM", "AccessMask": "0x00120196", "SubjectUserName": "samir"},
+        {"ShareName": "\\\\*\\C$", "RelativeTargetName": "Users\\PSAM", "AccessMask": "0x00100081", "SubjectUserName": "samir"},
+    ),
 ]
 
 
@@ -110,3 +139,14 @@ def test_account_change_rule_ignores_builtin_actors():
         data = {"SubjectUserName": actor, "TargetUserName": "alice"}
         titles = {m.title for m in evaluate_event(_event("Security", 4738, data), rules)}
         assert "User or Computer Account Modified by Another User Account" not in titles, actor
+
+
+def test_hive_rule_ignores_the_windows_system_directory_and_ordinary_shares():
+    rules = rule_loader.load_rules()
+    title = "Registry Hive Saved to an Admin Share (Remote SAM Dump)"
+    for data in (
+        {"ShareName": "\\\\*\\C$", "RelativeTargetName": "Windows\\System", "AccessMask": "0x00120196"},
+        {"ShareName": "\\\\*\\Public", "RelativeTargetName": "backup\\SYSTEM", "AccessMask": "0x00000002"},
+        {"ShareName": "\\\\*\\C$", "RelativeTargetName": "Users\\samir\\notes.txt", "AccessMask": "0x00000002"},
+    ):
+        assert title not in {m.title for m in evaluate_event(_event("Security", 5145, data), rules)}, data

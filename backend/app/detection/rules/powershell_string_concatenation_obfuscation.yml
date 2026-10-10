@@ -1,0 +1,28 @@
+title: PowerShell Script Block Obfuscated by String Splitting
+id: c4e8a1d6-3f72-4b95-a0c8-2e6d9b1f5a37
+status: experimental
+description: >
+  Detects a PowerShell script block that builds its commands out of many
+  small quoted pieces joined with '+' (for example ('ne'+'w-'+'item')), the
+  usual way droppers hide cmdlet and URL strings from keyword detections.
+
+  Ten or more 'x'+'y' joins in one script block is the threshold. Verified
+  against real content: exec_emotet_ps_4104.evtx has 98 such joins in one
+  1,609-character block. Measured on all 95 real-world fixtures on
+  2026-10-10: only that block matches; none of the 932 script blocks in the
+  benign captures (Microsoft module code) comes close.
+author: NightOwl
+date: 2026-10-10
+references:
+  - https://attack.mitre.org/techniques/T1027/010/
+tags:
+  - attack.stealth
+  - attack.t1027.010
+logsource:
+  category: script_block_logging
+  service: powershell
+detection:
+  selection:
+    ScriptBlockText|re: "(?s)('\\s*\\+\\s*'.*){10}"
+  condition: selection
+level: high

@@ -1,0 +1,44 @@
+title: Registry Hive Saved to an Admin Share (Remote SAM Dump)
+id: 7d2b9e4a-6c13-4f85-b7a2-1e5c8d0f3a69
+status: experimental
+description: >
+  Detects Security Event ID 5145 where a file whose name ends in SAM, SYSTEM
+  or SECURITY is opened for writing on an admin share (C$ or ADMIN$). Saving
+  those three registry hives to a file is how local password hashes are taken
+  from a machine remotely (reg save, RegSaveKey through the remote registry,
+  the Backup Operators technique); the files are then copied off and cracked.
+
+  Verified against real content:
+  remote_sam_registry_access_via_backup_operator_priv.evtx, where the account
+  opens winreg over IPC$ and then writes Users\PSAM, Users\PSYSTEM and
+  Users\PSECURITY to C$. The existing remote-registry rule tagged that file
+  T1012 (query registry) only. Measured on all 95 real-world fixtures on
+  2026-10-10: those six events match and nothing else does, including the
+  869 admin-share events of LM_5145_Remote_FileCopy.evtx.
+
+  The Windows\System directory itself is excluded: it ends in "System" and is
+  touched by ordinary admin-share browsing.
+author: NightOwl
+date: 2026-10-10
+references:
+  - https://attack.mitre.org/techniques/T1003/002/
+tags:
+  - attack.credential_access
+  - attack.t1003.002
+logsource:
+  category: admin_share_payload_write
+  service: security
+detection:
+  selection_share:
+    ShareName|contains:
+      - 'C$'
+      - 'ADMIN$'
+  selection_name:
+    RelativeTargetName|re: '(?i)(^|\\)[^\\.]{0,16}(sam|system|security)$'
+  selection_write:
+    # any access mask with the WriteData/AddFile bit (0x2) set
+    AccessMask|re: '(?i)^0x[0-9a-f]*[2367abef]$'
+  filter_system_dir:
+    RelativeTargetName|endswith: 'Windows\System'
+  condition: selection_share and selection_name and selection_write and not filter_system_dir
+level: high

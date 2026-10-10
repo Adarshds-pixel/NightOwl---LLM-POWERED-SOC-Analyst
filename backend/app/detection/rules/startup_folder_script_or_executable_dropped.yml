@@ -1,0 +1,31 @@
+title: Script or Executable Dropped in a Startup Folder
+id: 5b0f3c7e-9a41-4d2c-8e16-7c2d4f6a8b10
+status: experimental
+description: >
+  Detects a file with a script or executable extension created directly in a
+  user's or the machine's Start Menu\Programs\Startup folder. Anything there
+  runs at the next logon, so it is a simple persistence spot.
+
+  Installers legitimately place shortcuts (.lnk) in this folder; this rule
+  only looks at files that run by themselves (.ps1, .bat, .vbs, .exe ...).
+
+  Verified against real content: sysmon_2_11_evasion_timestomp_MACE.evtx
+  (cmd.exe writes ...\Start Menu\Programs\Startup\bs.ps1, which the existing
+  timestomp rule flagged only for the changed creation time). Measured on all
+  95 real-world fixtures on 2026-10-10: that one file create matches and
+  nothing in the 34 benign captures does (64,000+ benign file creates).
+author: NightOwl
+date: 2026-10-10
+references:
+  - https://attack.mitre.org/techniques/T1547/001/
+tags:
+  - attack.persistence
+  - attack.t1547.001
+logsource:
+  category: file_event
+  service: sysmon
+detection:
+  selection:
+    TargetFilename|re: '(?i)\\start menu\\programs\\startup\\[^\\]+\.(ps1|bat|cmd|vbs|vbe|js|jse|wsf|hta|exe|scr|pif|com|dll)$'
+  condition: selection
+level: medium
