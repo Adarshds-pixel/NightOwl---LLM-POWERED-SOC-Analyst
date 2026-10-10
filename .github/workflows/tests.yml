@@ -18,9 +18,11 @@ jobs:
         with:
           python-version: "3.13"
 
+      # No SETUPTOOLS_USE_DISTUTILS=stdlib here: Python 3.13 has no stdlib
+      # distutils, so that setting makes setuptools unimportable and the build
+      # of hexdump (a source-only dependency of python-evtx) fails with
+      # "Cannot import 'setuptools.build_meta'".
       - name: Install dependencies
-        env:
-          SETUPTOOLS_USE_DISTUTILS: stdlib
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
