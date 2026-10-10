@@ -9,8 +9,12 @@ this module avoids coupling the raw reader to a schema that hasn't been
 designed yet.
 """
 
+import itertools
 import json
 import logging
+import multiprocessing
+import os
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Iterator
 
@@ -26,33 +30,78 @@ class EvtxReadError(Exception):
     pass
 
 
-def read_raw_records(path: Path) -> Iterator[str]:
+# Reading is the slow part of an upload: python-evtx renders about 100 records
+# per second on one core, which is 97% of the time a large capture takes. An EVTX
+# file is a sequence of independent 64 KB chunks, so the chunks can be rendered
+# by several processes at once with the SAME parser and byte-identical output.
+# Files below this many chunks (about 1 MB) are read in-process: starting worker
+# processes would cost more than it saves.
+_PARALLEL_MIN_CHUNKS = 16
+_MAX_WORKERS = 8
+
+
+def _worker_count() -> int:
+    configured = os.environ.get("NIGHTOWL_EVTX_WORKERS")
+    if configured:
+        try:
+            return max(1, int(configured))
+        except ValueError:
+            pass
+    return max(1, min(os.cpu_count() or 1, _MAX_WORKERS))
+
+
+def _render_record(record) -> str:
+    # One record can carry a corrupted UTF-16 sequence that raises deep inside
+    # python-evtx; that must cost one record, not the whole file. "" flows on
+    # and degrades through the same path as any unparseable XML.
+    try:
+        return record.xml()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("skipping record that failed to render as XML: %s", e)
+        return ""
+
+
+def _render_chunk_range(path: str, start: int, stop: int) -> list[str]:
+    """Worker: the XML of every record in chunks [start, stop), in file order.
+    Top-level so it can be pickled into a worker process."""
+    out: list[str] = []
+    with evtx.Evtx(path) as log:
+        for chunk in itertools.islice(log.chunks(), start, stop):
+            out.extend(_render_record(record) for record in chunk.records())
+    return out
+
+
+def read_raw_records(path: Path, workers: int | None = None) -> Iterator[str]:
     """Yields each record's raw XML string, in file order.
 
-    `record.xml()` (python-evtx rendering one record's binary chunk data
-    into an XML string) is wrapped per-record, not just by this function's
-    outer try/except: confirmed live against a real Windows export, a
-    single record can have a raw field value with an illegal UTF-16
-    surrogate (a genuinely corrupted/truncated byte sequence -- not
-    something ingest can fix, only skip), which raises UnicodeDecodeError
-    deep inside python-evtx's own binary parser. Left to the outer
-    try/except alone, this converts to EvtxReadError and aborts the whole
-    generator -- rejecting an otherwise-good 1000+ record file over one
-    bad record, the same "one bad record shouldn't fail the whole batch"
-    gap record_to_dict's own per-record wrapping in read_records_as_dicts
-    exists to close. `""` flows through to that function's `record_to_dict`
-    call, fails to parse as XML, and degrades via the same existing path.
+    Large files are rendered chunk-range by chunk-range across worker
+    processes (see _PARALLEL_MIN_CHUNKS); the output is identical to a
+    sequential read, in the same order. Per-record failures are isolated as
+    described in _render_record.
     """
     try:
         with evtx.Evtx(str(path)) as log:
-            if not log.get_file_header().check_magic():
+            header = log.get_file_header()
+            if not header.check_magic():
                 raise EvtxReadError(f"not a valid EVTX file (bad magic/signature): {path}")
-            for record in log.records():
-                try:
-                    yield record.xml()
-                except Exception as e:
-                    logger.warning("skipping record that failed to render as XML: %s", e)
-                    yield ""
+            chunk_count = header.chunk_count()
+            n_workers = workers if workers is not None else _worker_count()
+            if n_workers <= 1 or chunk_count < _PARALLEL_MIN_CHUNKS:
+                for record in log.records():
+                    yield _render_record(record)
+                return
+        # One contiguous range per worker: every task re-opens the file, and on
+        # a machine with real-time antivirus each open of an attack-sample
+        # capture is a scan -- many small tasks made 16 workers 40x SLOWER than
+        # one process in measurement, while one range per worker is a clean
+        # speed-up. Records are spread evenly across a file's chunks, so the
+        # ranges balance well.
+        step = max(1, -(-chunk_count // n_workers))
+        ranges = [(start, min(start + step, chunk_count)) for start in range(0, chunk_count, step)]
+        with ProcessPoolExecutor(max_workers=n_workers, mp_context=multiprocessing.get_context("spawn")) as pool:
+            futures = [pool.submit(_render_chunk_range, str(path), a, b) for a, b in ranges]
+            for future in futures:  # in submission order == file order
+                yield from future.result()
     except FileNotFoundError:
         raise
     except EvtxReadError:
