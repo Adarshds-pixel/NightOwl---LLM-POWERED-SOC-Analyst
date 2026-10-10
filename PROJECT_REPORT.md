@@ -2,7 +2,7 @@
 
 Everything about the project in one file: what it is, what you decided, what was built and why, what was measured, where it stands today, and what is left for you to do.
 
-> **Snapshot:** 8 October 2026 · branch `fix/production-readiness` (14 commits, **not pushed**) · 778 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **41** benign sample files read **Normal**.
+> **Snapshot:** 8 October 2026 · branch `fix/production-readiness` (19 commits, **not pushed**) · 788 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **41** benign sample files read **Normal**.
 >
 > This file is the story and the status. For deep technical reference (API tables, data model, environment variables, troubleshooting) see `docs/DOCUMENTATION.md`; for the machine-learning layer see `ML.md`; for the quick start see `README.md`.
 
@@ -208,7 +208,7 @@ Decisions that were made along the way and still stand (technical):
 
 **Verified**
 
-- 778 backend tests pass; frontend type-check and build pass; lint shows warnings only.
+- 788 backend tests pass; frontend type-check and build pass; lint shows warnings only.
 - Clean Docker install in production mode: migrations, knowledge-base build, login, Demo Mode, upload, incident, explain, chat, status change and audit, logout and session revocation.
 - The new routes and rules running **inside the production backend image** against a throwaway database.
 - A headless Chrome run on an isolated copy: Normal verdicts on benign files, log-clear notices with the account, Suspicious on attacks, the ML panel, the ML alerts view, the new Logs cards.
@@ -228,7 +228,8 @@ Decisions that were made along the way and still stand (technical):
 - **ML is advisory and noisy.** It flags benign machines (see §4.6). Do not switch to `alert` mode until retrained and re-measured.
 - **"Normal" is only as good as the everyday lists** (§6 caveat). A file made only of everyday-class events reads Normal even if it is hostile in a way no rule sees; PowerShell 4103 is the most deliberate such case.
 - **SMB fan-out is uncalibrated:** the benign data has no port-445 traffic; the threshold (5 hosts in 60 s, low severity) is a conservative judgement. A backup or management server may trip it.
-- **Parsing is slow:** about 100 records per second (python-evtx). A 20–60 MB file takes 3–10 minutes. Async jobs stop the browser timing out; they do not make it faster.
+- **Parsing is the slow part, but now bounded:** python-evtx renders about 100–235 records per second per core. Large files are read in parallel across CPU cores (up to 8 worker processes), and the upload screen shows "Reading N of M records (x%) – about Ns left", then "Analysing events". Measured in the browser: the 56 MB / 48,125-record `sysmon_48113.evtx` finishes in **about 2–3 minutes** (127–170 s), down from 8+ minutes. A machine with fewer cores will be slower. Reading is ~97% of that time on the old path; after it, XML conversion, normalising and storing dominate.
+- **A faster Rust reader exists but is experimental and off by default.** `NIGHTOWL_EVTX_BACKEND=rust` (Linux/Docker) parses all 102 samples (257,241 records) in about 4 seconds, but its output is not identical to python-evtx: only 10 of 97 comparable files normalise identically (hex numbers are not zero-padded, EventData timestamps are formatted differently, nameless EventData differs) and a few captures are rejected. The rules, sequence detectors and ML were validated on python-evtx output, so it stays opt-in until `backend/scripts/check_evtx_backend_equivalence.py` reports zero differences.
 - **Upload jobs live in memory** (one hour, lost on restart). A lost job just means re-uploading; stored events are skipped as duplicates.
 - **Unrelated sample captures from the same lab machine merge into one incident** (grouping is by host and time). This is a demo artefact, not a bug in real use.
 - **The free Groq quota** runs out after roughly 45 AI calls in one sitting (benign files no longer make AI calls, which helps).

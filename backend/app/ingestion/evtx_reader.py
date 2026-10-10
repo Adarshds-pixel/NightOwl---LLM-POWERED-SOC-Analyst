@@ -22,6 +22,8 @@ from typing import Iterator
 import Evtx.Evtx as evtx
 import xmltodict
 
+from app.ingestion import evtx_rust
+
 logger = logging.getLogger(__name__)
 
 # path -> records rendered so far by the worker processes of an in-flight
@@ -47,6 +49,14 @@ class EvtxReadError(Exception):
 # processes would cost more than it saves.
 _PARALLEL_MIN_CHUNKS = 16
 _MAX_WORKERS = 8
+
+
+def _backend_wanted() -> str:
+    """NIGHTOWL_EVTX_BACKEND: "python" (default -- python-evtx, the parser every
+    rule and benchmark was validated against) or "rust" (opt-in experimental
+    fast reader; see evtx_rust.py for why it is not the default)."""
+    value = os.environ.get("NIGHTOWL_EVTX_BACKEND", "python").strip().lower()
+    return "rust" if value == "rust" else "python"
 
 
 def _worker_count() -> int:
@@ -108,6 +118,14 @@ def read_raw_records(path: Path, workers: int | None = None) -> Iterator[str]:
     sequential read, in the same order. Per-record failures are isolated as
     described in _render_record.
     """
+    if _backend_wanted() == "rust" and evtx_rust.available():
+        try:
+            rendered = evtx_rust.read_raw_records(str(path))
+        except Exception as e:  # noqa: BLE001 -- any Rust-parser rejection falls back
+            logger.warning("rust evtx backend could not read %s (%s); using python-evtx", path, e)
+        else:
+            yield from rendered
+            return
     try:
         with evtx.Evtx(str(path)) as log:
             header = log.get_file_header()

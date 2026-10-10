@@ -53,3 +53,19 @@ def test_count_records_is_none_for_an_unreadable_file(tmp_path):
 def test_render_progress_entry_is_removed_after_a_parallel_read():
     list(evtx_reader.read_raw_records(FIXTURE, workers=3))
     assert str(FIXTURE) not in evtx_reader.render_progress
+
+
+def test_rust_backend_is_opt_in(monkeypatch):
+    monkeypatch.delenv("NIGHTOWL_EVTX_BACKEND", raising=False)
+    assert evtx_reader._backend_wanted() == "python"
+    monkeypatch.setenv("NIGHTOWL_EVTX_BACKEND", "rust")
+    assert evtx_reader._backend_wanted() == "rust"
+
+
+def test_rust_guid_adapter_matches_python_evtx_guid_shape():
+    from app.ingestion.evtx_rust import _to_python_evtx_style
+
+    xml = '<Provider Guid="5770385F-C22A-43E0-BF4C-06F5698FFBD9"/><Data Name="ProcessGuid">5D9D6B6F-17B6-6A7F-C393-000000008600</Data>'
+    out = _to_python_evtx_style(xml)
+    assert 'Guid="{5770385f-c22a-43e0-bf4c-06f5698ffbd9}"' in out
+    assert ">{5d9d6b6f-17b6-6a7f-c393-000000008600}<" in out
