@@ -62,6 +62,9 @@ def create_event(db: Session, normalized: NormalizedEvent) -> Event:
     return event
 
 
+_DEDUP_CHUNK = 500
+
+
 def find_existing_event_keys(
     db: Session, keys: set[tuple[str, str | None, int]]
 ) -> set[tuple[str, str | None, int]]:
@@ -81,13 +84,19 @@ def find_existing_event_keys(
     if not keys:
         return set()
     hosts = {host for host, _channel, _record_id in keys}
-    record_ids = {record_id for _host, _channel, record_id in keys}
-    rows = db.execute(
-        select(Event.host, Event.channel, Event.event_record_id).where(
-            Event.host.in_(hosts), Event.event_record_id.in_(record_ids)
-        )
-    ).all()
-    candidates = {(row.host, row.channel, row.event_record_id) for row in rows}
+    record_ids = sorted({record_id for _host, _channel, record_id in keys})
+    # Chunked: one IN list with every record id of a 50,000-record capture
+    # exceeds SQLite's bound-parameter limit (32,766) and makes a large upload
+    # fail there. A few hundred ids per query is fast on both databases.
+    candidates: set[tuple[str, str | None, int]] = set()
+    for start in range(0, len(record_ids), _DEDUP_CHUNK):
+        chunk = record_ids[start : start + _DEDUP_CHUNK]
+        rows = db.execute(
+            select(Event.host, Event.channel, Event.event_record_id).where(
+                Event.host.in_(hosts), Event.event_record_id.in_(chunk)
+            )
+        ).all()
+        candidates.update((row.host, row.channel, row.event_record_id) for row in rows)
     return candidates & keys
 
 

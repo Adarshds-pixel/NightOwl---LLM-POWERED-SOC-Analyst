@@ -763,3 +763,24 @@ def test_a_cleared_system_log_is_a_notice_naming_the_account_not_an_alert(api_cl
         assert "SERVER002\lplui" in outcome.notices[0].message
         assert "System log was cleared" in outcome.notices[0].message
         assert outcome.uncovered_events == 0  # it was evaluated -- reported as a notice
+
+
+def test_duplicate_lookup_handles_more_record_ids_than_sqlite_allows_in_one_query(api_client):
+    """A 50,000-record capture used to fail on SQLite ("too many SQL
+    variables"); the lookup now chunks its IN lists."""
+    from app.services.event_service import find_existing_event_keys
+
+    _client, SessionLocal = api_client
+    with SessionLocal() as db:
+        db.add(
+            Event(
+                host="BIGHOST", timestamp=datetime(2026, 8, 28, 9, 0, tzinfo=timezone.utc), event_id=1,
+                channel="Security", event_record_id=40_000, process=None, command_line=None, user=None, raw_json={},
+            )
+        )
+        db.commit()
+        keys = {("BIGHOST", "Security", record_id) for record_id in range(1, 50_001)}
+
+        found = find_existing_event_keys(db, keys)
+
+        assert found == {("BIGHOST", "Security", 40_000)}
