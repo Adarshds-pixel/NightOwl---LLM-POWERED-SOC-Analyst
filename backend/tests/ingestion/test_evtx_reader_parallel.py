@@ -69,3 +69,12 @@ def test_rust_guid_adapter_matches_python_evtx_guid_shape():
     out = _to_python_evtx_style(xml)
     assert 'Guid="{5770385f-c22a-43e0-bf4c-06f5698ffbd9}"' in out
     assert ">{5d9d6b6f-17b6-6a7f-c393-000000008600}<" in out
+
+
+def test_parallel_dicts_match_in_process_dicts(monkeypatch):
+    monkeypatch.setenv("NIGHTOWL_EVTX_WORKERS", "1")
+    sequential = list(evtx_reader.read_records_as_dicts(FIXTURE))
+    monkeypatch.setenv("NIGHTOWL_EVTX_WORKERS", "3")
+    parallel = list(evtx_reader.read_records_as_dicts(FIXTURE))
+    assert len(sequential) == 351
+    assert parallel == sequential

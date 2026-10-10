@@ -48,7 +48,7 @@ class EvtxReadError(Exception):
 # Files below this many chunks (about 1 MB) are read in-process: starting worker
 # processes would cost more than it saves.
 _PARALLEL_MIN_CHUNKS = 16
-_MAX_WORKERS = 8
+_MAX_WORKERS = 16
 
 
 def _backend_wanted() -> str:
@@ -85,14 +85,19 @@ def _init_worker(counter) -> None:
     _shared_counter = counter
 
 
-def _render_chunk_range(path: str, start: int, stop: int) -> list[str]:
-    """Worker: the XML of every record in chunks [start, stop), in file order.
+def _render_chunk_range(path: str, start: int, stop: int, as_dicts: bool = False) -> list:
+    """Worker: the XML (or, with as_dicts, the parsed dict) of every record in
+    chunks [start, stop), in file order. Parsing here rather than in the parent
+    spreads the XML-to-dict cost across the same worker processes.
     Top-level so it can be pickled into a worker process."""
-    out: list[str] = []
+    out: list = []
     with evtx.Evtx(path) as log:
         for chunk in itertools.islice(log.chunks(), start, stop):
             before = len(out)
-            out.extend(_render_record(record) for record in chunk.records())
+            if as_dicts:
+                out.extend(_to_dict_or_empty(_render_record(record)) for record in chunk.records())
+            else:
+                out.extend(_render_record(record) for record in chunk.records())
             if _shared_counter is not None:
                 with _shared_counter.get_lock():
                     _shared_counter.value += len(out) - before
@@ -111,7 +116,12 @@ def count_records(path: Path) -> int | None:
 
 
 def read_raw_records(path: Path, workers: int | None = None) -> Iterator[str]:
-    """Yields each record's raw XML string, in file order.
+    """Yields each record's raw XML string, in file order (see _read)."""
+    return _read(path, workers, as_dicts=False)
+
+
+def _read(path: Path, workers: int | None, as_dicts: bool) -> Iterator:
+    """Yields each record, in file order, as raw XML or as a parsed dict.
 
     Large files are rendered chunk-range by chunk-range across worker
     processes (see _PARALLEL_MIN_CHUNKS); the output is identical to a
@@ -124,7 +134,7 @@ def read_raw_records(path: Path, workers: int | None = None) -> Iterator[str]:
         except Exception as e:  # noqa: BLE001 -- any Rust-parser rejection falls back
             logger.warning("rust evtx backend could not read %s (%s); using python-evtx", path, e)
         else:
-            yield from rendered
+            yield from (map(_to_dict_or_empty, rendered) if as_dicts else rendered)
             return
     try:
         with evtx.Evtx(str(path)) as log:
@@ -135,7 +145,8 @@ def read_raw_records(path: Path, workers: int | None = None) -> Iterator[str]:
             n_workers = workers if workers is not None else _worker_count()
             if n_workers <= 1 or chunk_count < _PARALLEL_MIN_CHUNKS:
                 for record in log.records():
-                    yield _render_record(record)
+                    xml = _render_record(record)
+                    yield _to_dict_or_empty(xml) if as_dicts else xml
                 return
         # One contiguous range per worker: every task re-opens the file, and on
         # a machine with real-time antivirus each open of an attack-sample
@@ -152,7 +163,7 @@ def read_raw_records(path: Path, workers: int | None = None) -> Iterator[str]:
             with ProcessPoolExecutor(
                 max_workers=n_workers, mp_context=ctx, initializer=_init_worker, initargs=(counter,)
             ) as pool:
-                futures = [pool.submit(_render_chunk_range, str(path), a, b) for a, b in ranges]
+                futures = [pool.submit(_render_chunk_range, str(path), a, b, as_dicts) for a, b in ranges]
                 for future in futures:  # in submission order == file order
                     while True:
                         try:
@@ -177,27 +188,30 @@ def record_to_dict(xml_str: str) -> dict:
     return xmltodict.parse(xml_str)
 
 
+def _to_dict_or_empty(xml_str: str) -> dict:
+    try:
+        return record_to_dict(xml_str)
+    except Exception as e:
+        # A record that reads fine as raw EVTX bytes (read_raw_records
+        # above succeeded) but isn't well-formed XML once decoded --
+        # confirmed live against a real Windows export: a stray control
+        # character embedded in a field value is enough to make
+        # xmltodict.parse raise xml.parsers.expat.ExpatError. Left
+        # uncaught, this propagated all the way past routes_ingest.py's
+        # `except EvtxReadError` (a different exception class) into an
+        # unhandled 500 on an otherwise perfectly valid upload --
+        # exactly the "one bad record shouldn't fail the whole batch"
+        # case routes_ingest.py's own docstring already promises for
+        # EventNormalizationError, just not reachable from here. `{}`
+        # fails normalize_event's own "record missing 'Event' block"
+        # check, so this reuses that existing skip-and-count path
+        # rather than adding a second one.
+        logger.warning("skipping record that failed to parse as XML: %s", e)
+        return {}
+
+
 def read_records_as_dicts(path: Path) -> Iterator[dict]:
-    for xml_str in read_raw_records(path):
-        try:
-            yield record_to_dict(xml_str)
-        except Exception as e:
-            # A record that reads fine as raw EVTX bytes (read_raw_records
-            # above succeeded) but isn't well-formed XML once decoded --
-            # confirmed live against a real Windows export: a stray control
-            # character embedded in a field value is enough to make
-            # xmltodict.parse raise xml.parsers.expat.ExpatError. Left
-            # uncaught, this propagated all the way past routes_ingest.py's
-            # `except EvtxReadError` (a different exception class) into an
-            # unhandled 500 on an otherwise perfectly valid upload --
-            # exactly the "one bad record shouldn't fail the whole batch"
-            # case routes_ingest.py's own docstring already promises for
-            # EventNormalizationError, just not reachable from here. `{}`
-            # fails normalize_event's own "record missing 'Event' block"
-            # check, so this reuses that existing skip-and-count path
-            # rather than adding a second one.
-            logger.warning("skipping record that failed to parse as XML: %s", e)
-            yield {}
+    return _read(path, None, as_dicts=True)
 
 
 if __name__ == "__main__":
