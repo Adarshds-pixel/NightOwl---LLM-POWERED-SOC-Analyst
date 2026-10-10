@@ -237,7 +237,9 @@ All 95 real-world captures were judged independently from their raw content, the
 
 **Duplicate fixtures removed.** 14 files in `NightOwl-Benign-Dataset` were fully redundant overlapping exports (`security_window_01, 03–09`, `sysmon_window_02, 03, 05, 07`, `application_session_late`, `application_session_mid1`). Every record they held is in a file that remains, and ML training already de-duplicates by host, channel and record ID, so the training data is unchanged. The dataset is now 17 files; the benchmark's benign corpus is 25 captures (252,594 events).
 
-**Known gaps from the audit run.** The browser tab froze once right after the 56 MB upload completed on the server, while the audit's upload script was holding two very large files in memory; a fresh tab handled the 63 MB file normally. It was not reproduced, and not proven to be the script.
+**The "frozen tab" during the audit was Chrome, not NightOwl.** Twice the automation tab stopped responding right after the 56 MB upload finished on the server. Chrome reported `document.wasDiscarded: true` for the tab: its Memory Saver suspends and reloads tabs left in the background, which is where the automation tab sat. The tab's ID changed each time, which is what a discard does. The upload itself completed on the server both times (48,125 events). A foreground upload of that file by hand has not been timed.
+
+**Verified in the live Docker stack after the fixes (10 October 2026).** Data reset, then 15 captures uploaded through the Logs page. Incident headlines: "Computer Account Renamed Without Its Trailing $ (sAMAccountName Spoofing)", "Registry Hive Saved to an Admin Share (Remote SAM Dump)" (T1003.002), "Process Spawned by the WMI Provider Host" for the NTLM relay capture, "PowerShell Script Block Obfuscated by String Splitting" (T1027.010); T1134.002 on both potato captures; the browser credential-check incident at low and the WinRM incident at medium; no AI review for the pipe-sweep and share-enumeration captures; the benign `security_window_02.evtx` and `sysmon_48113.evtx` ingested with 0 rule matches.
 
 ---
 
