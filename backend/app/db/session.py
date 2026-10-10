@@ -19,7 +19,25 @@ from app.core.config import settings
 # lightweight SELECT 1 before being handed out, and transparently replaced
 # if it's dead, instead of surfacing as a hard error on the next query that
 # happens to draw it from the pool.
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+_is_sqlite = settings.database_url.startswith("sqlite")
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    # SQLite fallback only: wait up to 30 s for a writer instead of failing a
+    # read with "database is locked" while a large upload is being stored.
+    connect_args={"timeout": 30} if _is_sqlite else {},
+)
+
+if _is_sqlite:
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_wal(dbapi_connection, _record):
+        # WAL lets readers proceed while a writer holds the database.
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
