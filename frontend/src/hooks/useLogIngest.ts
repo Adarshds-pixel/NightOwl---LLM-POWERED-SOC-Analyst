@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ApiError, ingestEvtxFileWithProgress, type IngestResponse } from '../api'
+import { ApiError, ingestEvtxFileWithProgress, type IngestJobStatus, type IngestResponse } from '../api'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
 import { invalidateRulesCache } from './useRules'
 
@@ -11,6 +11,7 @@ export function useLogIngest() {
   const [phase, setPhase] = useState<IngestPhase>('idle')
   const [progress, setProgress] = useState(0)
   const [recordsRead, setRecordsRead] = useState(0)
+  const [job, setJob] = useState<IngestJobStatus | null>(null)
   const [result, setResult] = useState<IngestResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,6 +21,7 @@ export function useLogIngest() {
       setPhase('uploading')
       setProgress(0)
       setRecordsRead(0)
+      setJob(null)
       setError(null)
       setResult(null)
       try {
@@ -31,7 +33,10 @@ export function useLogIngest() {
           // label rather than leaving the bar frozen at 100% with no
           // indication anything is still happening.
           if (fraction >= 1) setPhase('processing')
-        }, (job) => setRecordsRead(job.records_read))
+        }, (status) => {
+          setRecordsRead(status.records_read)
+          setJob(status)
+        })
         setResult(res)
         setPhase('done')
         // An ingest changes both the incident snapshot and the per-rule match
@@ -51,5 +56,5 @@ export function useLogIngest() {
     [refresh],
   )
 
-  return { pending, phase, progress, recordsRead, result, error, upload }
+  return { pending, phase, progress, recordsRead, job, result, error, upload }
 }

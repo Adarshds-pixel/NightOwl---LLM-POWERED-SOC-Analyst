@@ -38,3 +38,18 @@ def test_an_invalid_file_still_raises_evtx_read_error(tmp_path):
     except evtx_reader.EvtxReadError:
         return
     raise AssertionError("expected EvtxReadError")
+
+
+def test_count_records_matches_the_records_actually_read():
+    assert evtx_reader.count_records(FIXTURE) == 351
+
+
+def test_count_records_is_none_for_an_unreadable_file(tmp_path):
+    bad = tmp_path / "bad.evtx"
+    bad.write_bytes(b"not an evtx file")
+    assert evtx_reader.count_records(bad) is None
+
+
+def test_render_progress_entry_is_removed_after_a_parallel_read():
+    list(evtx_reader.read_raw_records(FIXTURE, workers=3))
+    assert str(FIXTURE) not in evtx_reader.render_progress

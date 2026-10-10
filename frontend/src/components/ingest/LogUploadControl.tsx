@@ -21,7 +21,7 @@ export function LogUploadControl({
   variant?: 'primary' | 'secondary' | 'ghost'
   label?: string
 }) {
-  const { pending, phase, progress, recordsRead, result, error, upload } = useLogIngest()
+  const { pending, phase, progress, recordsRead, job, result, error, upload } = useLogIngest()
   const inputRef = useRef<HTMLInputElement>(null)
   const { push } = useToast()
   const reported = useRef<IngestResponse | null>(null)
@@ -97,9 +97,11 @@ export function LogUploadControl({
     phase === 'uploading'
       ? `Uploading... ${Math.round(progress * 100)}%`
       : phase === 'processing'
-        ? recordsRead > 0
-          ? `Reading... ${recordsRead.toLocaleString()} records`
-          : 'Processing...'
+        ? job?.status === 'analysing'
+          ? 'Analysing events...'
+          : recordsRead > 0
+            ? readingLabel(recordsRead, job?.records_total ?? null, job?.eta_seconds ?? null)
+            : 'Processing...'
         : label
 
   return (
@@ -115,4 +117,17 @@ export function LogUploadControl({
       </Button>
     </>
   )
+}
+
+function formatEta(seconds: number): string {
+  if (seconds < 60) return `${Math.max(1, Math.round(seconds))}s`
+  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
+}
+
+/** "Reading 12,000 of 48,125 records (25%) - about 1m 20s left" */
+function readingLabel(read: number, total: number | null, eta: number | null): string {
+  if (!total || total < read) return `Reading... ${read.toLocaleString()} records`
+  const pct = Math.min(99, Math.round((read / total) * 100))
+  const left = eta !== null ? ` - about ${formatEta(eta)} left` : ''
+  return `Reading ${read.toLocaleString()} of ${total.toLocaleString()} records (${pct}%)${left}`
 }

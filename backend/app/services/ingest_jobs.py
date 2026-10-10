@@ -27,6 +27,10 @@ class IngestJob:
     # reading -> analysing -> done | failed
     status: str = "reading"
     records_read: int = 0
+    records_total: int | None = None
+    tmp_key: str | None = None
+    # when the reading phase started, for the elapsed/ETA figures
+    started_at: float = field(default_factory=time.time)
     result: dict | None = None
     error: str | None = None
     error_status: int | None = None

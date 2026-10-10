@@ -15,6 +15,7 @@ import logging
 import multiprocessing
 import os
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from pathlib import Path
 from typing import Iterator
 
@@ -22,6 +23,14 @@ import Evtx.Evtx as evtx
 import xmltodict
 
 logger = logging.getLogger(__name__)
+
+# path -> records rendered so far by the worker processes of an in-flight
+# parallel read. Written by read_raw_records, read by the upload-job status
+# endpoint for the live progress figure; the entry is removed when the read ends.
+render_progress: dict[str, int] = {}
+
+# Set in each worker process by _init_worker: a shared counter of rendered records.
+_shared_counter = None
 
 SAMPLE_LOG_PATH = Path(__file__).resolve().parents[2] / "sample_logs" / "sample.evtx"
 
@@ -61,14 +70,34 @@ def _render_record(record) -> str:
         return ""
 
 
+def _init_worker(counter) -> None:
+    global _shared_counter
+    _shared_counter = counter
+
+
 def _render_chunk_range(path: str, start: int, stop: int) -> list[str]:
     """Worker: the XML of every record in chunks [start, stop), in file order.
     Top-level so it can be pickled into a worker process."""
     out: list[str] = []
     with evtx.Evtx(path) as log:
         for chunk in itertools.islice(log.chunks(), start, stop):
+            before = len(out)
             out.extend(_render_record(record) for record in chunk.records())
+            if _shared_counter is not None:
+                with _shared_counter.get_lock():
+                    _shared_counter.value += len(out) - before
     return out
+
+
+def count_records(path: Path) -> int | None:
+    """Total records in the file, from the per-chunk record-number ranges (a
+    header-only scan, ~0.2 s for 50k records). Used for progress display only;
+    None when the file's chunk headers cannot be read."""
+    try:
+        with evtx.Evtx(str(path)) as log:
+            return sum(c.log_last_record_number() - c.log_first_record_number() + 1 for c in log.chunks())
+    except Exception:  # noqa: BLE001 -- progress is cosmetic, never fail an upload for it
+        return None
 
 
 def read_raw_records(path: Path, workers: int | None = None) -> Iterator[str]:
@@ -98,10 +127,25 @@ def read_raw_records(path: Path, workers: int | None = None) -> Iterator[str]:
         # ranges balance well.
         step = max(1, -(-chunk_count // n_workers))
         ranges = [(start, min(start + step, chunk_count)) for start in range(0, chunk_count, step)]
-        with ProcessPoolExecutor(max_workers=n_workers, mp_context=multiprocessing.get_context("spawn")) as pool:
-            futures = [pool.submit(_render_chunk_range, str(path), a, b) for a, b in ranges]
-            for future in futures:  # in submission order == file order
-                yield from future.result()
+        ctx = multiprocessing.get_context("spawn")
+        counter = ctx.Value("i", 0)
+        key = str(path)
+        try:
+            with ProcessPoolExecutor(
+                max_workers=n_workers, mp_context=ctx, initializer=_init_worker, initargs=(counter,)
+            ) as pool:
+                futures = [pool.submit(_render_chunk_range, str(path), a, b) for a, b in ranges]
+                for future in futures:  # in submission order == file order
+                    while True:
+                        try:
+                            batch = future.result(timeout=0.3)
+                            break
+                        except FutureTimeout:
+                            render_progress[key] = counter.value
+                    render_progress[key] = counter.value
+                    yield from batch
+        finally:
+            render_progress.pop(key, None)
     except FileNotFoundError:
         raise
     except EvtxReadError:

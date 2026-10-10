@@ -54,6 +54,7 @@ activity they recorded genuinely happened close together.
 
 import logging
 import tempfile
+import time
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -65,7 +66,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal, get_db
 from app.detection.rule_loader import get_loaded_rules
-from app.ingestion.evtx_reader import EvtxReadError, read_records_as_dicts
+from app.ingestion import evtx_reader
+from app.ingestion.evtx_reader import EvtxReadError, count_records, read_records_as_dicts
 from app.ingestion.normalizer import EventNormalizationError, normalize_event
 from app.services.ai_opinion_service import (
     REASON_NAMED_PIPE,
@@ -223,6 +225,11 @@ class IngestJobStatus(BaseModel):
     # reading -> analysing -> done | failed
     status: str
     records_read: int
+    # total records in the file (None if unknown) and timing, so the console
+    # can show "N of M records" and an ETA while reading
+    records_total: int | None = None
+    elapsed_seconds: float = 0.0
+    eta_seconds: float | None = None
     result: IngestResponse | None = None
     error: str | None = None
     # HTTP status the synchronous route would have returned for a failure
@@ -427,6 +434,9 @@ def _run_ingest_job(job_id: str, tmp_path: Path, filename: str) -> None:
         job.records_read = count
 
     try:
+        job.tmp_key = str(tmp_path)
+        job.records_total = count_records(tmp_path)
+        job.started_at = time.time()
         records = _read_sorted_records(tmp_path, _progress)
         job.status = "analysing"
         response = _process_records(db, records, filename, _start_thread)
@@ -462,11 +472,23 @@ def get_ingest_job(job_id: str) -> IngestJobStatus:
     job = ingest_jobs.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="upload job not found (it may have expired or the server restarted)")
+    elapsed = time.time() - job.started_at
+    # parallel readers publish how many records the worker processes have
+    # rendered so far, which moves smoothly; the yielded count only jumps
+    read = job.records_read
+    if job.status == "reading" and job.tmp_key:
+        read = max(read, evtx_reader.render_progress.get(job.tmp_key, 0))
+    eta = None
+    if job.status == "reading" and job.records_total and read >= 200 and elapsed > 1:
+        eta = round(max(job.records_total - read, 0) * elapsed / read, 0)
     return IngestJobStatus(
         job_id=job.id,
         filename=job.filename,
         status=job.status,
-        records_read=job.records_read,
+        records_read=read,
+        records_total=job.records_total,
+        elapsed_seconds=round(elapsed, 1),
+        eta_seconds=eta,
         result=IngestResponse(**job.result) if job.result is not None else None,
         error=job.error,
         error_status=job.error_status,

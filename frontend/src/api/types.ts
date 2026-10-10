@@ -440,6 +440,11 @@ export interface IngestJobStatus {
   /** reading -> analysing -> done | failed */
   status: 'reading' | 'analysing' | 'done' | 'failed'
   records_read: number
+  /** total records in the file, when the server could count them */
+  records_total: number | null
+  elapsed_seconds: number
+  /** estimated seconds left of the reading phase */
+  eta_seconds: number | null
   result: IngestResponse | null
   error: string | null
   error_status: number | null
