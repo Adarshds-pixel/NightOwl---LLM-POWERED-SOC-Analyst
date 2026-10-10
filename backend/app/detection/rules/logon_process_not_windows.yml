@@ -15,6 +15,12 @@ description: >
   of the standard values listed in the filter. Low severity because a user
   revealing their own saved password produces the same event; the rule says
   "a browser asked Windows to check credentials", not "credentials were stolen".
+
+  The base level is informational on purpose: the credential-access tactic
+  adds one severity step (services/severity_service.py), so this is what makes
+  the alert come out LOW. With base "low" it was shown as medium, which the
+  10 Oct 2026 fixture audit flagged as too loud for an event any user can
+  cause by opening their own saved passwords.
 author: NightOwl
 date: 2026-10-08
 references:
@@ -46,4 +52,4 @@ detection:
       - 'CredProv'
       - '-'
   condition: selection and not filter_windows_logon_processes
-level: low
+level: informational

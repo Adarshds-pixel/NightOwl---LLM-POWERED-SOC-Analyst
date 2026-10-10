@@ -7,6 +7,13 @@ description: >
   session. Any command execution under these parents means it arrived over
   a remote-management session -- expected on jump boxes, notable
   everywhere else, and a common lateral-movement vector.
+
+  The base level is low on purpose: the lateral-movement tactic adds one
+  severity step (services/severity_service.py), so the alert comes out
+  MEDIUM. With base "medium" a single harmless admin command (hostname,
+  ipconfig) was raised at high, which the 10 Oct 2026 fixture audit flagged.
+  A remote session that goes on to do something harmful is raised by the
+  rule for that action; the incident takes the higher severity.
 author: NightOwl (Pair 1 -- Adarsh + Lisha)
 date: 2026-09-04
 references:
@@ -23,4 +30,4 @@ detection:
       - '\wsmprovhost.exe'
       - '\winrshost.exe'
   condition: selection
-level: medium
+level: low
