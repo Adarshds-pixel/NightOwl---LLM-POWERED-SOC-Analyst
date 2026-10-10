@@ -417,6 +417,22 @@ def test_named_pipe_discovery_does_not_flag_unrelated_pipes_or_processes(api_cli
         assert outcome.named_pipe_discovery_event_ids == []
 
 
+def test_pipe_events_of_a_detected_sweep_are_not_sent_for_advisory_review(api_client):
+    """10 Oct 2026 fixture audit: the named-pipe sweep was detected, yet the
+    rest of the same burst (\\lsass, \\srvsvc) still went to the AI review,
+    which called it "nothing unusual" next to the detection. A sequence
+    detector alerts on one anchor event; its evidence is the whole burst."""
+    _client, SessionLocal = api_client
+    pipes = ["\\lsass", "\\browser", "\\atsvc", "\\epmapper", "\\eventlog", "\\InitShutdown", "\\LSM_API_service", "\\ntsvcs", "\\srvsvc", "\\scerpc"]
+    records = [_pipe_record(f"2026-08-28T09:00:00.{i:02d}0000+00:00", name) for i, name in enumerate(pipes)]
+
+    with SessionLocal() as db:
+        outcome = ingest_records(db, records, rules=[_PIPE_CONNECT_RULE], matched_at=None)
+
+        assert any("Named-Pipe Sweep" in title for title in outcome.matched_rule_titles)
+        assert outcome.named_pipe_discovery_event_ids == []
+
+
 # -- advisory patterns (service_installation_event_ids) --------------------
 #
 # Regression suite for the "covered but unmatched" AI-safety-net gap: Event

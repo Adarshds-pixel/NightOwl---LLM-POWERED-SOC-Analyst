@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
+from app.detection.event_names import event_type_name, rpc_interface_name
 from app.ingestion.normalizer import canonical_channel
 from app.models.ai_opinion import AiOpinion
 from app.models.event import Event
@@ -31,28 +32,6 @@ from app.rag.safety import annotate_unknown_technique_ids
 from app.services.ingest_service import UncoveredEventGroup
 
 logger = logging.getLogger(__name__)
-
-# Sysmon event id -> human label, mirroring frontend/src/lib/constants.ts's
-# SYSMON_EVENT_TYPE_LABELS exactly (same 5 entries, same wording) so an
-# analyst reading the AI opinion and the Logs page's own event-type badges
-# never sees two different names for the same event id. Gated to the
-# Sysmon channel specifically -- confirmed live during this feature's own
-# testing that the model, given only a bare `"event_id": 5`, guessed that
-# number meant "process creation" (it's actually Process Terminated) and
-# said so in its reasoning; raw Windows event ids are not unique across
-# channels (Security event 5 means something unrelated), so labeling one
-# without the channel check would just trade one mislabeling for another.
-# Deliberately not extended to other channels here: this is a label
-# lookup for ids this project's own rules already treat as meaningful
-# categories (see detection/engine.py's CATEGORY_TO_EVENT_ID), not a new
-# per-channel reference table built for this feature.
-_SYSMON_EVENT_TYPE_LABELS: dict[int, str] = {
-    1: "Process Creation",
-    3: "Network Connection",
-    5: "Process Terminated",
-    11: "File Created",
-    13: "Registry Event",
-}
 
 DEFAULT_K = 3
 # Bounds both the LLM prompt size and how much of a large uncovered file
@@ -129,18 +108,24 @@ def _event_summary(event: Event, group_total: int | None, why_sampled: str | Non
     """
     raw_json = event.raw_json or {}
     event_data = raw_json.get("normalized", {}).get("event_data") or {}
-    event_type = (
-        _SYSMON_EVENT_TYPE_LABELS.get(event.event_id) if canonical_channel(event.channel) == "sysmon" else None
-    )
+    # A real name for the event, looked up by channel AND id (ids repeat across
+    # channels). Given a bare number the model guesses: it has called Sysmon 5
+    # "process creation", Sysmon 18 "pipe creation" and Security 4722 "account
+    # creation". See detection/event_names.py.
+    event_type = event_type_name(canonical_channel(event.channel), event.event_id)
     return {
         "why_sampled": why_sampled,
         "channel": event.channel,
         "event_id": event.event_id,
-        # Omitted (not None) for anything outside the known Sysmon set
-        # above -- format_event_samples already drops None/""/[] values,
+        # Omitted (not None) for an event this project has no verified name
+        # for -- format_event_samples already drops None/""/[] values,
         # so an event type this project doesn't have a real label for
         # simply doesn't get a fabricated one.
         "event_type": event_type,
+        # Named only when the UUID is in the documented table -- so the model
+        # is told what an interface is instead of guessing (it has called the
+        # Service Control Manager's UUID "the EFSRPC interface").
+        "rpc_interface_name": rpc_interface_name(event_data.get("InterfaceUuid")),
         "host": event.host,
         "timestamp": event.timestamp.isoformat() if event.timestamp else None,
         "process": event.process,
@@ -243,6 +228,16 @@ def fill_in_opinion(
 
         query = _build_retrieval_query(filename, samples)
         chunks = retrieve(query, k=DEFAULT_K)
+        if matched_rule_titles:
+            # The file already has real detections, and they carry the
+            # technique. The review is only describing the leftover events, and
+            # a technique document handed to it here gets repeated as if it
+            # applied: in the 10 Oct 2026 audit a sAMAccountName-spoofing
+            # capture (detected as such) was described as "silver tickets"
+            # because the search returned that technique for a ticket request,
+            # and telling the model not to did not stop it. So technique
+            # documents are withheld; playbook guidance stays.
+            chunks = [c for c in chunks if (c.get("metadata") or {}).get("source_type") != _MITRE_TECHNIQUE_SOURCE_TYPE]
 
         reply = generate(
             build_uncovered_opinion_prompt(filename, samples, chunks, matched_rule_titles, anomaly_titles)

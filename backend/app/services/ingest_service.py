@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 from app.detection.coverage import CHECKED, ROUTINE, checked_pairs, classify
 from app.detection.engine import RuleMatch, evaluate_event
 from app.detection.rule_loader import LoadedRule
-from app.detection.sequences import detect_sequences
+from app.detection.sequences import NAMED_PIPE_SWEEP, SMB_SHARE_ENUM_PROBE, detect_sequences
 from app.core.config import settings
 from app.ml.features import WINDOW
 from app.ml.rule import ML_ANOMALY_RULE, ML_RULE_ID
@@ -65,6 +65,11 @@ MAX_ADVISORY_SAMPLE = 10
 # occurrence count. One capture used to produce 83 identical "Remote Thread
 # Creation" alerts, which buries everything else in the queue.
 ALERT_DEDUP_WINDOW = timedelta(seconds=60)
+
+
+# Sequence detectors whose evidence is a burst of named-pipe connections (see
+# the advisory filtering in ingest_records).
+_PIPE_SEQUENCE_RULE_IDS = frozenset({NAMED_PIPE_SWEEP.rule_id, SMB_SHARE_ENUM_PROBE.rule_id})
 
 
 def _alert_dedup_key(rule_id: str, event) -> tuple:
@@ -401,7 +406,10 @@ def ingest_records(
     # the exact same incident/alert plumbing every regular rule match
     # already uses -- see detection/sequences.py's module docstring for
     # why this is a hand-written pair of detectors, not a new subsystem.
+    pipe_detector_hosts: set[str] = set()
     for anchor_event, match in detect_sequences(list(zip(saved, normalized_events, strict=True))):
+        if match.rule_id in _PIPE_SEQUENCE_RULE_IDS:
+            pipe_detector_hosts.add(anchor_event.host)
         rule_matches += 1
         if match.title not in matched_titles:
             matched_titles.append(match.title)
@@ -425,9 +433,19 @@ def ingest_records(
     # ingest showed a confident "SUSPICIOUS ACTIVITY DETECTED" verdict next
     # to an AI opinion saying "insufficient information" about the identical
     # evidence.
+    #
+    # A sequence detector alerts on ONE anchor event but its evidence is the
+    # whole burst. Found in the 10 Oct 2026 fixture audit: the named-pipe sweep
+    # and share-enumeration captures showed a detection next to an AI review
+    # calling the rest of the very same pipe connections "nothing unusual". So
+    # when a pipe-based sequence detector fired on a host, none of that host's
+    # named-pipe events go to the advisory review.
     alerted_event_ids = {item[0] for item in alert_data}
+    host_of_event = {row.id: row.host for row in saved}
     named_pipe_discovery_event_ids = [
-        event_id for event_id in named_pipe_discovery_event_ids if event_id not in alerted_event_ids
+        event_id
+        for event_id in named_pipe_discovery_event_ids
+        if event_id not in alerted_event_ids and host_of_event.get(event_id) not in pipe_detector_hosts
     ]
     service_installation_event_ids = [
         event_id for event_id in service_installation_event_ids if event_id not in alerted_event_ids

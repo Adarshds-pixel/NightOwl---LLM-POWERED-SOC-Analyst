@@ -145,6 +145,35 @@ def test_fill_in_opinion_worth_reviewing_offers_only_well_matched_candidates(api
         assert opinion.attack_candidate_ids == [SAMPLE_CHUNKS[0]["metadata"]["technique_id"]]
 
 
+def test_fill_in_opinion_withholds_technique_documents_when_the_file_already_has_detections(api_client, monkeypatch):
+    """10 Oct 2026 audit: a capture detected as sAMAccountName spoofing was
+    described by the review as "silver tickets", a technique the search had
+    returned for a ticket request. With detections present the review gets no
+    technique documents and offers no technique candidates."""
+    _client, SessionLocal = api_client
+    monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
+    with SessionLocal() as db:
+        event_id = _make_event(db).id
+        opinion_id = ai_opinion_service.create_pending_opinion(db, "m.evtx", sample_event_ids=[event_id]).id
+
+    playbook = {"chunk_id": "p", "document": "triage guidance", "score": 0.6, "metadata": {"source_type": "playbook"}}
+    monkeypatch.setattr(ai_opinion_service, "retrieve", lambda query, k: [{**SAMPLE_CHUNKS[0], "score": 0.56}, playbook])
+    seen = {}
+
+    def fake_generate(messages):
+        seen["prompt"] = "\n".join(str(m.content) for m in messages)
+        return "Odd.\n\n## Assessment: Worth reviewing\n\n## Limitations\n- small sample"
+
+    monkeypatch.setattr(ai_opinion_service, "generate", fake_generate)
+
+    ai_opinion_service.fill_in_opinion(opinion_id, "m.evtx", [event_id], matched_rule_titles=["Some Real Detection"])
+
+    assert "triage guidance" in seen["prompt"]
+    assert SAMPLE_CHUNKS[0]["document"] not in seen["prompt"]
+    with SessionLocal() as db:
+        assert db.get(AiOpinion, opinion_id).attack_candidate_ids == []
+
+
 def test_fill_in_opinion_marks_invented_technique_ids(api_client, monkeypatch):
     _client, SessionLocal = api_client
     monkeypatch.setattr(ai_opinion_service, "SessionLocal", SessionLocal)
@@ -212,9 +241,10 @@ def test_fill_in_opinion_never_creates_an_alert_or_incident(api_client, monkeypa
         ),
     )
 
-    ai_opinion_service.fill_in_opinion(
-        opinion_id, "mystery.evtx", [event_id], matched_rule_titles=["Some Unrelated Rule"]
-    )
+    # No rule matched this file, so a technique candidate IS offered (with
+    # detections present they are withheld -- see the test above); the point
+    # here is that even an offered candidate never reaches detection state.
+    ai_opinion_service.fill_in_opinion(opinion_id, "mystery.evtx", [event_id])
 
     with SessionLocal() as db:
         from app.models.alert import Alert
@@ -261,6 +291,7 @@ def test_event_summary_never_includes_raw_json_fields():
         "channel",
         "event_id",
         "event_type",
+        "rpc_interface_name",
         "host",
         "timestamp",
         "process",
@@ -312,14 +343,14 @@ def test_event_summary_labels_known_sysmon_event_types():
 
 
 def test_event_summary_omits_event_type_for_unmapped_sysmon_event_id():
-    """An id this project's own SYSMON_EVENT_TYPE_LABELS table doesn't
-    cover (e.g. 22, DNS query) must not get a fabricated label -- absent,
-    not a guess, so format_event_samples' None-filtering drops it cleanly."""
+    """An id detection/event_names.py has no verified name for must not get
+    a fabricated label -- absent, not a guess, so format_event_samples'
+    None-filtering drops it cleanly."""
     event = Event(
         id=1,
         host="H",
         timestamp=datetime(2026, 9, 10, 16, 30, 27, tzinfo=timezone.utc),
-        event_id=22,
+        event_id=255,
         channel="Microsoft-Windows-Sysmon/Operational",
         raw_json={},
     )
@@ -599,3 +630,76 @@ def test_fill_in_opinion_reorders_events_to_match_sample_event_ids(api_client, m
     rendered = "\n".join(m.content for m in captured["messages"])
     # event_id: 2 (event_b) must be rendered as sample [1], before event_id: 1.
     assert rendered.index("event_id: 2") < rendered.index("event_id: 1")
+
+
+def _summary_type(channel, event_id):
+    event = Event(
+        id=1,
+        host="H",
+        timestamp=datetime(2026, 10, 10, 12, 0, 0, tzinfo=timezone.utc),
+        event_id=event_id,
+        channel=channel,
+        raw_json={},
+    )
+    return ai_opinion_service._event_summary(event, group_total=None)["event_type"]
+
+
+def test_event_summary_names_the_event_types_the_model_got_wrong_in_the_audit():
+    """10 Oct 2026 fixture audit: with no name to go on, the review called a
+    pipe connection "pipe creation" and an account being enabled "creation"."""
+    assert _summary_type("Microsoft-Windows-Sysmon/Operational", 18) == "Pipe Connected"
+    assert _summary_type("Microsoft-Windows-Sysmon/Operational", 17) == "Pipe Created"
+    assert _summary_type("Security", 4722) == "User Account Enabled"
+    assert _summary_type("Security", 4741) == "Computer Account Created"
+    assert _summary_type("Security", 4769) == "Kerberos Service Ticket Requested"
+    assert _summary_type("Security", 5156) == "Network Connection Allowed"
+
+
+def test_event_names_are_looked_up_per_channel():
+    from app.detection.event_names import event_type_name
+
+    assert event_type_name("sysmon", 1) == "Process Creation"
+    assert event_type_name("system", 1) is None  # System 1 is a clock change, not a process
+    assert event_type_name(None, 4624) is None
+    assert event_type_name("security", 4624) == "Logon"
+
+
+def test_prompt_forbids_guessing_what_a_listed_detection_matched():
+    from app.rag.prompts import UNCOVERED_OPINION_SYSTEM_PROMPT
+
+    assert "only the NAMES of those detections" in UNCOVERED_OPINION_SYSTEM_PROMPT
+    assert "never state or guess which event, field or value a listed detection matched" in UNCOVERED_OPINION_SYSTEM_PROMPT
+
+
+def test_rpc_interfaces_are_named_from_the_documented_table_only():
+    from app.detection.event_names import rpc_interface_name
+
+    # the UUID the review twice called "the EFSRPC interface" in the audit
+    assert rpc_interface_name("{367abb81-9844-35f1-ad32-98f038001003}") == "Service Control Manager (svcctl)"
+    assert "EFSRPC" in rpc_interface_name("{C681D488-D850-11D0-8C52-00C04FD90F7E}")
+    assert rpc_interface_name("{fb8a0729-2d04-4658-be93-27b4ad553fac}") is None  # not in the table: stays unnamed
+    assert rpc_interface_name(None) is None
+
+
+def test_event_summary_carries_the_rpc_interface_name_when_known():
+    def summary(uuid):
+        event = Event(
+            id=1,
+            host="H",
+            timestamp=datetime(2026, 10, 10, 12, 0, 0, tzinfo=timezone.utc),
+            event_id=5,
+            channel="Microsoft-Windows-RPC",
+            raw_json={"normalized": {"event_data": {"InterfaceUuid": uuid}}},
+        )
+        return ai_opinion_service._event_summary(event, group_total=None)
+
+    assert summary("{367abb81-9844-35f1-ad32-98f038001003}")["rpc_interface_name"] == "Service Control Manager (svcctl)"
+    assert summary("{00000134-0000-0000-c000-000000000046}")["rpc_interface_name"] is None
+
+
+def test_prompt_forbids_identifying_an_unnamed_identifier_or_citing_an_unshown_technique():
+    from app.rag.prompts import UNCOVERED_OPINION_SYSTEM_PROMPT
+
+    assert "`rpc_interface_name`" in UNCOVERED_OPINION_SYSTEM_PROMPT
+    assert "the interface is unidentified" in UNCOVERED_OPINION_SYSTEM_PROMPT
+    assert "A retrieved technique is only a search result" in UNCOVERED_OPINION_SYSTEM_PROMPT
