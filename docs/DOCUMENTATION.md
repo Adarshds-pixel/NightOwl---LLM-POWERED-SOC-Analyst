@@ -22,7 +22,7 @@ Ingestion     evtx_reader -> normalizer -> NormalizedEvent        --> events
    |          (de-duplicated by host + channel + EventRecordID)
    v
 Detection     69 Sigma-style YAML rules, per event
-              + 10 multi-event sequence detectors, per batch      --> alerts
+              + 11 multi-event sequence detectors, per batch      --> alerts
    |          severity = Sigma level + ATT&CK tactic weight
    |          repeat matches (same rule/host/process, 60 s) fold into one alert
    v
@@ -97,6 +97,7 @@ All routes are mounted at root. `/health` is public. Every other route requires 
 | POST | `/ingest` | multipart `.evtx` upload (default cap 100 MB), synchronous: counts (checked / everyday / unchecked), notices, telemetry profile, incident ids, ML anomalies, AI opinion id |
 | POST | `/ingest/async` | same upload, processed in the background: returns `202 {job_id}` at once (the console uses this so a multi-minute parse never hits a browser timeout) |
 | GET | `/ingest/jobs/{id}` | job status (`reading` -> `analysing` -> `done` / `failed`), records read so far and, when done, the same payload `POST /ingest` returns. Jobs live in memory for an hour |
+| | | The status also carries `records_total`, `elapsed_seconds` and `eta_seconds`, which the console shows as "Reading N of M records (x%) - about Ns left" |
 | GET | `/mitre/techniques` | ATT&CK Enterprise catalog |
 | GET | `/incidents` | `severity`, `status`, `start_date`, `end_date`, `q`, `limit` (≤200), `offset` |
 | GET | `/incidents/{id}` | Incident, alerts and events, resolved techniques |
@@ -144,7 +145,7 @@ The rules are 66 YAML files in `backend/app/detection/rules/`, loaded once per p
 
 ### Sequence detectors
 
-`detection/sequences.py` holds 10 multi-event detectors. They run once per ingest batch and feed the same alert path:
+`detection/sequences.py` holds 11 multi-event detectors. They run once per ingest batch and feed the same alert path:
 
 | Detector | Technique |
 |---|---|
@@ -158,6 +159,7 @@ The rules are 66 YAML files in `backend/app/detection/rules/`, loaded once per p
 | Mass process access | T1057 |
 | Group self-add | T1098 |
 | Bulk group-membership addition | T1098 |
+| SYSTEM process started by a parent running as another account (token theft, the end state of the "potato" family and PrintSpoofer). A parent whose account is unknown is never guessed at | T1134.002 |
 
 `SEQUENCE_PATTERNS` holds each detector's thresholds and rationale.
 
@@ -179,11 +181,14 @@ The "everyday" lists were measured on the benign corpus; each entry carries its 
 
 The AI review only ever reads *unchecked* events and advisory-pattern events, so a benign file with nothing unchecked makes no AI call. A System 104 "log cleared" event is reported as an informational **notice** naming the account and log (read from the event's `UserData`); it opens no alert. The Security-log equivalent (1102) remains a detection. `GET /events` accepts `coverage=checked|routine|unchecked` for the same three-way split.
 
+Three guards keep the review from contradicting or embellishing a detection: (1) every sampled event carries a real name looked up by channel and id, and a known RPC interface carries its service name (`detection/event_names.py`), so the model never has to guess what a number or UUID means; (2) when a pipe-based sequence detector fires on a host, that host's other named-pipe events are not sent for review, because they are the same burst; (3) when the file already has rule detections, technique documents are withheld from the review's retrieved context, so it describes the leftover events in plain words and the technique comes from the detections.
+
 ### Severity, de-duplication and grouping
 
 - **Severity** (`services/severity_service.py`): the Sigma level rank (1–5), plus 1 if the rule is tagged with a high-leverage tactic (credential access, lateral movement, collection, command and control, exfiltration, impact), capped at critical.
 - **Alert de-duplication:** a repeat match of the same rule, host and process within 60 s increments `occurrence_count` on the existing alert instead of creating a new one.
 - **Incident grouping** (`services/incident_service.py`): a detection joins an *open* or *investigating* incident on the same host whose activity span lies within 1 hour of it. The window slides with `last_activity_at`. The incident takes the union of technique ids and the higher severity, and its title follows its most severe alert. Otherwise a new incident is opened. Ingest takes a per-host advisory lock, so two concurrent uploads for one host cannot open duplicate incidents.
+- **Incident titles**: an incident is titled after its most severe detection, with one exception. A cover-up detection (the T1685 family: a cleared audit log, a weakened audit policy) never headlines an incident that also holds the attack itself; it still raises severity and adds its technique.
 
 ### Outside the rule engine
 
@@ -519,6 +524,9 @@ A Postman collection is in `docs/postman/`.
 | Backend exits at start with a settings error | Outside local mode without a valid `SESSION_SECRET_KEY`/`ADMIN_PASSWORD_HASH` | Set both, or `APP_ENV=local` for development |
 | `docker compose up` complains about `POSTGRES_PASSWORD` | Not set in `.env` | Set it |
 | `failed to connect to the docker API` | Docker Desktop is not running | Start it and retry |
+| A code change does not show up in the browser, or a large upload is as slow as before | The Docker stack is still running the old images | `docker compose up -d --build` (the database volume is kept) |
+| A large upload takes minutes | python-evtx renders about 100-235 records per second per core; files are read in parallel on up to 16 cores (`NIGHTOWL_EVTX_WORKERS` overrides). Measured in the Docker backend: 56 MB / 48,125 records in about 95 s end to end | Expected. Use a 5-10 MB capture for a demo. A faster Rust reader exists (`NIGHTOWL_EVTX_BACKEND=rust`) but is experimental and off, because its output is not identical |
+| The tab running an upload stops responding after being left in the background | Chrome's Memory Saver suspended or discarded the tab | Keep the tab in front during a long upload; the server finishes the upload either way and stored events are skipped as duplicates on a re-upload |
 | First container start is slow | Knowledge-base build downloads the embedding model | Expected once; it's cached in a volume |
 | Every POST returns 403 | Client isn't sending `X-NightOwl-Request` | Add the header (the console does) |
 | Login returns 429 | Too many failed attempts | Wait a minute |

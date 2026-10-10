@@ -11,6 +11,7 @@ A final-year major project built by a team of 4, AI-assisted.
 - Incident grouping per host with a sliding one-hour window, status workflow, alert de-duplication, audit trail
 - RAG explanations and incident chat (ChromaDB + sentence-transformers + Groq), with a self-critique pass, source attribution, prompt-injection containment for log content and flagging of any ATT&CK id the model invents
 - An advisory "second opinion" on telemetry no rule covers
+- Large uploads are read in parallel across CPU cores and show live progress ("Reading N of M records", then "Analysing events"); after pulling new code, rebuild the Docker images with `docker compose up -d --build`
 - **Experimental ML anomaly layer** — per-log-family models flag unusual 10-minute windows and record which features drove the score. It is supporting evidence only (advisory mode): it never opens or changes an incident and is never counted as a detection. See [`ML.md`](ML.md) for why
 - SOC console: overview, incidents, investigation view and timeline, AI assistant, MITRE ATT&CK matrix, alerts (detections and ML anomalies kept apart), logs, rules, reports, settings with live system status, Demo Mode
 - Single-admin authentication: bcrypt password, signed session cookie backed by a revocable server-side session, CSRF header check, failed-login throttling
