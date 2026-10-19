@@ -156,6 +156,16 @@ def _public_reason(exc: Exception) -> str:
     status = _status_code(exc)
     name = type(exc).__name__.lower()
     if status == 429 or "ratelimit" in name:
+        # The provider's own wait, when it gives one: a per-day token quota
+        # ("try again in 12m48s") must not be reported as "a minute".
+        match = _RETRY_AFTER.search(str(exc))
+        if match:
+            seconds = int(match.group(1) or 0) * 60 + float(match.group(2))
+            if seconds > 90:
+                return (
+                    "the AI provider's usage limit was reached -- "
+                    f"try again in about {round(seconds / 60)} minutes"
+                )
         return "the AI provider's rate limit was reached -- try again in a minute"
     if status in (401, 403) or "authentication" in name or "permission" in name:
         return "the AI provider rejected the configured API key"

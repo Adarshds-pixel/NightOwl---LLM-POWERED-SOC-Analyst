@@ -342,7 +342,16 @@ def test_a_long_rate_limit_still_fails_at_once(monkeypatch):
 
     FakeChatGroq.invoke_side_effect = daily_quota
 
-    with pytest.raises(LLMProviderError, match="rate limit"):
+    with pytest.raises(LLMProviderError, match="usage limit was reached -- try again in about 14 minutes"):
         generate([])
     assert len(calls) == 1
     assert slept == []
+
+
+def test_a_daily_quota_message_reports_the_real_wait():
+    from app.rag.llm_client import _public_reason
+
+    daily = _RateLimitError("Rate limit reached on tokens per day (TPD). Please try again in 12m48.096s.")
+    assert "about 13 minutes" in _public_reason(daily)
+    minute = _RateLimitError("Rate limit reached on tokens per minute. Please try again in 20.4s.")
+    assert "try again in a minute" in _public_reason(minute)
