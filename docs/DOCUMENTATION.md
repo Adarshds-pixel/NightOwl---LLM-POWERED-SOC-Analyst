@@ -458,7 +458,7 @@ The frontend has one build-time variable, `VITE_API_BASE_URL`. No secret is ever
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                  # 814 offline tests
+./venv/Scripts/python -m pytest                  # 820 offline tests
 ./venv/Scripts/python scripts/upload_sweep.py    # every sample file's verdict
 ./venv/Scripts/python -m pytest -m integration   # 5 tests: real KB/embeddings, Postgres
 cd ../frontend && npx tsc -b && npm run lint && npm run build

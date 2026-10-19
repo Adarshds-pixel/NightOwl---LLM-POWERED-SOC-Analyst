@@ -10,9 +10,8 @@ backend/venv
 backend/.pytest_cache
 backend/tests
 backend/scripts/cache
-backend/scripts/eval
 ai/vector_store
-ai/mitre/*.json
+ai/tools/*_output.json
 # Only the detected attack captures are copied into the image (Demo Mode);
 # everything else under sample_logs stays out of the build context.
 backend/sample_logs/real_world_fixtures/benign

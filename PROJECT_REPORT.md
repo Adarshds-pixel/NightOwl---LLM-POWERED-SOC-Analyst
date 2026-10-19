@@ -351,7 +351,7 @@ Copy each machine's `C:\NightOwl\export` folder to `backend\sample_logs\benign_c
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                         # 778 offline tests
+./venv/Scripts/python -m pytest                         # 820 offline tests
 ./venv/Scripts/python scripts/upload_sweep.py           # verdict for every sample file
 ./venv/Scripts/python scripts/run_detection_benchmark.py
 ./venv/Scripts/python scripts/build_failure_matrix.py

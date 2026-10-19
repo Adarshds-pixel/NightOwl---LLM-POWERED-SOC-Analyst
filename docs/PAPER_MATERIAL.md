@@ -387,7 +387,7 @@ day you last opened it.
 ATT&CK: Design and philosophy," The MITRE Corporation, McLean, VA, USA, Tech. Rep., 2018.
 
 [2] The MITRE Corporation, "MITRE ATT&CK Enterprise matrix, version 19.2." [Online]. Available:
-https://attack.mitre.org (bundled in this project as `ai/mitre/enterprise-attack.json`)
+https://attack.mitre.org (technique index bundled in this project as `backend/app/mitre/data/enterprise_attack_v19_2.json.gz`)
 
 [3] SigmaHQ, "Sigma: Generic signature format for SIEM systems." GitHub. [Online]. Available:
 https://github.com/SigmaHQ/sigma (rules validated with pySigma)
