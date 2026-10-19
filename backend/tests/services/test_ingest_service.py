@@ -776,7 +776,7 @@ def test_a_cleared_system_log_is_a_notice_naming_the_account_not_an_alert(api_cl
         assert outcome.alerts_created == 0
         assert outcome.incident_ids == []
         assert [n.kind for n in outcome.notices] == ["log_cleared"]
-        assert "SERVER002\lplui" in outcome.notices[0].message
+        assert "SERVER002\\lplui" in outcome.notices[0].message
         assert "System log was cleared" in outcome.notices[0].message
         assert outcome.uncovered_events == 0  # it was evaluated -- reported as a notice
 

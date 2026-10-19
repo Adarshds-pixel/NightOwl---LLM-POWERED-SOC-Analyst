@@ -125,7 +125,7 @@ def test_user_data_fields_are_read_so_a_log_clear_names_who_did_it():
     event = normalize_event(record)
     assert event.event_data["SubjectUserName"] == "lplui"
     assert event.event_data["Channel"] == "System"
-    assert event.user == "SERVER002\lplui"
+    assert event.user == "SERVER002\\lplui"
     assert "@xmlns" not in event.event_data
 
 
@@ -189,7 +189,7 @@ def _pipe(name: str, offset_ms: int, image: str = "System"):
 def test_named_pipe_sweep_fires_on_the_real_burst_across_many_pipes():
     from app.detection.sequences import NAMED_PIPE_SWEEP
 
-    pipes = ["\lsass", "\browser", "\atsvc", "\epmapper", "\eventlog", "\InitShutdown", "\LSM_API_service", "\ntsvcs", "\ROUTER", "\scerpc", "\srvsvc"]
+    pipes = ["\\lsass", "\\browser", "\\atsvc", "\\epmapper", "\\eventlog", "\\InitShutdown", "\\LSM_API_service", "\\ntsvcs", "\\ROUTER", "\\scerpc", "\\srvsvc"]
     rows = [_pipe(name, i * 20) for i, name in enumerate(pipes)]
     assert [m.rule_id for _a, m in detect_sequences(rows) if m.rule_id == NAMED_PIPE_SWEEP.rule_id]
 
@@ -197,9 +197,9 @@ def test_named_pipe_sweep_fires_on_the_real_burst_across_many_pipes():
 def test_named_pipe_sweep_ignores_a_normal_client_and_repeats_of_one_pipe():
     from app.detection.sequences import NAMED_PIPE_SWEEP
 
-    client = [_pipe(n, i * 20) for i, n in enumerate(["\srvsvc", "\wkssvc", "\lsass"])]
+    client = [_pipe(n, i * 20) for i, n in enumerate(["\\srvsvc", "\\wkssvc", "\\lsass"])]
     assert not [m for _a, m in detect_sequences(client) if m.rule_id == NAMED_PIPE_SWEEP.rule_id]
-    repeated = [_pipe("\lsass", i * 20) for i in range(30)]
+    repeated = [_pipe("\\lsass", i * 20) for i in range(30)]
     assert not [m for _a, m in detect_sequences(repeated) if m.rule_id == NAMED_PIPE_SWEEP.rule_id]
 
 
