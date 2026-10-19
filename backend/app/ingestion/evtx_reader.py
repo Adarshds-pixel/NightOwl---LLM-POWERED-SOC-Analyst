@@ -159,20 +159,35 @@ def _read(path: Path, workers: int | None, as_dicts: bool) -> Iterator:
         ctx = multiprocessing.get_context("spawn")
         counter = ctx.Value("i", 0)
         key = str(path)
+        done = 0  # ranges already yielded, so a fallback resumes exactly after them
         try:
-            with ProcessPoolExecutor(
-                max_workers=n_workers, mp_context=ctx, initializer=_init_worker, initargs=(counter,)
-            ) as pool:
-                futures = [pool.submit(_render_chunk_range, str(path), a, b, as_dicts) for a, b in ranges]
-                for future in futures:  # in submission order == file order
-                    while True:
-                        try:
-                            batch = future.result(timeout=0.3)
-                            break
-                        except FutureTimeout:
-                            render_progress[key] = counter.value
-                    render_progress[key] = counter.value
-                    yield from batch
+            try:
+                with ProcessPoolExecutor(
+                    max_workers=n_workers, mp_context=ctx, initializer=_init_worker, initargs=(counter,)
+                ) as pool:
+                    futures = [pool.submit(_render_chunk_range, str(path), a, b, as_dicts) for a, b in ranges]
+                    for future in futures:  # in submission order == file order
+                        while True:
+                            try:
+                                batch = future.result(timeout=0.3)
+                                break
+                            except FutureTimeout:
+                                render_progress[key] = counter.value
+                        render_progress[key] = counter.value
+                        yield from batch
+                        done += 1
+            except Exception as e:  # noqa: BLE001 -- a lost worker must not lose records
+                # Found on 2026-10-19: with Windows out of memory ("the paging
+                # file is too small"), worker processes died at start-up and a
+                # 29,109-record capture was read as nothing. Every range not yet
+                # yielded is now rendered in this process instead: slower, and
+                # the same records in the same order.
+                logger.warning(
+                    "parallel EVTX read of %s failed after %d of %d ranges (%s); finishing in-process",
+                    path, done, len(ranges), e,
+                )
+                for a, b in ranges[done:]:
+                    yield from _render_chunk_range(str(path), a, b, as_dicts)
         finally:
             render_progress.pop(key, None)
     except FileNotFoundError:

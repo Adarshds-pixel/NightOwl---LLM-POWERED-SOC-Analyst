@@ -5,11 +5,13 @@
 then event C happen together," or "did N different things happen from the
 same source within a window." This module is a small, hand-written detector
 for exactly the patterns real corpus fixtures need -- not a general sequence
-DSL. Eight patterns (see SEQUENCE_PATTERNS): Process Herpaderping, an SMB
+DSL. Eleven patterns (see SEQUENCE_PATTERNS): Process Herpaderping, an SMB
 share-enumeration probe, Kerberos password spray, authentication brute
-force, remote SAM/LSA enumeration, mass process access, group self-add and
-bulk group-membership addition. Each was added only once a real capture
-needed it, with thresholds checked against the benign corpus.
+force, remote SAM/LSA enumeration, mass process access, group self-add,
+bulk group-membership addition, SMB fan-out, named-pipe sweep, and a SYSTEM
+process started by a parent running as another account. Each was added only
+once a real capture needed it, with thresholds checked against the benign
+corpus.
 
 Scope, explicitly: each detector only looks within the current ingest
 batch (the same `records` one `POST /ingest` call parses), never a
@@ -704,7 +706,7 @@ def _detect_system_child_of_user_process(rows: list[EventRow]) -> list[tuple[Eve
 
 
 def detect_sequences(rows: list[EventRow]) -> list[tuple[Event, RuleMatch]]:
-    """Runs all three patterns over one ingest batch's (Event row,
+    """Runs every pattern over one ingest batch's (Event row,
     NormalizedEvent) pairs. Returns (anchor_event, RuleMatch) pairs in the
     same shape ingest_service.py's existing per-event rule-match loop
     already produces, so the caller can feed each straight into

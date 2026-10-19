@@ -7,7 +7,7 @@ still owns (file-format checks, multipart handling); this module starts at
 `IngestResponse`-shaped counts the route returns -- including the telemetry-
 profiler fields (`channels`, `providers`, `event_id_breakdown`) that show
 what's actually in a file, computed in the same pass as everything else
-rather than a second read of the upload, the 3-pattern sequence engine
+rather than a second read of the upload, the multi-event sequence engine
 (`detection/sequences.py`) that runs once over the whole persisted batch
 after the per-event rule loop below, for the handful of techniques a
 single-event rule structurally cannot express, and the ML anomaly layer
@@ -400,7 +400,7 @@ def ingest_records(
                 (event_row.id, match, stamp, incident.id, {"occurrence_count": 1, "last_matched_at": None})
             )
 
-    # The 3-pattern sequence engine (pending.md item 5): needs the whole
+    # The multi-event sequence engine (pending.md item 5): needs the whole
     # batch at once (a multi-event correlation, not a per-event rule), so
     # it runs after the per-event loop above rather than inside it. Feeds
     # the exact same incident/alert plumbing every regular rule match

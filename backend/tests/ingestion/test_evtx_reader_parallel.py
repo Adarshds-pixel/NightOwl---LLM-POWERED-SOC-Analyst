@@ -78,3 +78,33 @@ def test_parallel_dicts_match_in_process_dicts(monkeypatch):
     parallel = list(evtx_reader.read_records_as_dicts(FIXTURE))
     assert len(sequential) == 351
     assert parallel == sequential
+
+
+class _DyingPool:
+    """Stands in for ProcessPoolExecutor when worker processes cannot start --
+    the 2026-10-19 low-memory case: the first result raises BrokenProcessPool."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def submit(self, *args, **kwargs):
+        from concurrent.futures import Future
+        from concurrent.futures.process import BrokenProcessPool
+
+        future = Future()
+        future.set_exception(BrokenProcessPool("a child process terminated abruptly"))
+        return future
+
+
+def test_a_broken_worker_pool_falls_back_to_reading_in_process(monkeypatch):
+    expected = list(evtx_reader.read_raw_records(FIXTURE, workers=1))
+    monkeypatch.setattr(evtx_reader, "ProcessPoolExecutor", _DyingPool)
+    recovered = list(evtx_reader.read_raw_records(FIXTURE, workers=3))
+    assert len(recovered) == 351
+    assert recovered == expected
