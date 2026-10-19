@@ -89,8 +89,12 @@ def load_events(path: Path) -> tuple[list, int, int]:
                 skipped += 1
                 continue
             events.append(event.model_copy(update={"raw": {}}))
-    except EvtxReadError:
-        pass
+    except EvtxReadError as e:
+        # Reported and never cached: on 2026-10-19 a read that failed under
+        # memory pressure was cached as an empty capture, and every later run
+        # silently scored the 29,109-record PetitPotam file as "no events".
+        print(f"WARNING: could not read {path.name}: {e}", file=sys.stderr)
+        use_cache = False
     events.sort(key=lambda e: e.timestamp)
     result = (events, read, skipped)
     if not use_cache:
