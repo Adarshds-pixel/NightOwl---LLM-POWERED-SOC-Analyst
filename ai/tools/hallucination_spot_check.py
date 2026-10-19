@@ -18,6 +18,7 @@ and names the expected technique.
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -213,6 +214,11 @@ def _in_memory_db():
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--no-llm", action="store_true", help="check detection only; skip the explain calls")
+    parser.add_argument(
+        "--pause", type=float, default=0.0,
+        help="seconds to wait between explain calls (the free Groq tier allows 8,000 tokens a minute; "
+        "one explanation with its self-critique uses about 5,000, so use 60 there)",
+    )
     args = parser.parse_args()
 
     session_factory = _in_memory_db()
@@ -273,6 +279,8 @@ def main() -> None:
             mismatches += 0 if ok else 1
             print(f"  {host}: incident {info['incident_id']} {techniques} {'ok' if ok else 'TECHNIQUE MISMATCH'}")
             if not args.no_llm:
+                if args.pause and spot_checks:
+                    time.sleep(args.pause)
                 try:
                     resp = client.post(f"/incidents/{info['incident_id']}/explain")
                     if resp.status_code == 200:
