@@ -2,7 +2,7 @@
 
 Everything about the project in one file: what it is, what you decided, what was built and why, what was measured, where it stands today, and what is left for you to do.
 
-> **Snapshot:** 10 October 2026 · branch `fix/production-readiness` (33 commits) · 807 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
+> **Snapshot:** 19 October 2026 · branch `main` on GitHub · 814 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
 >
 > This file is the story and the status. For deep technical reference (API tables, data model, environment variables, troubleshooting) see `docs/DOCUMENTATION.md`; for the machine-learning layer see `ML.md`; for the quick start see `README.md`.
 
@@ -170,8 +170,10 @@ docs/                    DOCUMENTATION.md, postman/
 | Single-line commit messages, no co-author trailer | Followed. |
 | Get approval before live Sysmon or tool-config changes; don't build ahead of the roadmap | Followed. |
 | Benign files must read Normal, never Suspicious, Inconclusive or "no coverage" | Drove the coverage redesign. |
-| Test by uploading **every** sample file yourself in Chrome, after resetting the data | Done: 102 files, plus the report. |
-| You will collect benign logs from more machines for the ML layer | **Still to do (§9).** |
+| Test by uploading **every** sample file yourself in Chrome, after resetting the data | Done: 95 files on 10 Oct (blind audit), plus a re-check of the fixes on 10 and 19 Oct. |
+| You will collect benign logs from more machines for the ML layer | **Deferred (19 Oct):** ML stays experimental and is future work; the paper comes first. |
+| Write a literature/journal paper from the project | Source material in `docs/PAPER_MATERIAL.md`. |
+| Push and merge | Pushed and fast-forwarded into `main` on 10 Oct, after your own browser checks. |
 | Keep the project honest: no invented numbers, panels or accuracy claims | Every figure is script-generated; unsupported panels were removed. |
 
 Decisions that were made along the way and still stand (technical):
@@ -204,22 +206,15 @@ Decisions that were made along the way and still stand (technical):
 
 ## 7. Current status
 
-**Done, committed locally (not pushed):** everything in §3–§4. Working tree is clean at `edfd521`.
+**On GitHub `main`.** Everything below is committed; the 19 October work is committed locally and pushed only when you say so.
 
-**Verified**
+**Verified on 19 October 2026**
 
-- 807 backend tests pass; frontend type-check and build pass; lint shows warnings only.
-- Clean Docker install in production mode: migrations, knowledge-base build, login, Demo Mode, upload, incident, explain, chat, status change and audit, logout and session revocation.
-- The new routes and rules running **inside the production backend image** against a throwaway database.
-- A headless Chrome run on an isolated copy: Normal verdicts on benign files, log-clear notices with the account, Suspicious on attacks, the ML panel, the ML alerts view, the new Logs cards.
-- The full 102-file sweep and the benchmark.
-
-**Not verified yet — be aware**
-
-- The Chrome **extension** never connected, so I had no live control of your own browser. The headless run covered the main screens, but **the AI Retry button, Demo Mode after these changes, and the 56 MB upload through the new async path have not been exercised in a browser.** Please try them (§9).
-- The last frontend tweak (shortened provider list) is built into your container but not re-screenshotted.
-
-**Your running stack** (http://localhost:5173) is rebuilt with all of this. Its database still holds the audit uploads; use Demo Mode → Reset demo data for a clean slate.
+- 814 backend tests and 5 integration tests pass, on Windows and inside the Linux backend image; frontend type-check and build pass, lint shows warnings only.
+- Every Python file compiles with warnings treated as errors (17 broken backslash strings in tests fixed).
+- Detection benchmark 59/61 correct technique, 60/61 any alert, 0 false alarms on 25 benign captures; upload sweep 88/88 as expected.
+- No API keys or private `.env` files in the repository.
+- RAG audit with real AI calls (§7c).
 
 ---
 
@@ -243,6 +238,26 @@ All 95 real-world captures were judged independently from their raw content, the
 
 ---
 
+## 7c. 19 October 2026: re-verification and RAG audit
+
+**Two robustness bugs found by re-running everything:**
+- Running the test suite next to the benchmark exhausted Windows memory; the parallel reader's worker processes died and a 29,109-record capture came back empty. The reader now finishes the remaining part of the file in one process when workers die (`85ccd10`).
+- The benchmark script then cached that empty result and reused it on every later run; it now reports a failed read and never caches it (`91b35ce`).
+
+**RAG audit and three fixes** (full tables in `docs/PAPER_MATERIAL.md` §5.4):
+
+| Finding | Fix | Commit |
+|---|---|---|
+| Explanations and chat saw only process, command line and user: 4 of 10 explanations reported the destination, file or registry value as missing (one guessed it wrongly), and chat could not name the service of a real PsExec capture | The detection event's own fields and key fields of related events go into the evidence, bounded | `cd3c1e3` |
+| A chat follow-up on a real capture was 8,012 tokens and the free Groq tier refused it | Evidence, each earlier turn and the history as a whole are capped; worst case about 4,500 tokens | `291881e` |
+| The second opinion's candidate techniques were right only 23-42% of the time at a retrieval score of 0.50 | Floor raised to 0.55, where every candidate measured was right | `6403172` |
+
+After the fixes: 10/10 explanations state the event's key facts; chat answers the service question and the follow-up, refuses facts not in the evidence, declines off-topic requests and ignored a planted prompt injection. One honest limit remains: the evidence carries only 5 nearby events, so a C2 connection 2 seconds later in a 10-event capture is not seen, and chat says so.
+
+**Retrieval finding for the paper:** from raw events alone, retrieval finds the right ATT&CK technique in the top 3 for only 13 of 61 captures (21 with the file name). Deterministic rules naming the technique, with retrieval filtered to it, is the right design.
+
+---
+
 ## 8. Known limitations and risks
 
 - **ML is advisory and noisy.** It flags benign machines (see §4.6). Do not switch to `alert` mode until retrained and re-measured.
@@ -261,9 +276,10 @@ All 95 real-world captures were judged independently from their raw content, the
 
 ### 9.1 Required for "perfect" (only you can do these)
 
-1. **Collect benign logs for the ML layer.** At least 5 more machines (a mix of laptops, desktops, servers), 3 or more normal days each, Sysmon network (event 3) logging on. Commands are in Appendix A. Then give me the folder and I will retrain, re-run the held-out check and run the upload sweep on them. Alert mode is switched on only if false windows reach about **1 per machine per day or fewer**.
+1. **(Deferred, future work) Collect benign logs for the ML layer.** At least 5 more machines (a mix of laptops, desktops, servers), 3 or more normal days each, Sysmon network (event 3) logging on. Commands are in Appendix A. Then give me the folder and I will retrain, re-run the held-out check and run the upload sweep on them. Alert mode is switched on only if false windows reach about **1 per machine per day or fewer**.
 2. **Look at it in your own browser** (Appendix B), especially the three unverified items in §7.
-3. **Decide the push:** push `fix/production-readiness` to GitHub, and whether to open a pull request into `main` for review or merge directly. Nothing is pushed until you say so.
+3. **Push the 19 October commits** when you are ready (the earlier work is already on `main`).
+4. **Confirm the source of the attack captures** before citing them in the paper (`docs/PAPER_MATERIAL.md` §4).
 
 ### 9.2 Before a real deployment
 

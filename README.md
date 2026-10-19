@@ -6,7 +6,7 @@ A final-year major project built by a team of 4, AI-assisted.
 
 ## Features
 - EVTX upload (up to 100 MB) with per-file telemetry profiling: which channels and event types were in the file, and which of them any rule can evaluate
-- **Detection:** 69 Sigma-style YAML rules + 11 multi-event sequence detectors (brute force, Kerberos password spray, group-membership abuse, SAM/LSA enumeration, mass process access, Process Herpaderping, SMB share enumeration). Rules are validated at load time — an unscoped rule, an unsupported modifier, an unparseable condition or an ATT&CK tag that does not belong to the rule's technique is rejected, not silently loaded
+- **Detection:** 69 Sigma-style YAML rules + 11 multi-event sequence detectors (brute force, Kerberos password spray, group-membership abuse, SAM/LSA enumeration, mass process access, Process Herpaderping, SMB share enumeration, SMB fan-out, named-pipe sweep, SYSTEM process started by another account's process). Rules are validated at load time — an unscoped rule, an unsupported modifier, an unparseable condition or an ATT&CK tag that does not belong to the rule's technique is rejected, not silently loaded
 - ATT&CK v19.2 technique mapping (dataset bundled — no network needed) and tactic-weighted severity
 - Incident grouping per host with a sliding one-hour window, status workflow, alert de-duplication, audit trail
 - RAG explanations and incident chat (ChromaDB + sentence-transformers + Groq), with a self-critique pass, source attribution, prompt-injection containment for log content and flagging of any ATT&CK id the model invents
@@ -19,7 +19,7 @@ A final-year major project built by a team of 4, AI-assisted.
 
 ## Measured results
 
-All numbers are produced by scripts in `backend/scripts/` and checked into the repo next to them — re-run a script to refresh them.
+All numbers are produced by scripts in `backend/scripts/` and `ai/tools/` — re-run a script to refresh them. The full evaluation, decision log and limitations for a paper are in [`docs/PAPER_MATERIAL.md`](docs/PAPER_MATERIAL.md).
 
 | What | Result | Source |
 |---|---|---|
@@ -28,7 +28,9 @@ All numbers are produced by scripts in `backend/scripts/` and checked into the r
 | False-positive alerts on 25 benign captures (252,594 events) | **0** | same |
 | What an upload shows for each of the 88 sample files | 27 benign → **Normal**; 60 attack → Suspicious, 1 → Review recommended | `upload_sweep.py` |
 | ML anomaly layer, held-out benign windows flagged | 1–4.5 per host-day (deployment protocol) | `eval_ml_model.py` → `ml_eval_results.json` |
-| Backend tests | 778 offline + 5 integration | `pytest` / `pytest -m integration` |
+| Explanations stating the event's key facts correctly (10 crafted incidents, real LLM) | **10 / 10** (6 / 10 before the 19 Oct evidence fix) | `ai/tools/hallucination_spot_check.py` |
+| Knowledge-base coverage of the techniques NightOwl can emit | 50 / 50 | `docs/PAPER_MATERIAL.md` §5.4 |
+| Backend tests | 814 offline + 5 integration | `pytest` / `pytest -m integration` |
 
 Caveat on the detection numbers: every attack capture in the corpus informed rule development at some point, so these are development-set figures, not a held-out estimate. The 2 misses and why are listed in `backend/scripts/failure_matrix.md`.
 

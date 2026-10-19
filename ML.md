@@ -2,6 +2,8 @@
 
 **Status: experimental, advisory by default.** The layer is wired end to end and its records carry their own evidence, but measured on the data available today it is not accurate enough to raise alerts. It therefore never opens or changes an incident and is never counted as a detection. Everything below is reproducible with `backend/scripts/train_ml_model.py` and `backend/scripts/eval_ml_model.py`.
 
+**Decision (19 October 2026):** retraining is deferred. Collecting benign logs from at least 5 more machines over 3+ days is future work, so the layer stays experimental and advisory, and the paper reports it as a negative result with its measured numbers (`docs/PAPER_MATERIAL.md` §5.7). In the 10 October blind audit it raised 36 unusual windows on benign files against 23 on attack files.
+
 ## What it does
 
 The unit is a **window**: all events of one log family (Security, Sysmon, PowerShell, System or Application) from one host within one 10-minute bucket. That is exactly what one uploaded EVTX file produces, since one file is one channel, so the model is trained on the same shape of data it scores.

@@ -193,7 +193,7 @@ Three guards keep the review from contradicting or embellishing a detection: (1)
 ### Outside the rule engine
 
 - **Advisory patterns** (`services/advisory_patterns.py`) are event shapes too false-positive-prone to alert on, such as `System` connecting to `\lsass`/`\srvsvc`. They are routed to the AI second opinion and never create alerts.
-- **The ML anomaly layer** (`app/ml/`) has per-log-family models over 10-minute windows. It runs in **advisory mode** by default: it records anomalies with the features behind each one and links them to an existing incident, but never opens one and never counts as a detection. On a familiar machine it produces 1–4.5 false windows per host-day, and it does not transfer to unseen machines. Full design and evaluation: [`ML.md`](../ML.md).
+- **The ML anomaly layer** (`app/ml/`) has per-log-family models over 10-minute windows. It is **experimental** and runs in **advisory mode** by default (retraining on more machines is deferred to future work, 19 October 2026): it records anomalies with the features behind each one and links them to an existing incident, but never opens one and never counts as a detection. On a familiar machine it produces 1–4.5 false windows per host-day, and it does not transfer to unseen machines. Full design and evaluation: [`ML.md`](../ML.md).
 
 ---
 
@@ -229,23 +229,40 @@ The AI second opinion's verdict is read only from a strict heading line. Any ATT
 ### What the model sees
 
 `incident_service.build_incident_evidence()` builds the evidence from:
-- the incident's primary *detection* alert: process, parent, command line, user, rule title and method;
-- up to 5 nearby events on both sides of it;
+- the incident's primary *detection* alert: process, parent, command line, user, rule title, method, time and source;
+- **the detection event's own fields** (`event_details`): up to 15 "Name: value" lines, each at most 240 characters, with identifiers that mean nothing to an analyst (GUIDs, logon and process ids, UtcTime) removed;
+- up to 5 nearby events on both sides of it, each with its key fields (destination address and port, file, registry key and value, pipe, service, account, share, task);
 - any ML anomalies, listed separately as supporting statistics.
 
-An ML record is never chosen as the primary alert.
+An ML record is never chosen as the primary alert. Before 19 October 2026 the evidence carried only process, parent, command line and user, and for network, file and registry detections the explanation reported the destination, file or registry value as "not in the evidence" (§7 Evaluation).
 
 ### Provider, caching, failure
 
 - **Groq only**, behind `rag/llm_client.py`. There is no silent fallback, so an outage surfaces as a 503 carrying a sanitised reason. Provider error bodies are not echoed.
 - **Route-level response cache:** on by default with a 900 s TTL. It is keyed on the incident id *and* its evidence (alert count and latest alert), so new detections invalidate it. Demo reset clears it.
 - **Optional prompt-hash cache** in `llm_client`, off by default.
-- **Bounded history:** chat sends the last 10 messages.
+- **Bounded requests:** chat sends at most the last 10 messages, each earlier turn shortened to 1,200 characters and the history as a whole to 4,000 (newest kept first); evidence is rendered with tighter limits in chat (command line 1,200 characters, other fields 500, each related event 400). The worst case is about 4,500 tokens, under the free Groq tier's 8,000-token-per-minute ceiling that one unbounded follow-up exceeded (8,012 tokens). `tests/rag/test_prompt_size.py` checks it.
 - **Retries:** one retry, on retryable errors only.
+
+### AI second opinion guards
+
+The second opinion reviews only *unchecked* and advisory-pattern events (§5). Five guards, each added after a measured failure in the 10 October fixture audit:
+- every sampled event carries a verified name looked up by channel *and* event id, and a known RPC interface carries its service name from Microsoft's open protocol specifications (`detection/event_names.py`), so the model never guesses what a number or UUID means;
+- the prompt forbids identifying an unnamed identifier and forbids guessing what a listed detection matched;
+- when a pipe-based sequence detector fires on a host, that host's other named-pipe events are not sent;
+- when the file already has rule detections, technique documents are withheld from its retrieval;
+- a candidate ATT&CK technique is offered only above a retrieval score of 0.55 (measured: 23-42% of candidates correct at 0.50, all correct at 0.55).
 
 ### Evaluation (measured, not assumed)
 
-**Retrieval quality** (10 queries): 9 out of 10 returned the correct playbook or technique in the top 3. The miss was a vocabulary gap: "beaconing" never appears in the C2 playbook.
+The full numbers, with before/after tables, are in `docs/PAPER_MATERIAL.md` §5.4.
+
+- **Knowledge-base coverage:** all 50 ATT&CK techniques NightOwl can emit have their own chunks (1,888 chunks: 1,872 ATT&CK, 16 playbook).
+- **Unfiltered retrieval from raw events** (61 labelled captures): the expected technique is in the top 3 for 13 of 61 captures from the events alone, 21 of 61 with the file name. This is why the technique comes from the rules and retrieval is filtered to it.
+- **Explanations** (10 crafted incidents, real LLM): every key fact stated correctly after the evidence fix, against 6 of 10 before.
+- **Chat:** refuses facts the evidence does not hold, declines off-topic requests, and ignored a prompt injection planted in an event's command line.
+
+**Retrieval quality, earlier check** (10 queries): 9 out of 10 returned the correct playbook or technique in the top 3. The miss was a vocabulary gap: "beaconing" never appears in the C2 playbook.
 
 **Hallucination spot-check** (`ai/tools/hallucination_spot_check.py`, 10 crafted incidents) found two issues, both fixed:
 - the critique pass could not see the incident evidence;
@@ -440,7 +457,7 @@ The frontend has one build-time variable, `VITE_API_BASE_URL`. No secret is ever
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                  # 778 offline tests
+./venv/Scripts/python -m pytest                  # 814 offline tests
 ./venv/Scripts/python scripts/upload_sweep.py    # every sample file's verdict
 ./venv/Scripts/python -m pytest -m integration   # 5 tests: real KB/embeddings, Postgres
 cd ../frontend && npx tsc -b && npm run lint && npm run build
@@ -525,7 +542,7 @@ A Postman collection is in `docs/postman/`.
 | `docker compose up` complains about `POSTGRES_PASSWORD` | Not set in `.env` | Set it |
 | `failed to connect to the docker API` | Docker Desktop is not running | Start it and retry |
 | A code change does not show up in the browser, or a large upload is as slow as before | The Docker stack is still running the old images | `docker compose up -d --build` (the database volume is kept) |
-| A large upload takes minutes | python-evtx renders about 100-235 records per second per core; files are read in parallel on up to 16 cores (`NIGHTOWL_EVTX_WORKERS` overrides). Measured in the Docker backend: 56 MB / 48,125 records in about 95 s end to end | Expected. Use a 5-10 MB capture for a demo. A faster Rust reader exists (`NIGHTOWL_EVTX_BACKEND=rust`) but is experimental and off, because its output is not identical |
+| A large upload takes minutes | python-evtx renders about 100-235 records per second per core; files are read in parallel on up to 16 cores (`NIGHTOWL_EVTX_WORKERS` overrides). If worker processes die (for example when Windows runs out of memory), the rest of the file is read in one process instead of being lost. Measured in the Docker backend: 56 MB / 48,125 records in about 95 s end to end | Expected. Use a 5-10 MB capture for a demo. A faster Rust reader exists (`NIGHTOWL_EVTX_BACKEND=rust`) but is experimental and off, because its output is not identical |
 | The tab running an upload stops responding after being left in the background | Chrome's Memory Saver suspended or discarded the tab | Keep the tab in front during a long upload; the server finishes the upload either way and stored events are skipped as duplicates on a re-upload |
 | First container start is slow | Knowledge-base build downloads the embedding model | Expected once; it's cached in a volume |
 | Every POST returns 403 | Client isn't sending `X-NightOwl-Request` | Add the header (the console does) |
@@ -573,6 +590,16 @@ A KPI and chart audit cross-checked every figure in the console against direct d
 **ATT&CK index vendored.** The runtime never needs network access, and tests are deterministic.
 
 **Single admin, no RBAC.** NightOwl has one operator.
+
+**Detection decides the technique; the LLM explains (19 Oct 2026).** Retrieval from raw events alone finds the right ATT&CK technique for only 13 of 61 labelled captures in the top 3 (21 with the file name, which leaks the answer). Rules and sequence detectors name the technique; explanation and chat retrieval is filtered to it.
+
+**The LLM gets the event's own fields (19 Oct 2026).** Passing only process, command line and user made 4 of 10 explanations report key facts as missing. Bounded event fields are now part of the evidence.
+
+**Chat requests are size-bounded (19 Oct 2026).** A follow-up on a real capture exceeded the free tier's per-request ceiling; evidence, each earlier turn and the history are now capped.
+
+**Second-opinion technique candidates at 0.55 (19 Oct 2026).** At 0.50 only 23-42% were correct; at 0.55 all were. A wrong technique next to the evidence is worse than none.
+
+**ML stays experimental (19 Oct 2026).** Retraining needs benign logs from at least 5 more machines; the work is deferred, the layer remains advisory and labelled experimental everywhere in the console.
 
 ---
 
