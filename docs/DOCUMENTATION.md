@@ -229,7 +229,8 @@ The AI second opinion's verdict is read only from a strict heading line. Any ATT
 ### What the model sees
 
 `incident_service.build_incident_evidence()` builds the evidence from:
-- the incident's primary *detection* alert: process, parent, command line, user, rule title, method, time and source;
+- the incident's primary *detection* alert, which is the detection the incident is titled after (falling back to the earliest detection): process, parent, command line, user, rule title, method, time and source;
+- every technique id with its official ATT&CK v19.2 name (`techniques`), because the model does not know ids introduced after its training;
 - **the detection event's own fields** (`event_details`): up to 15 "Name: value" lines, each at most 240 characters, with identifiers that mean nothing to an analyst (GUIDs, logon and process ids, UtcTime) removed;
 - up to 5 nearby events on both sides of it, each with its key fields (destination address and port, file, registry key and value, pipe, service, account, share, task);
 - any ML anomalies, listed separately as supporting statistics.
@@ -242,7 +243,7 @@ An ML record is never chosen as the primary alert. Before 19 October 2026 the ev
 - **Route-level response cache:** on by default with a 900 s TTL. It is keyed on the incident id *and* its evidence (alert count and latest alert), so new detections invalidate it. Demo reset clears it.
 - **Optional prompt-hash cache** in `llm_client`, off by default.
 - **Bounded requests:** chat sends at most the last 10 messages, each earlier turn shortened to 1,200 characters and the history as a whole to 4,000 (newest kept first); evidence is rendered with tighter limits in chat (command line 1,200 characters, other fields 500, each related event 400). The worst case is about 4,500 tokens, under the free Groq tier's 8,000-token-per-minute ceiling that one unbounded follow-up exceeded (8,012 tokens). `tests/rag/test_prompt_size.py` checks it.
-- **Retries:** one retry, on retryable errors only.
+- **Retries:** one retry, on retryable errors only (timeouts, 5xx). A per-minute rate limit (429) is retried once after the provider's own suggested wait when that wait is 30 s or less; a longer one (the free tier's 200,000-token daily quota) fails at once and the console shows the real wait ("try again in about 13 minutes").
 
 ### AI second opinion guards
 

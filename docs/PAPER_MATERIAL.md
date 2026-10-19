@@ -279,6 +279,19 @@ opinions were wrong or misleading. No candidate technique was offered (all retri
 Note that "nothing unusual" here refers only to the leftover events no rule checked, and the console labels
 it that way next to the detections.
 
+### 5.6b Live walkthrough findings (19 October 2026)
+A visual pass through every page of the running Docker stack found three more defects, all fixed and
+re-checked in the browser:
+
+| Finding | Fix | Re-check |
+|---|---|---|
+| The explanation was built from the incident's earliest alert (a log clear), not the detection it is titled after, so a SAM-dump explanation reported the dumped hive file as "not in the evidence" | The titling detection is the primary alert, and its technique leads the incident's technique list | Explanation names `Users\PSAM`, the `C$` share, event 5145 and the account; list shows T1003.002 / Credential Access |
+| Bare ATT&CK ids: the model called T1685.005 (an id introduced in v19, newer than the model) "Remote SAM Dump" | Each id is passed with its official name from the bundled dataset | Explanation names T1685.005 "Clear Windows Event Logs" |
+| A per-minute token limit (free tier: 8,000 tokens a minute) failed Demo Mode's chat question right after an explanation | One retry after the provider's own suggested wait when it is 30 s or less; a longer (daily) quota fails at once with its real wait | Unit tests; chat after an explanation answered correctly |
+
+**Daily quota.** The free Groq tier also caps tokens per day (200,000). A day of evaluation runs used it up;
+one explanation with its self-critique costs about 5,000-8,000 tokens. Avoid heavy AI testing on a demo day.
+
 ### 5.7 ML anomaly layer (experimental, advisory)
 From `ML.md` and `backend/scripts/ml_eval_results.json`:
 - **Within-host temporal split (70/30):** 1.3-4.5 false windows per host-day depending on the log family.
@@ -310,6 +323,9 @@ type-check, lint (warnings only) and production build pass; GitHub Actions runs 
 | Retrieval filtered to the incident's techniques and parents | Unfiltered retrieval | Grounding is always about the named technique; playbooks are written against parent ids | §3.5 |
 | Pass the event's own fields to the LLM, bounded | Process, command line and user only | 4 of 10 explanations missed key facts | §5.4 |
 | Bound chat requests | Unbounded history and evidence | A real follow-up exceeded the provider's per-request ceiling | §5.4 |
+| Explain the detection the incident is titled after | Earliest alert | A SAM-dump explanation described the preceding log clear | §5.6b |
+| Give the model technique names, not bare ids | Bare ids | The model misnamed an ATT&CK v19 id newer than itself | §5.6b |
+| Wait out a short rate limit once | Fail immediately | Demo Mode failed on the free tier's per-minute limit | §5.6b |
 | Second-opinion candidates at 0.55 | 0.50 | 23-42% precision at 0.50, 100% at 0.55 | §5.4 |
 | ML advisory, retraining deferred | Alert mode | False alarms per host-day and transfer failure | §5.7 |
 | python-evtx kept, parallelised; Rust reader opt-in | Rust by default | Rust output not identical; results must not change | §5.5 |
@@ -324,8 +340,8 @@ type-check, lint (warnings only) and production build pass; GitHub Actions runs 
   different estate.
 - **Lab attack captures:** short excerpts recorded in lab domains; real intrusions are longer and noisier.
 - **Labels:** expected techniques per file were set by the project from the capture's name and content.
-- **One LLM provider and model**, on a free tier with an 8,000-token-per-minute limit; results depend on that
-  model.
+- **One LLM provider and model**, on a free tier with an 8,000-token-per-minute and 200,000-token-per-day
+  limit; results depend on that model.
 - **The spot-check incidents are crafted** (one event each); the chat test uses one real capture.
 - **Related-event window:** the evidence carries 5 nearby events; facts further away are not seen (§5.4).
 - **Two detection misses** remain (NTLM relay technique, single-event session enumeration).

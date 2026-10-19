@@ -254,6 +254,10 @@ All 95 real-world captures were judged independently from their raw content, the
 
 After the fixes: 10/10 explanations state the event's key facts; chat answers the service question and the follow-up, refuses facts not in the evidence, declines off-topic requests and ignored a planted prompt injection. One honest limit remains: the evidence carries only 5 nearby events, so a C2 connection 2 seconds later in a 10-event capture is not seen, and chat says so.
 
+**Live walkthrough (same day), three more fixes** (`75ba39f`, `8a3dc98`, `accdf17`): explanations are built from the detection the incident is titled after (its technique now leads the incident list); every technique id reaches the model with its official name; a short per-minute rate limit is waited out once, and a daily quota reports its real wait. Re-checked in the browser on a fresh SAM-dump incident.
+
+**Demo-day note:** the free Groq tier allows 200,000 tokens a day; today's evaluation used it up. Keep AI testing light on the day of a demo.
+
 **Retrieval finding for the paper:** from raw events alone, retrieval finds the right ATT&CK technique in the top 3 for only 13 of 61 captures (21 with the file name). Deterministic rules naming the technique, with retrieval filtered to it, is the right design.
 
 ---
