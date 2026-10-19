@@ -2,7 +2,7 @@
 
 Everything about the project in one file: what it is, what you decided, what was built and why, what was measured, where it stands today, and what is left for you to do.
 
-> **Snapshot:** 19 October 2026 · branch `fix/production-readiness` on GitHub (not yet merged into `main`) · 820 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
+> **Snapshot:** 19 October 2026 · branch `main` on GitHub · 820 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
 >
 > This file is the story and the status. For deep technical reference (API tables, data model, environment variables, troubleshooting) see `docs/DOCUMENTATION.md`; for the machine-learning layer see `ML.md`; for the quick start see `README.md`.
 
@@ -206,7 +206,7 @@ Decisions that were made along the way and still stand (technical):
 
 ## 7. Current status
 
-**On GitHub.** Everything up to 10 October is on `main`; the 19 October work is pushed to `fix/production-readiness` and is merged into `main` when you say so.
+**On GitHub `main`.** Everything below, including the 19 October work, is merged into `main`.
 
 **Paper.** The target is an IEEE-format paper. The 61 attack captures come from two public GitHub collections, Samir Bousseaden's EVTX-ATTACK-SAMPLES and Michel de Crevoisier's EVTX-to-MITRE-Attack (confirmed by you). The source material, the IEEE section plan and the references are in `docs/PAPER_MATERIAL.md` §9-§10.
 

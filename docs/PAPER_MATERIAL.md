@@ -2,7 +2,7 @@
 
 This is the factual base for an **IEEE-format paper** on NightOwl, not the paper itself. Every number
 below comes from a script, a test or a recorded run in this repository, and the source is named next to it.
-Status as of **19 October 2026**, branch `fix/production-readiness` on GitHub (not yet merged into `main`).
+Status as of **19 October 2026**, branch `main` on GitHub.
 §10 maps this material onto the IEEE paper structure and lists the references in IEEE style.
 
 **Scope note for the paper.** NightOwl's machine-learning layer is **experimental**. It runs in advisory
