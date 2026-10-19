@@ -317,6 +317,69 @@ def get_related_events(db: Session, host: str, around: datetime, exclude_event_i
     return sorted(nearest, key=lambda e: (e.timestamp, e.id))
 
 
+# The evidence used to carry only process, parent, command line and user. The
+# 19 Oct 2026 RAG audit showed what that costs: for a network connection, a file
+# write or a registry change the explanation said the destination, file name or
+# registry value "is not in the evidence" (4 of 10 spot-check incidents), guessed
+# a Run key "probably points to %APPDATA%" when it pointed to C:\Users\Public,
+# and chat could not name the service or the C2 address of a real PsExec capture.
+# The event's own fields are now passed, minus identifiers that carry no meaning
+# for an analyst, and bounded so the prompt stays within the provider's limits.
+_DETAIL_FIELDS_SKIPPED = frozenset({
+    "Image", "CommandLine", "User", "ParentImage",  # already promoted above
+    "ProcessGuid", "ParentProcessGuid", "SourceProcessGUID", "TargetProcessGUID", "LogonGuid",
+    "SourceProcessGuid", "TargetProcessGuid", "UtcTime", "RuleName", "SubjectUserSid",
+    "SubjectLogonId", "TargetLogonId", "LogonId", "TerminalSessionId", "SourceThreadId",
+    "SourceProcessId", "TargetProcessId", "ProcessId", "ParentProcessId", "ThreadID",
+    "KeyLength", "TransmittedServices", "LmPackageName", "Version", "Opcode", "Task", "Keywords",
+})
+_MAX_DETAIL_FIELDS = 15
+_MAX_DETAIL_CHARS = 240
+# Fields worth a mention on a related-event line, in order of preference.
+_RELATED_KEY_FIELDS = (
+    "DestinationIp", "DestinationPort", "TargetFilename", "TargetObject", "Details", "PipeName",
+    "ServiceName", "ImagePath", "ServiceFileName", "TargetUserName", "MemberName", "ShareName",
+    "RelativeTargetName", "TaskName", "QueryName", "TargetImage", "GrantedAccess", "ImageLoaded",
+    "IpAddress", "LogonType",
+)
+_RELATED_LINE_CHARS = 400
+
+
+def _event_data(event: Event) -> dict:
+    data = ((event.raw_json or {}).get("normalized") or {}).get("event_data") or {}
+    return data if isinstance(data, dict) else {}
+
+
+def _clip(value: object, limit: int) -> str:
+    text = " ".join(str(value).split())
+    return text if len(text) <= limit else f"{text[:limit]}... [{len(text) - limit} more chars]"
+
+
+def _event_details(event: Event) -> list[str]:
+    """The detection event's own fields as "Name: value" lines, bounded."""
+    lines = []
+    for name, value in _event_data(event).items():
+        if name in _DETAIL_FIELDS_SKIPPED or value in (None, "", "-", [], {}):
+            continue
+        lines.append(f"{name}: {_clip(value, _MAX_DETAIL_CHARS)}")
+        if len(lines) == _MAX_DETAIL_FIELDS:
+            break
+    return lines
+
+
+def _related_event_line(event: Event) -> str:
+    data = _event_data(event)
+    keys = ", ".join(
+        f"{name}={_clip(data[name], 120)}" for name in _RELATED_KEY_FIELDS if data.get(name) not in (None, "", "-")
+    )
+    line = (
+        f"{event.timestamp.isoformat()} {event.channel or 'unknown channel'} event_id={event.event_id} "
+        f"process={event.process or 'unknown'} command_line={event.command_line or 'none'}"
+        + (f" | {keys}" if keys else "")
+    )
+    return _clip(line, _RELATED_LINE_CHARS)
+
+
 def build_incident_evidence(db: Session, incident: Incident) -> dict:
     """The bounded evidence package rag/explain_service.py's and
     rag/chat_service.py's LLM prompts are built from (pending.md item 5:
@@ -376,15 +439,15 @@ def build_incident_evidence(db: Session, incident: Incident) -> dict:
     evidence["event_time_utc"] = primary_event.timestamp.isoformat()
     evidence["event_source"] = f"{primary_event.channel or 'unknown channel'} event {primary_event.event_id}"
 
+    details = _event_details(primary_event)
+    if details:
+        evidence["event_details"] = details
+
     related = get_related_events(
         db, host=primary_event.host, around=primary_event.timestamp, exclude_event_id=primary_event.id
     )
     if related:
-        evidence["related_events"] = [
-            f"{event.timestamp.isoformat()} event_id={event.event_id} "
-            f"process={event.process or 'unknown'} command_line={event.command_line or 'none'}"
-            for event in related
-        ]
+        evidence["related_events"] = [_related_event_line(event) for event in related]
 
     if len(detections) > 1:
         evidence["additional_alerts"] = (

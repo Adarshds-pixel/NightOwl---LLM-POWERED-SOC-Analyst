@@ -475,3 +475,57 @@ def test_a_cleared_log_on_its_own_still_titles_its_incident():
         db.commit()
 
         assert incident.title == f"{LOG_CLEARED} on PC01"
+
+
+def test_evidence_carries_the_detection_events_own_fields_for_non_process_events():
+    """19 Oct 2026 RAG audit: for a network connection the explanation said the
+    destination "is not in the evidence" -- only process/command line/user were
+    passed. The event's own fields now are, minus meaningless identifiers."""
+    real_rule = get_loaded_rules()[0]
+    data = {
+        "Image": "C:/Windows/System32/rundll32.exe",
+        "DestinationIp": "185.220.101.5",
+        "DestinationPort": "443",
+        "Protocol": "tcp",
+        "ProcessGuid": "{aaaa-bbbb}",
+        "UtcTime": "2026-08-19 12:00:00.000",
+    }
+    with Session(_engine()) as db:
+        event = _insert_event(db, event_id=3, process="rundll32.exe", raw_json={"raw": {}, "normalized": {"event_data": data}})
+        _insert_event(
+            db,
+            timestamp=BASE_TIME + timedelta(seconds=5),
+            event_id=13,
+            process=None,
+            raw_json={"raw": {}, "normalized": {"event_data": {"TargetObject": "HKU/Run/Updater", "Details": "C:/Users/Public/update.exe"}}},
+        )
+        match = _match(rule_id=real_rule.rule_id, title=real_rule.title)
+        incident = find_or_create_incident(db, "HOST-A", BASE_TIME, match)
+        db.commit()
+        save_alerts(db, [(event.id, match, BASE_TIME, incident.id)])
+
+        evidence = build_incident_evidence(db, incident)
+
+        assert "DestinationIp: 185.220.101.5" in evidence["event_details"]
+        assert "DestinationPort: 443" in evidence["event_details"]
+        assert not any(line.startswith(("ProcessGuid", "UtcTime", "Image")) for line in evidence["event_details"])
+        assert "TargetObject=HKU/Run/Updater" in evidence["related_events"][0]
+        assert "Details=C:/Users/Public/update.exe" in evidence["related_events"][0]
+
+
+def test_evidence_fields_are_bounded():
+    from app.services import incident_service
+
+    real_rule = get_loaded_rules()[0]
+    data = {f"Field{i}": "x" * 1000 for i in range(40)}
+    with Session(_engine()) as db:
+        event = _insert_event(db, raw_json={"raw": {}, "normalized": {"event_data": data}})
+        match = _match(rule_id=real_rule.rule_id, title=real_rule.title)
+        incident = find_or_create_incident(db, "HOST-A", BASE_TIME, match)
+        db.commit()
+        save_alerts(db, [(event.id, match, BASE_TIME, incident.id)])
+
+        details = build_incident_evidence(db, incident)["event_details"]
+
+        assert len(details) == incident_service._MAX_DETAIL_FIELDS
+        assert all(len(line) < incident_service._MAX_DETAIL_CHARS + 60 for line in details)
