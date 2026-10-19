@@ -282,6 +282,7 @@ def test_build_incident_evidence_with_no_alerts_returns_just_the_bare_fields():
             "host": "HOST-A",
             "technique_id": "T1059.001",
             "technique_ids": ["T1059.001"],
+            "techniques": ["T1059.001 PowerShell"],
         }
 
 
@@ -529,3 +530,45 @@ def test_evidence_fields_are_bounded():
 
         assert len(details) == incident_service._MAX_DETAIL_FIELDS
         assert all(len(line) < incident_service._MAX_DETAIL_CHARS + 60 for line in details)
+
+
+def test_the_titling_detection_leads_the_technique_list_and_the_explanation():
+    """19 Oct 2026: a "Remote SAM Dump" incident listed T1685.005 (log clear)
+    as its technique and its explanation was built from the log clear, so the
+    dumped hive files were reported as "not in the evidence"."""
+    cleared, hive = _rule(LOG_CLEARED), _rule("Registry Hive Saved to an Admin Share (Remote SAM Dump)")
+    with Session(_engine()) as db:
+        clear_event = _insert_event(db, event_id=1102, raw_json={"raw": {}, "normalized": {"event_data": {"SubjectUserName": "jbrown"}}})
+        hive_event = _insert_event(
+            db,
+            timestamp=BASE_TIME + timedelta(seconds=20),
+            event_id=5145,
+            raw_json={"raw": {}, "normalized": {"event_data": {"RelativeTargetName": "Users\\PSAM", "ShareName": "\\*\\C$"}}},
+        )
+        first = _match_for(LOG_CLEARED)
+        incident = find_or_create_incident(db, "DC1", BASE_TIME, first)
+        second = _match_for(hive.title)
+        find_or_create_incident(db, "DC1", BASE_TIME + timedelta(seconds=20), second)
+        db.commit()
+        save_alerts(db, [(clear_event.id, first, BASE_TIME, incident.id), (hive_event.id, second, BASE_TIME + timedelta(seconds=20), incident.id)])
+
+        assert incident.mitre_technique_ids[0] == hive.technique_id
+        assert cleared.technique_id in incident.mitre_technique_ids
+        evidence = build_incident_evidence(db, incident)
+        assert evidence["matched_rule"] == hive.title
+        assert "RelativeTargetName: Users\\PSAM" in evidence["event_details"]
+        assert evidence["technique_id"] == "T1003.002"
+
+
+def test_evidence_names_each_technique_from_the_bundled_attack_dataset():
+    with Session(_engine()) as db:
+        event = _insert_event(db)
+        match = _match_for(LOG_CLEARED)
+        incident = find_or_create_incident(db, "DC1", BASE_TIME, match)
+        db.commit()
+        save_alerts(db, [(event.id, match, BASE_TIME, incident.id)])
+
+        techniques = build_incident_evidence(db, incident)["techniques"]
+
+        assert techniques[0].startswith("T1685.005 ")
+        assert "SAM" not in techniques[0]

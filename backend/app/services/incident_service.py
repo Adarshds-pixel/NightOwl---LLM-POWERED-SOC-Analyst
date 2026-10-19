@@ -23,6 +23,7 @@ from app.detection.engine import RuleMatch
 from app.detection.rule_loader import get_loaded_rules
 from app.detection.sequences import SEQUENCE_PATTERNS
 from app.detection.synthetic import NON_YAML_RULES
+from app.mitre.loader import load_mitre_techniques
 from app.ml.rule import ML_RULE_ID
 from app.models.alert import Alert
 from app.models.event import Event
@@ -154,7 +155,16 @@ def find_or_create_incident(
             existing.mitre_technique_ids = [*existing.mitre_technique_ids, match.technique_id]
         if _new_match_takes_title(existing, match):
             existing.title = _incident_title(match, host)
-        existing.severity = severity_service.higher_severity(existing.severity, match.level)
+            # The titling detection's technique leads the list, so every view
+            # that shows "the" technique (the incident list, the evidence's
+            # technique_id) names the same attack as the title. Found 19 Oct
+            # 2026: a "Remote SAM Dump" incident listed T1685.005 (log clear).
+            if match.technique_id:
+                existing.mitre_technique_ids = [
+                    match.technique_id,
+                    *(t for t in existing.mitre_technique_ids if t != match.technique_id),
+                ]
+        existing.severity =severity_service.higher_severity(existing.severity, match.level)
         existing.severity_score = max(existing.severity_score, match.score)
         return existing
 
@@ -404,16 +414,29 @@ def build_incident_evidence(db: Session, incident: Incident) -> dict:
         "technique_id": incident.mitre_technique_ids[0] if incident.mitre_technique_ids else None,
         "technique_ids": incident.mitre_technique_ids or [],
     }
+    # Each id with its official name from the bundled ATT&CK v19.2 dataset.
+    # Found 19 Oct 2026: given the bare id T1685.005 (log clearing, an id
+    # newer than the model), the explanation called it "Remote SAM Dump".
+    names = load_mitre_techniques()
+    evidence["techniques"] = [
+        f"{tid} {names[tid]['name']}" if tid in names else tid for tid in incident.mitre_technique_ids or []
+    ]
 
     alerts_with_events = get_incident_alerts_with_events(db, incident.id)
     if not alerts_with_events:
         return evidence
 
-    # The primary alert is the earliest RULE detection. An ML anomaly is
-    # stamped at its window start, so it can sort first -- it must never be
+    # The primary alert is the detection the incident is titled after (see
+    # find_or_create_incident's title rule), falling back to the earliest RULE
+    # detection. Found 19 Oct 2026: always taking the earliest made a "Remote
+    # SAM Dump" incident's explanation describe the log clear that preceded it
+    # and report the dumped hive files as "not in the evidence". An ML anomaly
+    # is stamped at its window start, so it can sort first -- it must never be
     # what the explanation is built around while a real detection exists.
     detections = [(a, e) for a, e in alerts_with_events if a.rule_id != ML_RULE_ID]
-    primary_alert, primary_event = (detections or alerts_with_events)[0]
+    titling_rule = _rule_behind_title(incident.title)
+    titled = [(a, e) for a, e in detections if titling_rule is not None and a.rule_id == titling_rule.rule_id]
+    primary_alert, primary_event = (titled or detections or alerts_with_events)[0]
     # Merges in the detectors that have no YAML file behind them the same way
     # get_incident_detail's own rules_by_id does -- a sequence's rule_id
     # (detection/sequences.py) and the ML layer's (app/ml/rule.py) were never
