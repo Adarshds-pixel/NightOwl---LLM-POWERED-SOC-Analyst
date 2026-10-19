@@ -92,17 +92,37 @@ EXPLANATION_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
-_LARGE_FIELDS = {"command_line", "event_data", "related_events", "ScriptBlockText"}
+_LARGE_FIELDS = {"command_line", "event_data", "related_events", "event_details", "ScriptBlockText"}
 
 
-def _render_value(key: str, value) -> str:
-    limit = LARGE_FIELD_LIMIT if key in _LARGE_FIELDS else 1000
+# Chat sends the evidence, five knowledge-base chunks AND up to ten earlier
+# turns in one request. On 19 Oct 2026 a follow-up question on a real PsExec
+# capture (a 3,000-character encoded command line plus five related events)
+# came to 8,012 tokens and the free Groq tier, which caps a request at 8,000
+# tokens a minute, refused it. Chat therefore renders evidence with these
+# tighter limits, shortens each earlier turn and caps the history as a whole
+# (newest turns kept first). Worst case is held under about 6,000 tokens of
+# prompt; tests/rag/test_prompt_size.py checks it.
+CHAT_LARGE_FIELD_LIMIT = 1200
+CHAT_FIELD_LIMIT = 500
+CHAT_LIST_ITEM_LIMIT = 400
+CHAT_TURN_CHARS = 1200
+CHAT_HISTORY_CHARS = 4000
+
+
+def _render_value(
+    key: str, value, large_limit: int = LARGE_FIELD_LIMIT, field_limit: int = 1000, item_limit: int | None = None
+) -> str:
+    limit = large_limit if key in _LARGE_FIELDS else field_limit
     if isinstance(value, list):
-        return "\n".join(f"    - {untrusted(item, limit)}" for item in value)
+        per_item = min(limit, item_limit) if item_limit else limit
+        return "\n".join(f"    - {untrusted(item, per_item)}" for item in value)
     return untrusted(value, limit)
 
 
-def format_incident_context(incident: dict) -> str:
+def format_incident_context(
+    incident: dict, large_limit: int = LARGE_FIELD_LIMIT, field_limit: int = 1000, item_limit: int | None = None
+) -> str:
     """Render an incident dict as a bullet list, fenced as untrusted evidence
     (host names, command lines, users and related events all come from logs
     an attacker can write to -- see rag/safety.py)."""
@@ -112,7 +132,7 @@ def format_incident_context(incident: dict) -> str:
     for key, value in incident.items():
         if value in (None, "", []):
             continue
-        rendered = _render_value(key, value)
+        rendered = _render_value(key, value, large_limit, field_limit, item_limit)
         lines.append(f"- {key}:\n{rendered}" if isinstance(value, list) else f"- {key}: {rendered}")
     return fence("\n".join(lines)) if lines else "(no incident context provided)"
 
@@ -218,13 +238,28 @@ def format_chat_history(history: list[dict]) -> str:
     bounded = bound_chat_history(history)
     if not bounded:
         return "(no prior messages -- this is the first question)"
-    return "\n".join(f"{turn['role']}: {turn['content']}" for turn in bounded)
+    lines: list[str] = []
+    used = 0
+    for turn in reversed(bounded):  # newest first, so the latest context always survives
+        line = f"{turn['role']}: {_shorten(turn['content'], CHAT_TURN_CHARS)}"
+        if lines and used + len(line) > CHAT_HISTORY_CHARS:
+            break
+        lines.append(line)
+        used += len(line)
+    return "\n".join(reversed(lines))
+
+
+def _shorten(text: str, limit: int) -> str:
+    text = text or ""
+    return text if len(text) <= limit else f"{text[:limit]} ...[earlier answer shortened]"
 
 
 def build_chat_prompt(incident: dict, chunks: list[dict], history: list[dict], message: str) -> list[BaseMessage]:
     """Render the full system+human message pair ready for llm_client.generate()."""
     return CHAT_PROMPT.format_messages(
-        incident_context=format_incident_context(incident),
+        incident_context=format_incident_context(
+            incident, CHAT_LARGE_FIELD_LIMIT, CHAT_FIELD_LIMIT, CHAT_LIST_ITEM_LIMIT
+        ),
         retrieved_context=format_chunks(chunks),
         chat_history=format_chat_history(history),
         message=message,
