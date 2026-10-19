@@ -216,7 +216,7 @@ function RulesPage() {
           }`}
         />
         <StatCard label="Triggered 24h" value={triggeredToday} icon={<Target className="h-4 w-4" />} accent="amber" note="Matches in the 24 h before the latest alert" />
-        <StatCard label="Never fired" value={rules.filter((rule) => rule.match_count === 0).length} icon={<CircleSlash className="h-4 w-4" />} accent="neutral" note="No match in the ingested data" />
+        <StatCard label="Never fired" value={rules.filter((rule) => rule.kind !== 'ml' && rule.match_count === 0).length} icon={<CircleSlash className="h-4 w-4" />} accent="neutral" note={`of ${rules.filter((rule) => rule.kind !== 'ml').length} -- no match in the ingested data`} />
         <StatCard label="Categories" value={categories.length} icon={<Layers className="h-4 w-4" />} accent="primary" note="Log source categories covered" />
       </div>
 

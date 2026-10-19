@@ -239,7 +239,11 @@ function IncidentsPage() {
           value={meta.totalLow}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.low}
-          note="Lowest severity band"
+          note={
+            meta.totalInformational > 0
+              ? `Lowest severity band -- plus ${meta.totalInformational} informational`
+              : 'Lowest severity band'
+          }
         />
       </div>
 

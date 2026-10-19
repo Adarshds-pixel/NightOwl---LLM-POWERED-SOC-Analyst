@@ -83,7 +83,8 @@ export function buildReport(
       .map(([id, detections]) => ({ id, name: techniqueById.get(id)?.name ?? 'Unknown technique', detections })),
     tactics: tacticActivityCounts(scoped, techniqueById).map((entry) => ({ label: entry.label, count: entry.count })),
     rules: [...rules]
-      .filter((rule) => rule.match_count > 0)
+      // ML anomaly records are advisory evidence, not detections.
+      .filter((rule) => rule.kind !== 'ml' && rule.match_count > 0)
       .sort((a, b) => b.match_count - a.match_count)
       .slice(0, 10)
       .map((rule) => ({ title: rule.title, matches: rule.match_count, technique: rule.technique_id })),

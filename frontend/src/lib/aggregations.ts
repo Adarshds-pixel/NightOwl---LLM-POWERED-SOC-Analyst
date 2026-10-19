@@ -331,7 +331,10 @@ export function periodDelta(
 
   return {
     percent: ((current - previous) / previous) * 100,
-    label: `vs previous ${windowHours}h`,
+    // Callers anchor `now` on the newest record, not the clock (historical
+    // captures would otherwise always compare two empty windows), so the
+    // label says "of data" rather than implying the real last 24 hours.
+    label: `last ${windowHours}h of data vs the ${windowHours}h before`,
     current,
     previous,
   }

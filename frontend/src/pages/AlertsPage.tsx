@@ -177,13 +177,25 @@ function AlertsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Detections"
-          value={detectionTotal}
-          icon={<Bell className="h-4 w-4" />}
-          accent="amber"
-          note={`Rule and sequence alerts${anomalyTotal ? ` · ${anomalyTotal} ML anomaly record(s) shown separately` : ''}`}
-        />
+        {/* The tile matches the open tab; the other three always describe
+            detections, and say so in the ML view. */}
+        {isMl ? (
+          <StatCard
+            label="ML anomaly records"
+            value={anomalyTotal}
+            icon={<Bell className="h-4 w-4" />}
+            accent="amber"
+            note={`Advisory, never counted as detections · ${detectionTotal} detection(s) on the other tab`}
+          />
+        ) : (
+          <StatCard
+            label="Detections"
+            value={detectionTotal}
+            icon={<Bell className="h-4 w-4" />}
+            accent="amber"
+            note={`Rule and sequence alerts${anomalyTotal ? ` · ${anomalyTotal} ML anomaly record(s) shown separately` : ''}`}
+          />
+        )}
         {/* Whole-feed totals, not page-scoped -- a KPI row that mixed the
             two made a filtered or later page look like the alert counts had
             changed. Page-scoped breakdowns live in the side panels, which
@@ -193,14 +205,14 @@ function AlertsPage() {
           value={criticalTotal}
           icon={<Siren className="h-4 w-4" />}
           accent="red"
-          note="Across all detections"
+          note={isMl ? 'Detections only -- not ML records' : 'Across all detections'}
         />
         <StatCard
           label="High"
           value={highTotal}
           icon={<Siren className="h-4 w-4" />}
           accent="amber"
-          note="Across all detections"
+          note={isMl ? 'Detections only -- not ML records' : 'Across all detections'}
         />
         <StatCard
           label="Rules fired"

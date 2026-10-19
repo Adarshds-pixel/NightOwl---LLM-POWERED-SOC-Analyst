@@ -147,6 +147,21 @@ def test_activity_window_anchors_to_dataset_not_wall_clock(api_client):
     assert rule["matches_24h"] == 2
 
 
+def test_activity_window_is_not_anchored_by_a_later_ml_record(api_client):
+    client, SessionLocal = api_client
+    historical_now = datetime(2019, 5, 8, 12, 0, 0, tzinfo=timezone.utc)
+    with SessionLocal() as db:
+        _insert_alert(db, ENCODED_PS_RULE_ID, historical_now - timedelta(minutes=5))
+        # An advisory ML record months later must not move the window past
+        # every real detection.
+        _insert_alert(db, ML_RULE_ID, historical_now + timedelta(days=90), severity="low")
+
+    rules = client.get("/rules").json()["rules"]
+    rule = next(r for r in rules if r["rule_id"] == ENCODED_PS_RULE_ID)
+
+    assert rule["matches_24h"] == 1
+
+
 def test_filters_by_technique_level_and_category(api_client):
     client, _ = api_client
 

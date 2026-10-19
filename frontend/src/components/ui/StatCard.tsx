@@ -114,7 +114,7 @@ export function StatCard({
         ) : delta ? (
           <DeltaLine delta={delta} />
         ) : (
-          <span className="text-text-faint">No earlier period in this dataset to compare</span>
+          <span className="text-text-faint">Nothing in the 24 h before the latest day of data to compare</span>
         )}
       </div>
     </Wrapper>

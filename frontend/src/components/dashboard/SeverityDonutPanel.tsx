@@ -4,7 +4,7 @@ import type { IncidentsMeta } from '../../context/incidents/IncidentsDataContext
 import { SEVERITY_HEX, severityLabel } from '../../lib/severity'
 import { Card, Donut, EmptyState } from '../ui'
 
-const DISPLAY_ORDER = ['critical', 'high', 'medium', 'low'] as const
+const DISPLAY_ORDER = ['critical', 'high', 'medium', 'low', 'informational'] as const
 
 /** Incidents by severity. Sourced from `meta`'s dedicated ground-truth
  *  per-severity counts (each a real `GET /incidents?severity=X&limit=1`
@@ -21,6 +21,7 @@ export function SeverityDonutPanel({ meta }: { meta: IncidentsMeta }) {
     high: meta.totalHigh,
     medium: meta.totalMedium,
     low: meta.totalLow,
+    informational: meta.totalInformational,
   }
 
   const slices = DISPLAY_ORDER.filter((severity) => counts[severity] > 0).map((severity) => ({

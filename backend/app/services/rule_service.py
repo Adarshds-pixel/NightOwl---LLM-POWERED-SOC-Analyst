@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.ml.rule import ML_RULE_ID
 from app.models.alert import Alert
 
 
@@ -45,9 +46,16 @@ def get_rule_activity(db: Session, now: datetime | None = None) -> dict[str, Rul
     metric meaningful for a historical import while still meaning exactly
     "the real last 24 hours" the moment there's a genuinely recent alert --
     which is what an actual live deployment would naturally have.
+
+    The anchor is the latest rule or sequence detection; ML anomaly records
+    are advisory and only anchor the window when nothing else exists. Found
+    19 Oct 2026: an ML record dated months after every detection pushed the
+    window past all of them, so "Triggered 24h" read 0.
     """
     if now is None:
-        latest = db.execute(select(func.max(Alert.matched_at))).scalar()
+        latest = db.execute(
+            select(func.max(Alert.matched_at)).where(Alert.rule_id != ML_RULE_ID)
+        ).scalar() or db.execute(select(func.max(Alert.matched_at))).scalar()
         now = latest or datetime.now(timezone.utc)
         if now.tzinfo is None:
             # SQLite (the in-memory test DB) strips tzinfo on round-trip;
