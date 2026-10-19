@@ -1,8 +1,9 @@
 # NightOwl: source material for the paper
 
-This is the factual base for a journal or college paper on NightOwl, not the paper itself. Every number
+This is the factual base for an **IEEE-format paper** on NightOwl, not the paper itself. Every number
 below comes from a script, a test or a recorded run in this repository, and the source is named next to it.
-Status as of **19 October 2026**, branch `main`.
+Status as of **19 October 2026**, branch `fix/production-readiness` on GitHub (not yet merged into `main`).
+§10 maps this material onto the IEEE paper structure and lists the references in IEEE style.
 
 **Scope note for the paper.** NightOwl's machine-learning layer is **experimental**. It runs in advisory
 mode only, never changes a verdict, and its retraining on more machines is future work (§8). Present it that
@@ -151,8 +152,8 @@ detection, never the alert an explanation is built around. See `ML.md`.
 
 | Corpus | Files | Content | Labels | Notes |
 |---|---:|---|---|---|
-| `real_world_fixtures/detected` | 59 | Public attack-technique captures | Expected ATT&CK techniques per file in `backend/scripts/fixture_ground_truth.json` | File names match two public collections (Samir Bousseaden's EVTX-ATTACK-SAMPLES and Michel de Crevoisier's EVTX-to-MITRE-Attack); **confirm the source before citing** |
-| `real_world_fixtures/undetected` | 2 | NTLM self-relay; one single-event UserHunter pipe connection | As above | Kept as the hard cases |
+| `real_world_fixtures/detected` | 59 | Public attack-technique captures | Expected ATT&CK techniques per file in `backend/scripts/fixture_ground_truth.json` | Downloaded from two public GitHub collections (source confirmed by the authors): Samir Bousseaden's EVTX-ATTACK-SAMPLES [5] and Michel de Crevoisier's EVTX-to-MITRE-Attack [6] |
+| `real_world_fixtures/undetected` | 2 | NTLM self-relay; one single-event UserHunter pipe connection | As above | Same two collections; kept as the hard cases |
 | `NightOwl-Benign-Dataset` | 17 | A laptop and a server, real use, several days | Benign | 14 fully redundant overlapping exports removed on 10 Oct 2026 |
 | `real_world_fixtures/benign` | 3 | The authors' laptop and VM | Benign | Includes a 63 MB Windows Update capture |
 | `demo_fixtures` | 5 noise + attack demos | Short benign slices for Demo Mode | Benign | Slices of the VM capture |
@@ -292,6 +293,25 @@ re-checked in the browser:
 **Daily quota.** The free Groq tier also caps tokens per day (200,000). A day of evaluation runs used it up;
 one explanation with its self-critique costs about 5,000-8,000 tokens. Avoid heavy AI testing on a demo day.
 
+**Dashboard figures checked against the database (19 October 2026).** Every summary card on every page was
+traced to the query behind it and compared with the live values. The totals were consistent across pages
+(for example 68,784 events = 8 alerting + 64,620 checked + 4,147 everyday + 9 unchecked), but five labelling
+or counting faults were found and fixed:
+
+| Finding | Fix |
+|---|---|
+| Incident severity captions named the wrong band (High read "Highest", Medium read "Second") | Captions corrected |
+| "Triggered 24h" and "Never fired" on the Rules page, and the report's top-rules list, counted ML anomaly records as rule matches, unlike every other page | ML records excluded; they stay advisory |
+| The 24-hour window was anchored on the newest record of any kind, and an ML record dated months after every detection made it read 0 | Anchored on the newest rule or sequence detection |
+| Period comparisons said "vs previous 24h" although they count back from the newest record, not from now | Label reads "last 24h of data vs the 24h before" |
+| An informational-severity incident would have been in no severity band (none occurs with the current rules) | Counted and shown, so the bands always add up to the total |
+
+**Upload kept across page changes.** Leaving the Logs page during an upload made it look cancelled: the
+transfer and the server job continued, but the progress lived in the page's own button. The upload state now
+sits above the page router; progress shows on every page and in the header, and the result is reported on
+whichever page is open. Verified with a 5,076-record benign capture: progress continued through five page
+changes, the verdict (Normal, 0 alerts) arrived on another page, and the database held 5,076 new events.
+
 ### 5.7 ML anomaly layer (experimental, advisory)
 From `ML.md` and `backend/scripts/ml_eval_results.json`:
 - **Within-host temporal split (70/30):** 1.3-4.5 false windows per host-day depending on the log family.
@@ -306,7 +326,7 @@ From `ML.md` and `backend/scripts/ml_eval_results.json`:
 Conclusion for the paper: with two baseline machines the layer detects "unfamiliar machine", not "attack".
 
 ### 5.8 Software quality
-814 backend tests (offline) and 5 integration tests pass on Windows and in the Linux container; frontend
+820 backend tests (offline) and 5 integration tests pass on Windows and in the Linux container; frontend
 type-check, lint (warnings only) and production build pass; GitHub Actions runs both on every push.
 
 ---
@@ -332,6 +352,8 @@ type-check, lint (warnings only) and production build pass; GitHub Actions runs 
 | Pin ATT&CK v19.2 with strict tag validation | Unpinned, unvalidated tags | A wrong tactic tag silently raised severity | §3.3 |
 | One LLM provider, no silent fallback | Fallback chain | An outage is reported, not hidden behind a different model's answer | DOCUMENTATION.md §7 |
 | Remove 14 redundant benign fixtures | Keep all | Every record was duplicated in a remaining file; training data unchanged | §4 |
+| ML records never counted as rule matches on any summary card | Count them with detections | Advisory evidence must not inflate detection figures; one stray ML record zeroed a 24 h window | §5.6b |
+| Upload state held above the page router | State inside each page's upload button | Leaving the page hid a running upload and its result | §5.6b |
 
 ---
 
@@ -356,12 +378,71 @@ type-check, lint (warnings only) and production build pass; GitHub Actions runs 
 4. Close the Rust reader's formatting differences and prove equivalence on every record before enabling it.
 5. Evaluate with more than one LLM provider.
 
-## 9. References the project actually uses (verify details before citing)
-- MITRE ATT&CK, Enterprise matrix v19.2 (the bundled dataset in `ai/mitre/enterprise-attack.json`).
-- Sigma rule format and pySigma (rule structure validation).
-- Microsoft Sysinternals Sysmon (event schema).
-- Microsoft open protocol specifications [MS-SCMR], [MS-EFSR], [MS-SAMR], [MS-LSAD], [MS-NRPC], [MS-DRSR],
-  [MS-SRVS], [MS-WKST], [MS-RRP], [MS-TSCH], [MS-RPRN], [MS-EVEN] (RPC interface identities).
-- Retrieval-augmented generation (Lewis et al., 2020) for the general approach.
-- python-evtx and the Rust `evtx` crate (EVTX parsing).
-- The public EVTX attack-sample collections named in §4.
+## 9. References (IEEE style)
+Only sources the project actually uses. Volume, page and year details were written from memory: check each
+one against the publisher's page before submission, and set the access date of every online source to the
+day you last opened it.
+
+[1] B. E. Strom, A. Applebaum, D. P. Miller, K. C. Nickels, A. G. Pennington, and C. B. Thomas, "MITRE
+ATT&CK: Design and philosophy," The MITRE Corporation, McLean, VA, USA, Tech. Rep., 2018.
+
+[2] The MITRE Corporation, "MITRE ATT&CK Enterprise matrix, version 19.2." [Online]. Available:
+https://attack.mitre.org (bundled in this project as `ai/mitre/enterprise-attack.json`)
+
+[3] SigmaHQ, "Sigma: Generic signature format for SIEM systems." GitHub. [Online]. Available:
+https://github.com/SigmaHQ/sigma (rules validated with pySigma)
+
+[4] Microsoft, "Sysmon," Sysinternals. [Online]. Available:
+https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon
+
+[5] S. Bousseaden, "EVTX-ATTACK-SAMPLES." GitHub. [Online]. Available:
+https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES
+
+[6] M. de Crevoisier, "EVTX-to-MITRE-Attack." GitHub. [Online]. Available:
+https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack
+
+[7] P. Lewis et al., "Retrieval-augmented generation for knowledge-intensive NLP tasks," in *Proc. Adv.
+Neural Inf. Process. Syst. (NeurIPS)*, vol. 33, 2020, pp. 9459-9474.
+
+[8] N. Reimers and I. Gurevych, "Sentence-BERT: Sentence embeddings using Siamese BERT-networks," in *Proc.
+EMNLP-IJCNLP*, 2019, pp. 3982-3992. (basis of the `all-MiniLM-L6-v2` embedding model)
+
+[9] O. Ledoit and M. Wolf, "A well-conditioned estimator for large-dimensional covariance matrices,"
+*J. Multivariate Anal.*, vol. 88, no. 2, pp. 365-411, 2004. (ML layer)
+
+[10] W. Ballenthin, "python-evtx." GitHub. [Online]. Available: https://github.com/williballenthin/python-evtx
+
+[11] Microsoft, "Windows Protocols: Open Specifications" ([MS-SCMR], [MS-EFSR], [MS-SAMR], [MS-LSAD],
+[MS-NRPC], [MS-DRSR], [MS-SRVS], [MS-WKST], [MS-RRP], [MS-TSCH], [MS-RPRN], [MS-EVEN]). [Online]. Available:
+https://learn.microsoft.com/en-us/openspecs/windows_protocols/
+
+[12] OpenAI, "gpt-oss-120b" model release, 2025, served through the Groq API. (Cite the model card current at
+submission.)
+
+Related work on LLM-assisted SOC triage and alert explanation should be added from a literature search; none
+is listed here because the project did not use any such paper.
+
+---
+
+## 10. IEEE paper structure
+
+Use the IEEE template (two-column `IEEEtran`, conference or journal mode) and numbered references as in §9.
+An IEEE conference paper is usually 6 pages (8 with extra-page charges); a journal such as *IEEE Access* allows
+a longer version with the full audit tables.
+
+| IEEE section | Take from | Notes |
+|---|---|---|
+| Title, Abstract (150-250 words), Index Terms | §1 | Index Terms: security operations center, Windows event logs, MITRE ATT&CK, Sigma rules, retrieval-augmented generation, large language models, hallucination |
+| I. Introduction | §1 problem and contributions | End with a numbered contribution list |
+| II. Related Work | §9 [1]-[8] plus a literature search | Rule-based detection, ATT&CK mapping, RAG, LLMs in security operations |
+| III. System Architecture | §2 | Fig. 1: the architecture diagram, redrawn as a vector figure |
+| IV. Methodology | §3.1-§3.7 | Coverage classes, detection, incidents and severity, RAG guards, second opinion; ML as experimental |
+| V. Datasets and Experimental Setup | §4, §5.5 | Table: corpora with sources [5], [6]; hardware and software versions |
+| VI. Results | §5.1-§5.6b | Tables: detection benchmark, verdict sweep, blind audit, RAG audit and claim grading, second opinion |
+| VII. Discussion and Limitations | §5.7, §7 | ML as a negative result; development-set caveat; free-tier LLM limits |
+| VIII. Conclusion and Future Work | §8 | |
+| References | §9 | IEEE numbered style |
+
+Figures worth including: the architecture (Fig. 1), an incident page with the AI explanation, the upload
+verdict panel for a benign and an attack file, and the ATT&CK matrix view. Take screenshots from the running
+stack with demo data, not from personal machines' logs.

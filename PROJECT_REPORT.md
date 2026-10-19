@@ -2,7 +2,7 @@
 
 Everything about the project in one file: what it is, what you decided, what was built and why, what was measured, where it stands today, and what is left for you to do.
 
-> **Snapshot:** 19 October 2026 · branch `main` on GitHub · 814 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
+> **Snapshot:** 19 October 2026 · branch `fix/production-readiness` on GitHub (not yet merged into `main`) · 820 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
 >
 > This file is the story and the status. For deep technical reference (API tables, data model, environment variables, troubleshooting) see `docs/DOCUMENTATION.md`; for the machine-learning layer see `ML.md`; for the quick start see `README.md`.
 
@@ -193,7 +193,7 @@ Decisions that were made along the way and still stand (technical):
 | Attack captures raising any alert | 60 / 61 | same |
 | False alarms on 25 benign captures (252,594 events) | **0** (was 5) | same |
 | Verdict for each of the 88 sample files | 27 benign → **Normal**; 60 attack → Suspicious; 1 → Review recommended | `upload_sweep.py` |
-| Backend tests | 778 offline + 5 integration | `pytest` |
+| Backend tests | 820 offline + 5 integration | `pytest` |
 | ML false windows per machine per day (held-out benign) | 1.3 – 4.5 | `eval_ml_model.py` |
 
 **Caveats:** every attack capture informed rule development, so these are development-set figures. The everyday-event lists were measured on the same benign corpus: a new machine can still read "Review recommended" until its everyday events are added. Your new benign logs are the real held-out test.
@@ -206,11 +206,15 @@ Decisions that were made along the way and still stand (technical):
 
 ## 7. Current status
 
-**On GitHub `main`.** Everything below is committed; the 19 October work is committed locally and pushed only when you say so.
+**On GitHub.** Everything up to 10 October is on `main`; the 19 October work is pushed to `fix/production-readiness` and is merged into `main` when you say so.
+
+**Paper.** The target is an IEEE-format paper. The 61 attack captures come from two public GitHub collections, Samir Bousseaden's EVTX-ATTACK-SAMPLES and Michel de Crevoisier's EVTX-to-MITRE-Attack (confirmed by you). The source material, the IEEE section plan and the references are in `docs/PAPER_MATERIAL.md` §9-§10.
 
 **Verified on 19 October 2026**
 
-- 814 backend tests and 5 integration tests pass, on Windows and inside the Linux backend image; frontend type-check and build pass, lint shows warnings only.
+- 820 backend tests and 5 integration tests pass, on Windows and inside the Linux backend image; frontend type-check and build pass, lint shows warnings only.
+- Every summary card on every page traced to its query and checked against the database; five labelling or counting faults fixed (ML records no longer counted as rule matches, severity captions, the 24-hour window, period labels, informational incidents). See `docs/PAPER_MATERIAL.md` §5.6b.
+- An upload keeps running and shows its progress on every page when you leave the Logs page; the result is reported wherever you are.
 - Every Python file compiles with warnings treated as errors (17 broken backslash strings in tests fixed).
 - Detection benchmark 59/61 correct technique, 60/61 any alert, 0 false alarms on 25 benign captures; upload sweep 88/88 as expected.
 - No API keys or private `.env` files in the repository.
