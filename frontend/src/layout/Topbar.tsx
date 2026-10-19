@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Bell, Bot, Clock, LogOut, Menu, Search, Settings, Sparkles } from 'lucide-react'
+import { Bell, Bot, Clock, LogOut, Menu, Search, Settings, Sparkles, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AnalystAvatar } from '../components/brand/NightOwlMark'
@@ -8,10 +8,12 @@ import { Popover, StatusDot, Tooltip } from '../components/ui'
 import { useAuth } from '../context/auth/useAuth'
 import { useHealth } from '../context/health/useHealth'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
+import { useIngest } from '../context/ingest/useIngest'
 import { usePreferences } from '../context/preferences/usePreferences'
 import { useClock } from '../hooks/useClock'
 import { useUnseenIncidents } from '../hooks/useUnseenIncidents'
 import { formatShortDate } from '../lib/format'
+import { ingestProgressLabel } from '../lib/ingestProgress'
 import { matchNavEntry } from '../lib/navigation'
 
 /**
@@ -31,6 +33,7 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
   const [profileOpen, setProfileOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const now = useClock()
+  const ingest = useIngest()
 
   async function handleLogout() {
     if (loggingOut) return
@@ -74,6 +77,22 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
       </div>
 
       <div className="flex items-center gap-2">
+        {/* A running upload, visible on every page -- it keeps going while
+            the analyst moves around (see IngestProvider). */}
+        {ingest.pending && (
+          <Link
+            to="/logs"
+            title={ingest.filename ?? undefined}
+            className="flex max-w-[22rem] items-center gap-2 rounded-control border border-accent-violet/35 bg-accent-violet/10 px-3 py-1.5 text-meta text-text transition-colors hover:border-accent-violet/60"
+          >
+            <Upload className="h-3.5 w-3.5 shrink-0 animate-pulse text-accent-violet" />
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate font-medium">{ingest.filename ?? 'Uploading'}</span>
+              <span className="block truncate text-micro text-text-muted">{ingestProgressLabel(ingest)}</span>
+            </span>
+          </Link>
+        )}
+
         <div className="hidden items-center gap-2.5 rounded-control border border-line bg-surface-2/50 px-3 py-1.5 md:flex">
           <Clock className="h-4 w-4 text-accent-magenta" />
           <div className="leading-tight">

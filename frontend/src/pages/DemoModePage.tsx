@@ -50,7 +50,7 @@ function DemoModePage() {
       reset()
       // A reset changes both the incident snapshot and every rule's match
       // count, so the session-cached rule set has to be dropped too -- same
-      // reasoning as useLogIngest.ts's upload() -- otherwise Rules Engine,
+      // reasoning as IngestProvider's upload() -- otherwise Rules Engine,
       // Reports, MITRE and the other useRules() readers keep showing
       // pre-reset counts until something else happens to invalidate it.
       invalidateRulesCache()

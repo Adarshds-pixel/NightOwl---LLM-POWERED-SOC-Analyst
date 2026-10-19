@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { EventLogRow, IngestResponse } from '../api'
 import { LogUploadControl } from '../components/ingest/LogUploadControl'
+import { useIngest } from '../context/ingest/useIngest'
 import { AiOpinionPanel } from '../components/logs/AiOpinionPanel'
 import { EventDetailDrawer } from '../components/logs/EventDetailDrawer'
 import { TelemetryProfilePanel } from '../components/logs/TelemetryProfilePanel'
@@ -65,8 +66,11 @@ function LogsPage() {
   )
   const { eventTotal, alertTotal, routineTotal, uncoveredTotal, refresh: refreshEventTotals } = useEventTotals()
   const verifiedCleanTotal = Math.max(eventTotal - alertTotal - routineTotal - uncoveredTotal, 0)
-  const [aiOpinionId, setAiOpinionId] = useState<number | null>(null)
-  const [lastIngest, setLastIngest] = useState<IngestResponse | null>(null)
+  // Start from the session's latest upload, so one that finished while
+  // another page was open still shows its verdict here.
+  const { result: latestUpload } = useIngest()
+  const [aiOpinionId, setAiOpinionId] = useState<number | null>(latestUpload?.ai_opinion_id ?? null)
+  const [lastIngest, setLastIngest] = useState<IngestResponse | null>(latestUpload)
 
   function handleUploadSuccess(res: IngestResponse) {
     setAiOpinionId(res.ai_opinion_id)

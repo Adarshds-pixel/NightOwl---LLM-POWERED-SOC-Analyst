@@ -1,108 +1,52 @@
 import { Upload } from 'lucide-react'
 import { useEffect, useRef, type ChangeEvent } from 'react'
 import type { IngestResponse } from '../../api'
-import { useToast } from '../../context/toast/useToast'
-import { useLogIngest } from '../../hooks/useLogIngest'
-import { computeVerdict } from '../../lib/verdict'
+import { useIngest } from '../../context/ingest/useIngest'
+import { ingestProgressLabel } from '../../lib/ingestProgress'
 import { Button } from '../ui'
 
 /**
  * EVTX upload. The button is the whole control: the file input stays
- * hidden, and the result is reported through the global toast system
- * instead of a line of text under the button, so it reads the same
- * wherever the control is placed (header, logs page, demo page).
+ * hidden, and the upload itself lives in IngestProvider, so it keeps
+ * running when the page that started it is left. Every page's button shows
+ * the same live progress, and the result is reported through the global
+ * toast system by the provider, wherever the user is when it finishes.
  */
 export function LogUploadControl({
   onSuccess,
   variant = 'secondary',
   label = 'Upload logs',
 }: {
+  /** Called when an upload finishes while this page is open. */
   onSuccess?: (res: IngestResponse) => void
   variant?: 'primary' | 'secondary' | 'ghost'
   label?: string
 }) {
-  const { pending, phase, progress, recordsRead, job, result, error, upload } = useLogIngest()
+  const ingest = useIngest()
+  const { pending, result, upload } = ingest
   const inputRef = useRef<HTMLInputElement>(null)
-  const { push } = useToast()
-  const reported = useRef<IngestResponse | null>(null)
+  // The result already there when this page opened belongs to an earlier
+  // visit; only a completion seen while mounted is passed to onSuccess.
+  const seen = useRef<IngestResponse | null>(result)
+  const onSuccessRef = useRef(onSuccess)
 
   useEffect(() => {
-    if (result && reported.current !== result) {
-      reported.current = result
+    onSuccessRef.current = onSuccess
+  }, [onSuccess])
 
-      // A file (or a re-export overlapping an earlier upload) NightOwl has
-      // already ingested: every record matched an existing event by its
-      // own (host, channel, Windows EventRecordID) identity, so nothing
-      // new was stored -- no alert/coverage tone applies, since nothing
-      // was actually evaluated this time.
-      if (result.events_ingested === 0 && result.duplicate_events_skipped > 0) {
-        push({
-          tone: 'info',
-          title: 'Already ingested',
-          description: `All ${result.duplicate_events_skipped.toLocaleString()} event(s) in ${result.filename} were already in NightOwl — nothing new to add.`,
-        })
-        return
-      }
-
-      // Same verdict-kind split TelemetryProfilePanel's banner shows
-      // (lib/verdict.ts) -- one shared source of truth for "which category
-      // applies," not a second, independently-drifting tone ternary. "0
-      // alerts" here does NOT mean verified clean (an Inconclusive file
-      // must never read as success), so the tone only ever says success
-      // for a genuinely fully-evaluated, clean file. A real detection
-      // stays a warning even when other events in the same file were
-      // never checked (detected_with_uncovered) -- the match is still real.
-      const verdict = computeVerdict(result)
-      const isDetected = verdict.kind === 'detected' || verdict.kind === 'detected_with_uncovered'
-      const tone = isDetected ? 'warning' : verdict.kind === 'review' || verdict.kind === 'empty' ? 'info' : 'success'
-      const duplicateNote =
-        result.duplicate_events_skipped > 0
-          ? ` (${result.duplicate_events_skipped.toLocaleString()} already ingested, skipped)`
-          : ''
-      const description = isDetected
-        ? `${result.alerts_created} alert(s), ${result.incident_ids.length} incident(s) from ${result.filename}${duplicateNote}` +
-          (verdict.kind === 'detected_with_uncovered'
-            ? ` — ${result.uncovered_events} other event(s) not checked by any rule`
-            : '')
-        : `${verdict.label}: ${verdict.explanation}${duplicateNote}`
-      const anomalyNote =
-        result.ml_anomalies > 0
-          ? ` · ${result.ml_anomalies} ML anomaly record(s) (experimental, not detections)`
-          : ''
-      push({
-        tone,
-        title: `${result.events_ingested.toLocaleString()} events ingested`,
-        description: description + anomalyNote,
-      })
+  useEffect(() => {
+    if (result && seen.current !== result) {
+      seen.current = result
+      onSuccessRef.current?.(result)
     }
-  }, [result, push])
+  }, [result])
 
-  useEffect(() => {
-    if (error) push({ tone: 'error', title: 'Ingest failed', description: error })
-  }, [error, push])
-
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    const response = await upload(file)
-    if (response) onSuccess?.(response)
+    void upload(file)
   }
-
-  // Real transfer percentage while uploading; a distinct label once the
-  // transfer itself is done and the server is parsing/detecting -- never a
-  // fabricated percentage for that phase, since there's no progress signal
-  // for it (see client.ts's ingestEvtxFileWithProgress docstring).
-  const buttonLabel =
-    phase === 'uploading'
-      ? `Uploading... ${Math.round(progress * 100)}%`
-      : phase === 'processing'
-        ? job?.status === 'analysing'
-          ? 'Analysing events...'
-          : recordsRead > 0
-            ? readingLabel(recordsRead, job?.records_total ?? null, job?.eta_seconds ?? null)
-            : 'Processing...'
-        : label
 
   return (
     <>
@@ -113,21 +57,8 @@ export function LogUploadControl({
         disabled={pending}
         icon={<Upload className="h-3.5 w-3.5" />}
       >
-        {buttonLabel}
+        {ingestProgressLabel(ingest) ?? label}
       </Button>
     </>
   )
-}
-
-function formatEta(seconds: number): string {
-  if (seconds < 60) return `${Math.max(1, Math.round(seconds))}s`
-  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
-}
-
-/** "Reading 12,000 of 48,125 records (25%) - about 1m 20s left" */
-function readingLabel(read: number, total: number | null, eta: number | null): string {
-  if (!total || total < read) return `Reading... ${read.toLocaleString()} records`
-  const pct = Math.min(99, Math.round((read / total) * 100))
-  const left = eta !== null ? ` - about ${formatEta(eta)} left` : ''
-  return `Reading ${read.toLocaleString()} of ${total.toLocaleString()} records (${pct}%)${left}`
 }

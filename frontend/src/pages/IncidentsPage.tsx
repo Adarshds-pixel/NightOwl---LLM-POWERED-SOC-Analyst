@@ -8,6 +8,7 @@ import {
   type IncidentFilterState,
 } from '../components/incidents/IncidentFilters'
 import { LogUploadControl } from '../components/ingest/LogUploadControl'
+import { useIngest } from '../context/ingest/useIngest'
 import { AiOpinionPanel } from '../components/logs/AiOpinionPanel'
 import { TelemetryProfilePanel } from '../components/logs/TelemetryProfilePanel'
 import {
@@ -74,8 +75,11 @@ function IncidentsPage() {
   // here entirely (onSuccess={refresh}), so ai_opinion_id, uncovered_events
   // and the coverage breakdown never reached the screen for an upload made
   // from Incidents, only the toast.
-  const [aiOpinionId, setAiOpinionId] = useState<number | null>(null)
-  const [lastIngest, setLastIngest] = useState<IngestResponse | null>(null)
+  // Start from the session's latest upload, so one that finished while
+  // another page was open still shows its verdict here.
+  const { result: latestUpload } = useIngest()
+  const [aiOpinionId, setAiOpinionId] = useState<number | null>(latestUpload?.ai_opinion_id ?? null)
+  const [lastIngest, setLastIngest] = useState<IngestResponse | null>(latestUpload)
 
   function handleUploadSuccess(res: IngestResponse) {
     setAiOpinionId(res.ai_opinion_id)

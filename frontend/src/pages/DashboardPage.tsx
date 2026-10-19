@@ -12,6 +12,7 @@ import { PipelineHealthPanel } from '../components/dashboard/PipelineHealthPanel
 import { RecentAlertsPanel } from '../components/dashboard/RecentAlertsPanel'
 import { SeverityDonutPanel } from '../components/dashboard/SeverityDonutPanel'
 import { LogUploadControl } from '../components/ingest/LogUploadControl'
+import { useIngest } from '../context/ingest/useIngest'
 import { AiOpinionPanel } from '../components/logs/AiOpinionPanel'
 import { TelemetryProfilePanel } from '../components/logs/TelemetryProfilePanel'
 import { HeatmapGrid } from '../components/mitre/HeatmapGrid'
@@ -109,8 +110,11 @@ function DashboardPage() {
   // with the branch that triggered it. Before this, IngestResponse was
   // discarded entirely (onSuccess took no argument), so ai_opinion_id and
   // the coverage breakdown never reached the screen here, only the toast.
-  const [aiOpinionId, setAiOpinionId] = useState<number | null>(null)
-  const [lastIngest, setLastIngest] = useState<IngestResponse | null>(null)
+  // Start from the session's latest upload, so one that finished while
+  // another page was open still shows its verdict here.
+  const { result: latestUpload } = useIngest()
+  const [aiOpinionId, setAiOpinionId] = useState<number | null>(latestUpload?.ai_opinion_id ?? null)
+  const [lastIngest, setLastIngest] = useState<IngestResponse | null>(latestUpload)
 
   // A file uploaded from this page's own empty-state control needs both
   // the incidents snapshot AND the event totals (PipelineHealthPanel's
