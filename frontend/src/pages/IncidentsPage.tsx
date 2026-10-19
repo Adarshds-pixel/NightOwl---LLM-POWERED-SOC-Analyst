@@ -225,21 +225,21 @@ function IncidentsPage() {
           value={meta.totalHigh}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.high}
-          note="Highest severity band"
+          note="Second severity band"
         />
         <StatCard
           label="Medium"
           value={meta.totalMedium}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.medium}
-          note="Second severity band"
+          note="Third severity band"
         />
         <StatCard
           label="Low"
           value={meta.totalLow}
           icon={<ShieldAlert className="h-4 w-4" />}
           accent={SEVERITY_ACCENT.low}
-          note="Lowest severity bands"
+          note="Lowest severity band"
         />
       </div>
 

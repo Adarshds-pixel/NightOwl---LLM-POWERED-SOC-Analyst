@@ -64,7 +64,8 @@ function RulesPage() {
   })
 
   const selected = rules.find((rule) => rule.rule_id === selectedId) ?? filtered[0] ?? null
-  const triggeredToday = rules.reduce((sum, rule) => sum + rule.matches_24h, 0)
+  // ML anomaly records are advisory and left out, as on every other alert total.
+  const triggeredToday = rules.filter((rule) => rule.kind !== 'ml').reduce((sum, rule) => sum + rule.matches_24h, 0)
   // Top 6 + a folded "Other" slice, same convention as
   // attackVectorBreakdown()/MitrePage.tsx/ReportsPage.tsx -- a bare
   // topBy(..., 6) here previously dropped every category past the 6th
@@ -214,7 +215,7 @@ function RulesPage() {
               : ''
           }`}
         />
-        <StatCard label="Triggered 24h" value={triggeredToday} icon={<Target className="h-4 w-4" />} accent="amber" note="In the 24 h before the latest alert" />
+        <StatCard label="Triggered 24h" value={triggeredToday} icon={<Target className="h-4 w-4" />} accent="amber" note="Matches in the 24 h before the latest alert" />
         <StatCard label="Never fired" value={rules.filter((rule) => rule.match_count === 0).length} icon={<CircleSlash className="h-4 w-4" />} accent="neutral" note="No match in the ingested data" />
         <StatCard label="Categories" value={categories.length} icon={<Layers className="h-4 w-4" />} accent="primary" note="Log source categories covered" />
       </div>
