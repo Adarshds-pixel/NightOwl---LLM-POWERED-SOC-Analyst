@@ -703,3 +703,14 @@ def test_prompt_forbids_identifying_an_unnamed_identifier_or_citing_an_unshown_t
     assert "`rpc_interface_name`" in UNCOVERED_OPINION_SYSTEM_PROMPT
     assert "the interface is unidentified" in UNCOVERED_OPINION_SYSTEM_PROMPT
     assert "A retrieved technique is only a search result" in UNCOVERED_OPINION_SYSTEM_PROMPT
+
+
+def test_a_candidate_below_the_measured_floor_is_not_offered(api_client, monkeypatch):
+    """At 0.50 the offered candidates were right 23-42% of the time on the 61
+    labelled captures; at 0.55 every one was right (19 Oct 2026)."""
+    assert ai_opinion_service.MIN_CANDIDATE_SCORE == 0.55
+    chunks = [
+        {"chunk_id": "a", "document": "d", "score": 0.53, "metadata": {"source_type": "mitre_technique", "technique_id": "T1547.001"}},
+        {"chunk_id": "b", "document": "d", "score": 0.57, "metadata": {"source_type": "mitre_technique", "technique_id": "T1003"}},
+    ]
+    assert ai_opinion_service._attack_candidate_ids(chunks) == ["T1003"]

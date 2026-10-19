@@ -56,7 +56,14 @@ _MITRE_TECHNIQUE_SOURCE_TYPE = "mitre_technique"
 # genuinely related techniques scored 0.52-0.58, unrelated nearest
 # neighbours 0.42-0.47. Without a floor, the top-3 nearest chunks were
 # returned as "candidates" even when the opinion found nothing unusual.
-MIN_CANDIDATE_SCORE = 0.5
+#
+# Re-measured on 19 Oct 2026 over all 61 labelled attack captures (event
+# samples built the way this module builds them): at 0.50 the offered
+# candidates were right 42% of the time with the file name in the query and
+# 23% without it; at 0.55 every offered candidate was right (2 of 2 and 1 of 1),
+# at the cost of almost never offering one. A wrong technique next to an
+# analyst's evidence is worse than none, so 0.55.
+MIN_CANDIDATE_SCORE = 0.55
 
 # Why each sampled event is in front of the model -- passed through as the
 # sample's `why_sampled` field so the prompt never mislabels a covered
