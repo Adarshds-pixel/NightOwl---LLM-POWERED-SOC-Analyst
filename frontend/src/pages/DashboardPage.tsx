@@ -1,7 +1,6 @@
 import clsx from 'clsx'
 import { Crosshair, Network, ShieldAlert } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import type { IngestResponse } from '../api'
+import { useEffect } from 'react'
 import { ActiveIncidentsPanel } from '../components/dashboard/ActiveIncidentsPanel'
 import { AiAssistantPanel } from '../components/dashboard/AiAssistantPanel'
 import { AttackVectorPanel } from '../components/dashboard/AttackVectorPanel'
@@ -12,9 +11,6 @@ import { PipelineHealthPanel } from '../components/dashboard/PipelineHealthPanel
 import { RecentAlertsPanel } from '../components/dashboard/RecentAlertsPanel'
 import { SeverityDonutPanel } from '../components/dashboard/SeverityDonutPanel'
 import { LogUploadControl } from '../components/ingest/LogUploadControl'
-import { useIngest } from '../context/ingest/useIngest'
-import { AiOpinionPanel } from '../components/logs/AiOpinionPanel'
-import { TelemetryProfilePanel } from '../components/logs/TelemetryProfilePanel'
 import { HeatmapGrid } from '../components/mitre/HeatmapGrid'
 import { Card, EmptyState, ErrorState, SkeletonCard, ViewAllLink } from '../components/ui'
 import { useIncidentsSnapshot } from '../context/incidents/useIncidentsSnapshot'
@@ -101,28 +97,12 @@ function DashboardPage() {
     const timer = window.setInterval(refreshEventTotals, DASHBOARD_REFRESH_MS)
     return () => window.clearInterval(timer)
   }, [refreshEventTotals])
-  // Coverage-honesty panels for the one upload entry point this page has
-  // (the empty-state control below) -- captured here rather than only in
-  // that branch's local scope, since a successful upload immediately
-  // transitions the page to the non-empty return path once `incidents`
-  // catches up, and the AI opinion (polled, can take several seconds) needs
-  // to keep rendering somewhere after that transition rather than vanish
-  // with the branch that triggered it. Before this, IngestResponse was
-  // discarded entirely (onSuccess took no argument), so ai_opinion_id and
-  // the coverage breakdown never reached the screen here, only the toast.
-  // Start from the session's latest upload, so one that finished while
-  // another page was open still shows its verdict here.
-  const { result: latestUpload } = useIngest()
-  const [aiOpinionId, setAiOpinionId] = useState<number | null>(latestUpload?.ai_opinion_id ?? null)
-  const [lastIngest, setLastIngest] = useState<IngestResponse | null>(latestUpload)
-
   // A file uploaded from this page's own empty-state control needs both
   // the incidents snapshot AND the event totals (PipelineHealthPanel's
   // eventTotal below) to catch up -- refresh() alone used to leave
   // eventTotal frozen at whatever it was when this page first mounted.
-  function handleUploadSuccess(res: IngestResponse) {
-    setAiOpinionId(res.ai_opinion_id)
-    setLastIngest(res)
+  // The upload's verdict (telemetry profile, AI review) lives on Logs only.
+  function handleUploadSuccess() {
     refresh()
     refreshEventTotals()
   }
@@ -160,14 +140,6 @@ function DashboardPage() {
   if (incidents.length === 0) {
     return (
       <div className="flex flex-col gap-4 p-5">
-        {/* A clean upload creates no incident, so the page stays in this
-            branch -- its coverage verdict and AI opinion must still show. */}
-        <TelemetryProfilePanel ingest={lastIngest} hasAiOpinion={aiOpinionId !== null} />
-        <AiOpinionPanel
-        opinionId={aiOpinionId}
-        hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0}
-        hasDetections={(lastIngest?.rule_matches ?? 0) > 0}
-      />
         <Card>
           <EmptyState
             message="Nothing ingested yet"
@@ -186,17 +158,6 @@ function DashboardPage() {
   return (
     <div className="flex flex-col gap-4 p-5">
       <ThreatBanner level={threat.level} activeCount={threat.activeCount} />
-
-      {/* Only ever populated by this page's one upload entry point (the
-          empty-state control above) -- both return `null` until then, so
-          this is inert on every load that isn't immediately following that
-          upload. */}
-      <TelemetryProfilePanel ingest={lastIngest} hasAiOpinion={aiOpinionId !== null} />
-      <AiOpinionPanel
-        opinionId={aiOpinionId}
-        hasUncoveredEvents={(lastIngest?.uncovered_events ?? 0) > 0}
-        hasDetections={(lastIngest?.rule_matches ?? 0) > 0}
-      />
 
       <KpiRow incidents={incidents} meta={meta} alerts={alertsQuery.alerts} alertTotal={alertsQuery.total} now={activityNow} />
 
