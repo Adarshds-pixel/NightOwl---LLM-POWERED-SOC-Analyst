@@ -302,3 +302,47 @@ def test_provider_error_text_is_not_echoed_to_clients():
     assert secret not in _public_reason(RateLimitError(secret))
     assert "rate limit" in _public_reason(RateLimitError(secret))
     assert secret not in _public_reason(RuntimeError(secret))
+
+
+class _RateLimitError(Exception):
+    status_code = 429
+
+
+def test_a_short_per_minute_rate_limit_is_waited_out_once(monkeypatch):
+    """19 Oct 2026: Demo Mode's chat question right after an explanation hit
+    the free tier's per-minute token limit and failed, although the provider
+    said to try again in about 20 seconds."""
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
+    slept = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: slept.append(s))
+    attempts = {"count": 0}
+
+    def rate_limited_once(messages):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise _RateLimitError("Rate limit reached ... Please try again in 20.48s. Need more tokens?")
+        return FakeResponse("answer after waiting")
+
+    FakeChatGroq.invoke_side_effect = rate_limited_once
+
+    assert generate([]) == "answer after waiting"
+    assert attempts["count"] == 2
+    assert slept and 21 <= slept[0] <= 22
+
+
+def test_a_long_rate_limit_still_fails_at_once(monkeypatch):
+    monkeypatch.setattr(settings, "groq_api_key", "fake-groq-key")
+    slept = []
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: slept.append(s))
+    calls = []
+
+    def daily_quota(messages):
+        calls.append(1)
+        raise _RateLimitError("Rate limit reached on requests per day. Please try again in 14m22.5s.")
+
+    FakeChatGroq.invoke_side_effect = daily_quota
+
+    with pytest.raises(LLMProviderError, match="rate limit"):
+        generate([])
+    assert len(calls) == 1
+    assert slept == []

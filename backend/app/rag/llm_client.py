@@ -43,6 +43,7 @@ before any error surfaces.
 
 import hashlib
 import logging
+import re
 import time
 from dataclasses import dataclass
 
@@ -165,6 +166,28 @@ def _public_reason(exc: Exception) -> str:
     return "the AI provider is unavailable right now"
 
 
+# A per-minute token limit (HTTP 429) says how long to wait: "Please try again
+# in 20.48s". Found 19 Oct 2026: on the free Groq tier an incident explanation
+# (draft + self-critique) uses most of a minute's 8,000 tokens, so the chat
+# question Demo Mode asks right after it failed with a red error. A short wait
+# is honoured once; a long one (a daily quota) still fails at once.
+_MAX_RATE_LIMIT_WAIT_SECONDS = 30.0
+_RETRY_AFTER = re.compile(r"try again in\s+(?:(\d+)m)?\s*([\d.]+)\s*s", re.IGNORECASE)
+
+
+def _rate_limit_wait(exc: Exception) -> float | None:
+    """Seconds the provider asked us to wait, when the error is a 429 with a
+    short enough wait to be worth retrying; otherwise None."""
+    status = _status_code(exc)
+    if not (status == 429 or "ratelimit" in type(exc).__name__.lower()):
+        return None
+    match = _RETRY_AFTER.search(str(exc))
+    if not match:
+        return None
+    seconds = int(match.group(1) or 0) * 60 + float(match.group(2))
+    return seconds + 1.0 if seconds <= _MAX_RATE_LIMIT_WAIT_SECONDS else None
+
+
 def _is_retryable(exc: Exception) -> bool:
     # A 4xx (bad key, quota exhausted, bad request) will fail identically on
     # retry and a retry spends more of a free-tier quota; only transient
@@ -191,9 +214,15 @@ def _generate_raw(messages: list[BaseMessage]) -> tuple[object, str]:
         except Exception as exc:  # noqa: BLE001 -- deliberately broad: SDK can raise many types
             last_error = exc
             logger.warning("LLM call failed (attempt %d/%d): %r", attempt, _MAX_ATTEMPTS, exc)
-            if attempt < _MAX_ATTEMPTS and _is_retryable(exc):
-                time.sleep(_RETRY_DELAY_SECONDS)
-                continue
+            if attempt < _MAX_ATTEMPTS:
+                wait = _rate_limit_wait(exc)
+                if wait is not None:
+                    logger.info("LLM per-minute rate limit: waiting %.1f s before one retry", wait)
+                    time.sleep(wait)
+                    continue
+                if _is_retryable(exc):
+                    time.sleep(_RETRY_DELAY_SECONDS)
+                    continue
             break
 
     raise LLMProviderError(f"AI request failed: {_public_reason(last_error)}") from last_error
