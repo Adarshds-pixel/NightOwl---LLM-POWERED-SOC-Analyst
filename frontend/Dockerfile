@@ -2,7 +2,7 @@
 # for this service), matching backend/Dockerfile's own convention.
 
 # ---- builder: install deps and produce the static Vite build ----
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
