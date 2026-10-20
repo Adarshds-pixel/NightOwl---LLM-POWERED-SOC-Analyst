@@ -1,7 +1,9 @@
 # One-command deployment: `docker compose up --build`.
 # Required in .env first: ADMIN_PASSWORD_HASH, SESSION_SECRET_KEY,
-# POSTGRES_PASSWORD (and GROQ_API_KEY for explanations/chat). The backend
-# refuses to start with an empty or short SESSION_SECRET_KEY outside APP_ENV=local.
+# POSTGRES_PASSWORD (and GROQ_API_KEY for explanations/chat). The backend runs
+# with APP_ENV=production here and refuses to start with a short
+# SESSION_SECRET_KEY, a non-bcrypt ADMIN_PASSWORD_HASH, or a weak
+# POSTGRES_PASSWORD (under 12 characters or an example value).
 services:
   db:
     image: postgres:16
@@ -36,7 +38,10 @@ services:
     environment:
       # Inside the compose network Postgres is "db:5432", not localhost:5433.
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-nightowl}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-nightowl}
-      APP_ENV: ${APP_ENV:-production}
+      # Never taken from .env: .env sets APP_ENV=local for bare-metal dev runs,
+      # and inheriting it here silently turned off the production checks, the
+      # Secure cookie flag and the hidden /docs (19 Oct 2026 audit, F-01).
+      APP_ENV: production
       # The browser origin the frontend is served from (port mapping below).
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     volumes:
@@ -47,7 +52,10 @@ services:
       - kb_store:/app/ai/vector_store
       - model_cache:/home/appuser/.cache
     ports:
-      - "8000:8000"
+      # Loopback only by default: the API speaks plain HTTP, so on the network
+      # it would carry the admin password and session cookie in clear text.
+      # Network access belongs behind a TLS reverse proxy (docs/DOCUMENTATION.md).
+      - "${API_BIND:-127.0.0.1}:8000:8000"
 
   frontend:
     build:
@@ -62,7 +70,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "5173:80"
+      - "${UI_BIND:-127.0.0.1}:5173:80"
 
 volumes:
   postgres_data:

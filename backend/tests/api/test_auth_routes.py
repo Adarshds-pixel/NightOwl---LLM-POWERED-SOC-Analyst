@@ -61,8 +61,10 @@ def auth_client(monkeypatch):
             db.close()
 
     app.dependency_overrides[get_db] = _override_get_db
+    client = TestClient(app, headers={CSRF_HEADER: "1"})
+    client.session_factory = TestingSessionLocal
     try:
-        yield TestClient(app, headers={CSRF_HEADER: "1"})
+        yield client
     finally:
         app.dependency_overrides.clear()
 
@@ -269,6 +271,47 @@ def test_unauthenticated_upload_is_rejected_before_the_body_is_read(auth_client)
         "/ingest", files={"file": ("x.evtx", b"x" * 1000, "application/octet-stream")}
     )
     assert response.status_code == 401
+
+
+def _auth_audit(client) -> list[tuple[str, str]]:
+    from app.models.audit_log import AuditLog
+
+    with client.session_factory() as db:
+        rows = db.query(AuditLog).filter(AuditLog.entity_type == "auth").order_by(AuditLog.id).all()
+        return [(row.action, row.actor) for row in rows]
+
+
+def test_login_success_failure_and_logout_are_audited(auth_client):
+    auth_client.post("/auth/login", json={"username": TEST_USERNAME, "password": "wrong"})
+    _login(auth_client)
+    auth_client.post("/auth/logout")
+
+    assert _auth_audit(auth_client) == [
+        ("login_failed", TEST_USERNAME),
+        ("login_success", TEST_USERNAME),
+        ("logout", TEST_USERNAME),
+    ]
+
+
+def test_failed_login_with_an_unknown_username_never_stores_what_was_typed(auth_client):
+    """A password typed into the username box must not end up in the audit log."""
+    auth_client.post("/auth/login", json={"username": "hunter2-my-password", "password": "x"})
+
+    assert _auth_audit(auth_client) == [("login_failed", "unknown")]
+
+
+def test_throttled_login_attempts_are_audited(auth_client):
+    for _ in range(settings.login_rate_limit_per_minute):
+        auth_client.post("/auth/login", json={"username": TEST_USERNAME, "password": "wrong"})
+    assert auth_client.post("/auth/login", json={"username": TEST_USERNAME, "password": "wrong"}).status_code == 429
+
+    assert _auth_audit(auth_client)[-1] == ("login_throttled", TEST_USERNAME)
+
+
+def test_logout_without_a_session_writes_no_audit_row(auth_client):
+    auth_client.post("/auth/logout")
+
+    assert _auth_audit(auth_client) == []
 
 
 def test_api_key_grants_headless_access_when_configured(auth_client, monkeypatch):

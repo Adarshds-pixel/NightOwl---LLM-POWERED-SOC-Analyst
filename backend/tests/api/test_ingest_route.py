@@ -749,3 +749,43 @@ def test_ingest_accepts_a_valid_upload_comfortably_under_the_limit(api_client, m
     with SessionLocal() as db:
         assert db.query(Event).count() == 4
 
+
+# --- One upload at a time (19 Oct 2026 audit, F-05) -------------------------
+
+
+def _upload_demo(client, path="/ingest"):
+    with open(SYSMON_DEMO_PATH, "rb") as f:
+        return client.post(path, files={"file": ("sysmon_demo.evtx", f, "application/octet-stream")})
+
+
+def test_a_second_upload_while_one_is_running_is_refused(api_client):
+    from app.api import routes_ingest
+
+    client, SessionLocal = api_client
+    assert routes_ingest._ingest_slots.acquire(blocking=False)  # an upload in progress
+    try:
+        for path in ("/ingest", "/ingest/async"):
+            response = _upload_demo(client, path)
+            assert response.status_code == 409
+            assert response.json()["detail"] == routes_ingest.BUSY_DETAIL
+    finally:
+        routes_ingest._ingest_slots.release()
+    with SessionLocal() as db:
+        assert db.query(Event).count() == 0
+
+
+def test_the_upload_slot_is_freed_after_a_rejected_file(api_client):
+    client, _ = api_client
+    rejected = client.post("/ingest", files={"file": ("notlogs.txt", b"text", "text/plain")})
+    assert rejected.status_code == 400
+
+    assert _upload_demo(client).status_code == 200
+
+
+def test_the_upload_slot_is_freed_after_an_async_job_finishes(api_client):
+    client, _ = api_client
+    # TestClient runs the background job before returning the response.
+    assert _upload_demo(client, "/ingest/async").status_code == 202
+
+    assert _upload_demo(client, "/ingest/async").status_code == 202
+

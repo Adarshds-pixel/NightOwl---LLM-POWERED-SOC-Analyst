@@ -40,7 +40,37 @@ def test_real_secret_is_used_verbatim():
     assert resolve_session_secret(_settings(APP_ENV="production", session_secret_key=secret)) == secret
 
 
+_BCRYPT = "$2b$12$" + "a" * 53
+_STRONG_DB = "postgresql+psycopg2://nightowl:Xq7vR2mK9pL4wT8z@db:5432/nightowl"
+
+
 def test_production_requires_a_bcrypt_admin_hash():
     with pytest.raises(InsecureConfigurationError):
-        validate_production_settings(_settings(APP_ENV="production", admin_password_hash=""))
-    validate_production_settings(_settings(APP_ENV="production", admin_password_hash="$2b$12$" + "a" * 53))
+        validate_production_settings(_settings(APP_ENV="production", admin_password_hash="", database_url=_STRONG_DB))
+    validate_production_settings(_settings(APP_ENV="production", admin_password_hash=_BCRYPT, database_url=_STRONG_DB))
+
+
+@pytest.mark.parametrize(
+    "password",
+    ["nightowl", "NightOwl", "postgres", "password", "changeme", "short1"],
+)
+def test_production_refuses_a_weak_database_password(password):
+    url = f"postgresql+psycopg2://nightowl:{password}@db:5432/nightowl"
+    with pytest.raises(InsecureConfigurationError):
+        validate_production_settings(_settings(APP_ENV="production", admin_password_hash=_BCRYPT, database_url=url))
+
+
+def test_production_refuses_a_database_url_without_a_password():
+    url = "postgresql+psycopg2://nightowl@db:5432/nightowl"
+    with pytest.raises(InsecureConfigurationError):
+        validate_production_settings(_settings(APP_ENV="production", admin_password_hash=_BCRYPT, database_url=url))
+
+
+def test_weak_database_password_is_allowed_in_local():
+    validate_production_settings(_settings(APP_ENV="local", database_url="postgresql+psycopg2://a:nightowl@x/db"))
+
+
+def test_sqlite_database_needs_no_password():
+    validate_production_settings(
+        _settings(APP_ENV="production", admin_password_hash=_BCRYPT, database_url="sqlite:///./nightowl.db")
+    )

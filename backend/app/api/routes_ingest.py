@@ -213,6 +213,17 @@ async def check_upload_size_limit(request: Request):
 
 _COPY_CHUNK_BYTES = 1024 * 1024  # 1MB
 
+# Uploads processed at once (settings.max_concurrent_ingests). A slot is taken
+# before the file is staged and released when its processing ends, so a second
+# upload during a long one is refused at once instead of competing for memory.
+_ingest_slots = threading.BoundedSemaphore(max(1, settings.max_concurrent_ingests))
+BUSY_DETAIL = "Another upload is still being processed -- try again when it finishes."
+
+
+def _take_ingest_slot() -> None:
+    if not _ingest_slots.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail=BUSY_DETAIL)
+
 
 class IngestJobAccepted(BaseModel):
     job_id: str
@@ -412,18 +423,25 @@ def ingest_evtx(
     files and for scripts; the console uses /ingest/async instead so a large
     file cannot hit a browser timeout."""
     filename = file.filename or ""
-    tmp_path = _stage_upload(file)
+    _take_ingest_slot()
     try:
-        records = _read_sorted_records(tmp_path)
-        return _process_records(db, records, filename, background_tasks.add_task)
+        tmp_path = _stage_upload(file)
+        try:
+            records = _read_sorted_records(tmp_path)
+            return _process_records(db, records, filename, background_tasks.add_task)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
     finally:
-        if tmp_path.exists():
-            tmp_path.unlink()
+        _ingest_slots.release()
 
 
 def _run_ingest_job(job_id: str, tmp_path: Path, filename: str) -> None:
     job = ingest_jobs.get_job(job_id)
     if job is None:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        _ingest_slots.release()
         return
     db = SessionLocal()
 
@@ -453,6 +471,7 @@ def _run_ingest_job(job_id: str, tmp_path: Path, filename: str) -> None:
         db.close()
         if tmp_path.exists():
             tmp_path.unlink()
+        _ingest_slots.release()
 
 
 @router.post("/ingest/async", response_model=IngestJobAccepted, status_code=202, dependencies=[Depends(check_upload_size_limit)])
@@ -461,8 +480,14 @@ def ingest_evtx_async(background_tasks: BackgroundTasks, file: UploadFile = File
     `GET /ingest/jobs/{id}` reports progress and, when finished, the same
     payload `POST /ingest` returns."""
     filename = file.filename or ""
-    tmp_path = _stage_upload(file)
-    job = ingest_jobs.create_job(filename)
+    _take_ingest_slot()
+    try:
+        tmp_path = _stage_upload(file)
+        job = ingest_jobs.create_job(filename)
+    except BaseException:
+        _ingest_slots.release()
+        raise
+    # The job releases the slot when it finishes (see _run_ingest_job).
     background_tasks.add_task(_run_ingest_job, job.id, tmp_path, filename)
     return IngestJobAccepted(job_id=job.id, filename=filename)
 

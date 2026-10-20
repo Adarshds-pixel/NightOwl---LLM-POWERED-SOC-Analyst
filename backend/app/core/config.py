@@ -133,6 +133,11 @@ class Settings(BaseSettings):
     # is read (see core/upload_guard.py) and again while copying to disk.
     max_upload_bytes: int = 100 * 1024 * 1024
 
+    # Uploads processed at once (api/routes_ingest.py). Each one holds every
+    # record in memory and can start up to 16 reader processes; two large
+    # files at once ran a 16 GB machine out of memory on 19 Oct 2026.
+    max_concurrent_ingests: int = 1
+
     @property
     def is_local(self) -> bool:
         return (self.env or "local").strip().lower() in {"local", "dev", "development", "test"}
@@ -173,12 +178,35 @@ def resolve_session_secret(s: "Settings") -> str:
     return secrets.token_hex(32)
 
 
+# Database passwords that ship in examples and tutorials, rejected outside local.
+WEAK_DATABASE_PASSWORDS = frozenset({"nightowl", "postgres", "password", "changeme", "admin", "root"})
+MIN_DATABASE_PASSWORD_LENGTH = 12
+
+
 def validate_production_settings(s: "Settings") -> None:
     """Fail fast on configurations that are only acceptable on a dev box."""
     if s.is_local:
         return
     if not s.admin_password_hash.startswith(("$2a$", "$2b$", "$2y$")):
         raise InsecureConfigurationError("ADMIN_PASSWORD_HASH must be a bcrypt hash when APP_ENV is not local")
+    _validate_database_password(s.database_url)
+
+
+def _validate_database_password(database_url: str) -> None:
+    """The example POSTGRES_PASSWORD (`nightowl`) was found running in a real
+    deployment by the 19 Oct 2026 audit; outside local it is now refused."""
+    from sqlalchemy.engine import make_url
+
+    url = make_url(database_url)
+    if url.get_backend_name() == "sqlite":
+        return
+    password = url.password or ""
+    if password.lower() in WEAK_DATABASE_PASSWORDS or len(password) < MIN_DATABASE_PASSWORD_LENGTH:
+        raise InsecureConfigurationError(
+            f"the database password must be at least {MIN_DATABASE_PASSWORD_LENGTH} characters and not an "
+            "example value when APP_ENV is not local; set POSTGRES_PASSWORD (and DATABASE_URL) in .env -- "
+            "generate one with: python -c \"import secrets; print(secrets.token_urlsafe(24))\""
+        )
 
 
 @lru_cache
