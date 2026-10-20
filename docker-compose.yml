@@ -72,6 +72,26 @@ services:
     ports:
       - "${UI_BIND:-127.0.0.1}:5173:80"
 
+  # Nightly database dumps to ./backups on the host, newest BACKUP_KEEP kept
+  # (deploy/backup.sh). Restore: docs/DOCUMENTATION.md "Backups and restore".
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-nightowl}
+      PGDATABASE: ${POSTGRES_DB:-nightowl}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+    volumes:
+      - ./deploy/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    entrypoint: ["sh", "/backup.sh"]
+
 volumes:
   postgres_data:
   kb_store:

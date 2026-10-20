@@ -37,6 +37,38 @@ jobs:
       - name: Run integration tests (models + knowledge base)
         run: python -m pytest -v -m integration
 
+      # Security gates (19 Oct 2026 audit, F-08), run against the installed
+      # environment so transitive dependencies are audited too.
+      - name: Install security tools
+        run: pip install pip-audit==2.10.1 bandit==1.9.4
+
+      # Ignored advisories are not reachable in NightOwl:
+      #   chromadb (PYSEC-2026-311, -3813, -3814, -3815) need Chroma's HTTP
+      #   server; NightOwl only uses the in-process PersistentClient
+      #   (app/rag/chroma_client.py). diskcache (PYSEC-2026-2447, via pySigma)
+      #   needs write access to its cache directory. Revisit when fixes ship.
+      - name: Dependency audit (pip-audit)
+        run: >-
+          pip-audit --progress-spinner off
+          --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813
+          --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
+          --ignore-vuln PYSEC-2026-2447
+
+      - name: Static analysis (bandit, medium and above)
+        run: bandit -r app ../ai/tools -ll -q
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret scan (full history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -54,6 +86,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Dependency audit (runtime packages)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Type check
         run: npx tsc -b

@@ -46,7 +46,7 @@ _login_buckets: dict[str, _TokenBucket] = {}
 # Not rate limited (see module docstring). Kept as an exact-match set rather
 # than a prefix check so a future "/healthz/expensive-subcheck" cannot slip
 # through by accident.
-EXEMPT_PATHS = frozenset({"/health"})
+EXEMPT_PATHS = frozenset({"/health", "/readyz"})
 _rate_limit_lock = threading.Lock()
 
 

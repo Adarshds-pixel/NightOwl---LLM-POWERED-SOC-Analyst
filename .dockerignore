@@ -2,6 +2,7 @@
 .github
 .vscode
 .env
+backups
 **/__pycache__
 **/*.pyc
 **/node_modules

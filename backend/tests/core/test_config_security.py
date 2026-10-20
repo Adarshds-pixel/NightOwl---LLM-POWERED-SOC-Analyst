@@ -70,6 +70,21 @@ def test_weak_database_password_is_allowed_in_local():
     validate_production_settings(_settings(APP_ENV="local", database_url="postgresql+psycopg2://a:nightowl@x/db"))
 
 
+def test_demo_mode_defaults_on_in_local_and_off_elsewhere():
+    assert _settings(APP_ENV="local").demo_mode_enabled is True
+    assert _settings(APP_ENV="production").demo_mode_enabled is False
+
+
+def test_demo_mode_can_be_enabled_explicitly_in_production(monkeypatch):
+    assert _settings(APP_ENV="production", demo_mode_enabled=True).demo_mode_enabled is True
+    monkeypatch.setenv("DEMO_MODE_ENABLED", "true")
+    assert _settings(APP_ENV="production").demo_mode_enabled is True
+
+
+def test_demo_mode_can_be_disabled_in_local():
+    assert _settings(APP_ENV="local", demo_mode_enabled=False).demo_mode_enabled is False
+
+
 def test_sqlite_database_needs_no_password():
     validate_production_settings(
         _settings(APP_ENV="production", admin_password_hash=_BCRYPT, database_url="sqlite:///./nightowl.db")

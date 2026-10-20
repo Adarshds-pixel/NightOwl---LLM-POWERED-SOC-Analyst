@@ -53,5 +53,5 @@ EXPOSE 8000
 # CPU), so the start period is generous; the container still turns healthy on
 # the first passing check, so later restarts are not slowed down.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=600s --retries=5 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=4).status == 200 else 1)"
 ENTRYPOINT ["./docker-entrypoint.sh"]

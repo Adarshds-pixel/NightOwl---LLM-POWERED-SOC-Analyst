@@ -8,6 +8,9 @@ backend/venv/
 # Secrets
 .env
 
+# Database dumps from the backup service (docker-compose.yml): real data.
+backups/
+
 # Generated AI-layer data: the Chroma vector store is rebuilt by
 # ai/tools/build_kb.py. (The ATT&CK index ships with the code, in
 # backend/app/mitre/data/.)

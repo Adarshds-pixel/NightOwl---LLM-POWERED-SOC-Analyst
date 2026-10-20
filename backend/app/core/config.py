@@ -8,7 +8,7 @@ os.environ calls around the codebase.
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Repo root .env, resolved from this file's location rather than the
@@ -88,11 +88,10 @@ class Settings(BaseSettings):
     # curl/Postman work fine (browsers enforce it, other tools don't).
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
-    # Demo reset (/demo/reset, api/routes_demo.py). On by default: this is
-    # a single-analyst local deployment whose whole point is demoing the
-    # pipeline, and the endpoint is only destructive to data this same demo
-    # workflow creates. Set false for any deployment where a reachable,
-    # destructive reset endpoint is not acceptable.
+    # Demo Mode (/demo/*, api/routes_demo.py), including the reset that wipes
+    # every incident and the audit trail. Default: on for local development,
+    # off otherwise (see _default_demo_mode below; 19 Oct 2026 audit, F-17).
+    # Set DEMO_MODE_ENABLED=true explicitly for a deployment that demos itself.
     demo_mode_enabled: bool = True
 
     # Admin login (single admin, no registration -- see api/routes_auth.py).
@@ -141,6 +140,14 @@ class Settings(BaseSettings):
     @property
     def is_local(self) -> bool:
         return (self.env or "local").strip().lower() in {"local", "dev", "development", "test"}
+
+    @model_validator(mode="after")
+    def _default_demo_mode(self) -> "Settings":
+        # Unset DEMO_MODE_ENABLED means "on" only on a dev box: a production
+        # deployment must opt in to an endpoint that deletes all data.
+        if "demo_mode_enabled" not in self.model_fields_set and not self.is_local:
+            self.demo_mode_enabled = False
+        return self
 
 
 MIN_SESSION_SECRET_LENGTH = 32

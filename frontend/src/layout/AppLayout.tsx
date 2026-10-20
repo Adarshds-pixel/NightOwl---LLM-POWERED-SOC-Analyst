@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { CommandPalette } from '../components/search/CommandPalette'
+import { ErrorBoundary } from '../components/ui/ErrorBoundary'
 import { AmbientBackground, CursorGlow, LoadingState, PageTransition, ToastViewport } from '../components/ui'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
@@ -83,12 +84,15 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onOpenSearch={() => setSearchOpen(true)} onOpenSidebar={() => setMobileOpen(true)} />
         <main className={clsx('min-h-0 flex-1 overflow-y-auto')}>
-          <Suspense fallback={<LoadingState label="Loading view" className="py-20" />}>
-            {/* Keyed on pathname so each route replays the entrance. */}
-            <PageTransition routeKey={pathname}>
-              <Outlet />
-            </PageTransition>
-          </Suspense>
+          {/* Keyed on pathname so a page's error clears when you navigate away. */}
+          <ErrorBoundary key={pathname}>
+            <Suspense fallback={<LoadingState label="Loading view" className="py-20" />}>
+              {/* Keyed on pathname so each route replays the entrance. */}
+              <PageTransition routeKey={pathname}>
+                <Outlet />
+              </PageTransition>
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
 

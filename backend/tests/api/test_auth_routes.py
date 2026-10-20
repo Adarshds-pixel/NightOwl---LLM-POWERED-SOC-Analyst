@@ -273,6 +273,26 @@ def test_unauthenticated_upload_is_rejected_before_the_body_is_read(auth_client)
     assert response.status_code == 401
 
 
+def test_readiness_is_public_and_checks_the_database(auth_client):
+    response = auth_client.get("/readyz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_readiness_reports_503_when_the_database_is_unreachable(auth_client):
+    class _DeadSession:
+        def execute(self, *_args, **_kwargs):
+            raise OSError("connection refused")
+
+    app.dependency_overrides[get_db] = lambda: _DeadSession()
+
+    response = auth_client.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "unavailable"}
+
+
 def _auth_audit(client) -> list[tuple[str, str]]:
     from app.models.audit_log import AuditLog
 

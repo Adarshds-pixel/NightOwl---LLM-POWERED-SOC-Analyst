@@ -13,7 +13,12 @@ one-row-per-alert feed behind the Alerts page. `api/routes_demo.py` adds
 POST /demo/reset (behind require_demo_mode in addition to the usual API key).
 """
 
+import logging
+
 from fastapi import Depends, FastAPI
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -37,6 +42,7 @@ from app.core.logging import configure_logging
 from app.core.rate_limit import rate_limit_middleware
 from app.core.security_middleware import csrf_middleware, unhandled_error_middleware
 from app.core.upload_guard import UploadGuardMiddleware
+from app.db.session import get_db
 
 configure_logging()
 validate_production_settings(settings)
@@ -94,4 +100,20 @@ app.include_router(ml_router, dependencies=[Depends(require_api_key), Depends(re
 
 @app.get("/health")
 def health() -> dict[str, str]:
+    """Liveness: the process answers. Polled by the console's status dot."""
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readiness(db: Session = Depends(get_db)) -> JSONResponse:
+    """Readiness: the process can serve real requests, i.e. the database
+    answers. Used by the container healthcheck, so the console waits for a
+    working backend rather than a merely running one. Public and detail-free
+    (19 Oct 2026 audit, F-06); component detail stays behind login at
+    /system/status."""
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:  # noqa: BLE001 -- any failure means "not ready"
+        logging.getLogger(__name__).warning("readiness check failed: database unreachable", exc_info=True)
+        return JSONResponse(status_code=503, content={"status": "unavailable"})
+    return JSONResponse(content={"status": "ready"})
