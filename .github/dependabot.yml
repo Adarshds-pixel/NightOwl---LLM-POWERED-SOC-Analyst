@@ -1,7 +1,9 @@
-# Weekly dependency update PRs (19 Oct 2026 audit, F-08). Minor and patch
-# updates are grouped into one PR per ecosystem to keep the noise down; each
-# PR runs the full test workflow before anything is merged. scikit-learn is
-# ignored: it must match the version the committed ML models were trained
+# Weekly dependency update PRs (19 Oct 2026 audit, F-08). Only minor and patch
+# updates are proposed, grouped into one PR per ecosystem; each PR runs the
+# full test workflow before anything is merged. Major versions are ignored on
+# purpose: they are upgraded deliberately, with a local test (for example
+# sentence-transformers changes the RAG embeddings). scikit-learn is ignored
+# entirely: it must match the version the committed ML models were trained
 # with (backend/requirements.txt), so it is bumped only together with a retrain.
 version: 2
 updates:
@@ -14,6 +16,8 @@ updates:
         update-types: [minor, patch]
     ignore:
       - dependency-name: scikit-learn
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -22,13 +26,27 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: docker
     directories: [/backend, /frontend]
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+      # A Python 3.x step changes the interpreter under pinned wheels (torch,
+      # numpy, the scikit-learn the ML models were trained with); upgrade it
+      # deliberately, not as a weekly bump.
+      - dependency-name: python
+        update-types: [version-update:semver-minor]
