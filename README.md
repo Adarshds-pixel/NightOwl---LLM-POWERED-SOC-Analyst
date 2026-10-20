@@ -53,7 +53,9 @@ Caveat on the detection numbers: every attack capture in the corpus informed rul
 ```bash
 cp .env.example .env
 # Fill in: ADMIN_PASSWORD_HASH (bcrypt), SESSION_SECRET_KEY (32+ chars),
-#          POSTGRES_PASSWORD, GROQ_API_KEY (free key from console.groq.com)
+#          POSTGRES_PASSWORD (12+ chars, also in DATABASE_URL),
+#          GROQ_API_KEY (free key from console.groq.com),
+#          DEMO_MODE_ENABLED=true if you want Demo Mode
 python -c "import bcrypt; print(bcrypt.hashpw(b'choose-a-password', bcrypt.gensalt()).decode())"
 python -c "import secrets; print(secrets.token_hex(32))"
 
@@ -62,7 +64,19 @@ docker compose up --build
 
 Put the bcrypt hash in single quotes in `.env` (`ADMIN_PASSWORD_HASH='$2b$12$...'`). Without them Docker Compose reads each `$` as a variable reference and corrupts the hash.
 
-Open http://localhost:5173 and sign in. On first start the backend applies database migrations and builds the knowledge base (this needs network access once, to download the embedding model). The backend refuses to start outside `APP_ENV=local` with a missing or short session secret or password hash.
+Open http://localhost:5173 and sign in. On first start the backend applies database migrations and builds the knowledge base (this needs network access once, to download the embedding model).
+
+The Docker stack runs in production mode: the backend refuses to start with a short session secret, a non-bcrypt password hash or a weak database password, `/docs` is hidden, and Demo Mode (which can wipe all data) is off unless `DEMO_MODE_ENABLED=true`. All ports are bound to `127.0.0.1`; to use NightOwl from another machine, put it behind HTTPS (see "Network access" in [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md)). A `backup` service writes a database dump to `./backups` every day and keeps the newest seven.
+
+## Privacy and data handling
+
+Uploaded Windows logs contain personal data: user names, host names, IP addresses and command lines.
+
+- **Stored locally:** every event goes into the PostgreSQL database on this machine and stays there until you delete it (`POST /demo/reset` wipes all ingested data; there is no automatic expiry).
+- **Sent to the AI provider:** when you ask for an incident explanation or use the AI chat, and for the automatic AI second opinion on unchecked or advisory-pattern events, NightOwl sends an excerpt of the evidence to Groq (`openai/gpt-oss-120b`). The excerpt is bounded: the detection's rule, process, parent, command line, user and time, up to 15 of the event's own fields, up to five nearby events, and for a second opinion up to eight events. Nothing is sent for a file whose events are all checked by a rule or everyday activity.
+- **To keep all data on this machine,** leave `GROQ_API_KEY` empty: detection, incidents, MITRE mapping and reports keep working; only the AI explanations, chat and second opinion are unavailable.
+
+Before uploading logs from machines you do not own, make sure you are allowed to process them and to share them with the AI provider. Laws such as India's DPDP Act and the EU GDPR apply to this data.
 
 ## Local development
 
@@ -79,7 +93,7 @@ python -m venv venv && ./venv/Scripts/python -m pip install -r requirements-dev.
 cd ../frontend && npm ci && npm run dev                # http://localhost:5173
 ```
 
-Tests: `cd backend && ./venv/Scripts/python -m pytest` (offline) and `-m integration` (needs the knowledge base and model downloads). Frontend: `npx tsc -b && npm run lint && npm run build`.
+Tests: `cd backend && ./venv/Scripts/python -m pytest` (offline) and `-m integration` (needs the knowledge base and model downloads). Frontend: `npx tsc -b && npm run lint && npm run build`. CI also runs `pip-audit`, `npm audit`, `bandit` and a gitleaks secret scan; Dependabot proposes dependency updates weekly.
 
 ## Tech stack
 | Layer | Technology |

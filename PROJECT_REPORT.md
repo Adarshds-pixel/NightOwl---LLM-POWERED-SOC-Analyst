@@ -2,7 +2,7 @@
 
 Everything about the project in one file: what it is, what you decided, what was built and why, what was measured, where it stands today, and what is left for you to do.
 
-> **Snapshot:** 20 October 2026 · branch `main` on GitHub · 836 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
+> **Snapshot:** 20 October 2026 · branch `main` on GitHub · 841 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
 >
 > This file is the story and the status. For deep technical reference (API tables, data model, environment variables, troubleshooting) see `docs/DOCUMENTATION.md`; for the machine-learning layer see `ML.md`; for the quick start see `README.md`.
 
@@ -193,7 +193,7 @@ Decisions that were made along the way and still stand (technical):
 | Attack captures raising any alert | 60 / 61 | same |
 | False alarms on 25 benign captures (252,594 events) | **0** (was 5) | same |
 | Verdict for each of the 88 sample files | 27 benign → **Normal**; 60 attack → Suspicious; 1 → Review recommended | `upload_sweep.py` |
-| Backend tests | 836 offline + 5 integration | `pytest` |
+| Backend tests | 841 offline + 5 integration | `pytest` |
 | ML false windows per machine per day (held-out benign) | 1.3 – 4.5 | `eval_ml_model.py` |
 
 **Caveats:** every attack capture informed rule development, so these are development-set figures. The everyday-event lists were measured on the same benign corpus: a new machine can still read "Review recommended" until its everyday events are added. Your new benign logs are the real held-out test.
@@ -212,7 +212,7 @@ Decisions that were made along the way and still stand (technical):
 
 **Verified on 20 October 2026 (after the production-readiness audit, §7d)**
 
-- 836 backend tests pass on Windows (820 before, plus 16 for the audit fixes).
+- 841 backend tests pass on Windows (820 before, plus 21 for the audit fixes).
 - The rebuilt Docker stack is healthy and runs in production mode: `/docs` and `/openapi.json` answer 404, every port is bound to `127.0.0.1`, the API does not answer on the LAN address, and all 114,303 stored events survived the database password change.
 
 **Verified on 19 October 2026**
@@ -243,7 +243,18 @@ A full audit (security, architecture, reliability, testing, quality) read the co
 | F-04 | Logins and logouts left no record | Success, failure, throttling and logout are audited and logged with the client IP |
 | F-05 | Uploads had no concurrency limit (two large files ran the machine out of memory) | One upload at a time (`MAX_CONCURRENT_INGESTS`); another gets 409 |
 
-**Still open (planned, not done):** database backups, a readiness endpoint and request IDs, security scans in CI with Dependabot, a privacy notice and retention for log data sent to the AI provider, a React error boundary and frontend tests, and Demo Mode off by default in production. The dependency scanners' ChromaDB CVEs need Chroma's network server, which NightOwl does not run (it uses the in-process client).
+**Fixed on 20 October (the engineering essentials from the 30-day list):**
+
+| ID | Fix | Verified |
+|---|---|---|
+| F-07 | A `backup` service dumps the database daily to `./backups` and keeps seven; restore steps documented | A dump restored into a scratch database matched the live one exactly (114,307 events, 60 alerts, 12 incidents) |
+| F-08 | CI runs `pip-audit`, `npm audit`, `bandit` and a gitleaks secret scan; Dependabot proposes weekly updates | All four pass locally; gitleaks found no leaks in 167 commits; `npm audit fix` cleared the one high advisory |
+| F-17 | Demo Mode (and its data-wiping reset) is off by default outside local; this deployment keeps it on through `DEMO_MODE_ENABLED=true` | Tests; sidebar still shows Demo Mode |
+| F-10 | A React error boundary around each page | Build and type check |
+| F-06 | `/readyz` checks the database; the container healthcheck uses it | Live 200 `{"status":"ready"}`; 503 path tested |
+| F-09 | README "Privacy and data handling": what is stored, what is sent to Groq, how to keep everything local | Checked against the code paths that build the AI evidence |
+
+**Still open (nice-to-have):** request IDs and metrics, frontend tests, nginx header gaps and a narrower CSP, image digest pinning and scanning, MFA, rejecting unknown request fields, persisted upload jobs, a smaller JS bundle, CHANGELOG and SECURITY.md. The ChromaDB CVEs reported by the scanners need Chroma's network server, which NightOwl does not run (it uses the in-process client); CI ignores those five IDs with that reason written next to them.
 
 ---
 
@@ -376,7 +387,7 @@ Copy each machine's `C:\NightOwl\export` folder to `backend\sample_logs\benign_c
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                         # 836 offline tests
+./venv/Scripts/python -m pytest                         # 841 offline tests
 ./venv/Scripts/python scripts/upload_sweep.py           # verdict for every sample file
 ./venv/Scripts/python scripts/run_detection_benchmark.py
 ./venv/Scripts/python scripts/build_failure_matrix.py

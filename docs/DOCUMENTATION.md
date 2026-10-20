@@ -85,11 +85,12 @@ The rule `rule_id` is either a Sigma rule UUID, a `sequence-*` id or `ml-anomaly
 
 ## 4. API surface
 
-All routes are mounted at root. `/health` is public. Every other route requires a valid admin session **or** the `X-API-Key` header when `API_KEY` is set (for scripts and CI). State-changing requests must also carry the CSRF header (§10).
+All routes are mounted at root. `/health` and `/readyz` are public. Every other route requires a valid admin session **or** the `X-API-Key` header when `API_KEY` is set (for scripts and CI). State-changing requests must also carry the CSRF header (§10).
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/health` | Liveness only. Public, exempt from rate limiting |
+| GET | `/readyz` | Readiness: 200 `{"status":"ready"}` when the database answers, otherwise 503. Public, detail-free, exempt from rate limiting; the container healthcheck uses it |
 | GET | `/system/status` | Readiness of the LLM key, knowledge base, rules, ML bundle, ATT&CK dataset; demo flag |
 | POST | `/auth/login` | Admin login; creates a server-side session |
 | POST | `/auth/logout` | Revokes the session |
@@ -116,9 +117,9 @@ All routes are mounted at root. `/health` is public. Every other route requires 
 | GET | `/demo/fixtures` | Attack captures the current rules detect with the correct technique |
 | GET | `/demo/fixtures/{filename}` | Streams one fixture |
 
-The `/demo/*` routes also need `DEMO_MODE_ENABLED=true`. `/docs` and `/openapi.json` exist only when `APP_ENV=local`.
+The `/demo/*` routes also need Demo Mode, which is on by default only when `APP_ENV=local`; elsewhere set `DEMO_MODE_ENABLED=true` (the sidebar hides Demo Mode when it is off). `/docs` and `/openapi.json` exist only when `APP_ENV=local`.
 
-Error shape is uniform: `{"detail": ...}`. An LLM provider failure gives 503 with a sanitised reason, a throttled request gives 429, an oversized upload gives 413 and a missing CSRF header gives 403. Lists are newest-first with an `id` tiebreak. Dashboard aggregates are computed client-side. Live data is polled, not streamed.
+Error shape is uniform: `{"detail": ...}`. An LLM provider failure gives 503 with a sanitised reason, a throttled request gives 429, an oversized upload gives 413, an upload while another is still processing gives 409, and a missing CSRF header gives 403. Lists are newest-first with an `id` tiebreak. Dashboard aggregates are computed client-side. Live data is polled, not streamed.
 
 ---
 
@@ -403,6 +404,23 @@ The backend container always runs with `APP_ENV=production` (hard-coded in `dock
 - **backend:** the entrypoint runs `alembic upgrade head` and builds the knowledge base on first start (this needs network access once; set `NIGHTOWL_BUILD_KB=0` to skip). It then starts uvicorn. The knowledge base and the model cache live in named volumes, and a healthcheck polls `/health`.
 - **frontend:** a production build served by nginx with security headers, on http://localhost:5173.
 
+### Backups and restore
+
+The `backup` service in `docker-compose.yml` runs `deploy/backup.sh`. It writes a compressed `pg_dump` (custom format) to `./backups` on the host at start-up and then every `BACKUP_INTERVAL_SECONDS` (default daily), and keeps the newest `BACKUP_KEEP` dumps (default 7). `backups/` is git-ignored and excluded from the Docker build context. The dumps are not encrypted, so keep the folder on an encrypted disk or copy it somewhere safe.
+
+- **Backup now:** `docker compose exec backup sh /backup.sh once`
+- **Check a dump without touching live data** (restores into a scratch database):
+  ```bash
+  docker compose exec db psql -U nightowl -d postgres -c "CREATE DATABASE nightowl_restore_check"
+  docker compose cp backups/<file>.dump db:/tmp/check.dump
+  docker compose exec db pg_restore -U nightowl -d nightowl_restore_check --no-owner /tmp/check.dump
+  docker compose exec db psql -U nightowl -d nightowl_restore_check -c "select count(*) from events"
+  docker compose exec db psql -U nightowl -d postgres -c "DROP DATABASE nightowl_restore_check"
+  ```
+- **Restore over the live database** (replaces everything): stop the backend (`docker compose stop backend`), copy the dump in as above, run `pg_restore -U nightowl -d nightowl --clean --if-exists --no-owner /tmp/check.dump`, then `docker compose start backend`.
+
+The scratch-restore check was run on 20 October 2026: the restored copy matched the live database exactly (114,307 events, 60 alerts, 12 incidents).
+
 ### Network access
 
 The API (8000) and console (5173) are bound to `127.0.0.1` by default (`API_BIND` / `UI_BIND`), because both speak plain HTTP: on a network they would carry the admin password and session cookie in clear text, and the `Secure` cookie would not be sent at all. To use NightOwl from another machine, put a TLS-terminating reverse proxy in front instead of binding to `0.0.0.0`. For example, a Caddy service serving one origin:
@@ -452,6 +470,7 @@ API docs are at http://127.0.0.1:8000/docs (local only). The backend runs withou
 | `POSTGRES_PASSWORD` | — (required by Compose) | Database password; 12+ characters and not an example value outside local |
 | `API_BIND` / `UI_BIND` | `127.0.0.1` | Docker port bindings for the API and console; see "Network access" |
 | `MAX_CONCURRENT_INGESTS` | 1 | Uploads processed at once; others get 409 |
+| `BACKUP_INTERVAL_SECONDS` / `BACKUP_KEEP` | 86400 / 7 | Backup service: seconds between dumps, dumps kept |
 | `GROQ_API_KEY` | empty | Missing key → explain/chat return 503; the rest works |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Model override |
 | `LLM_TIMEOUT_SECONDS` | 30 | Per-call timeout |
@@ -467,7 +486,7 @@ API docs are at http://127.0.0.1:8000/docs (local only). The backend runs withou
 | `CORS_ALLOW_ORIGINS` | localhost:5173 | Allowed console origins |
 | `MAX_UPLOAD_BYTES` | 104857600 | Upload cap |
 | `ML_MODE` | `advisory` | `advisory`, `alert` or `off` (ML.md) |
-| `DEMO_MODE_ENABLED` | true | Gates `/demo/*` |
+| `DEMO_MODE_ENABLED` | true in local, false otherwise | Gates `/demo/*`, including the reset that deletes all data |
 
 The frontend has one build-time variable, `VITE_API_BASE_URL`. No secret is ever baked into the bundle.
 
@@ -477,7 +496,7 @@ The frontend has one build-time variable, `VITE_API_BASE_URL`. No secret is ever
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                  # 836 offline tests
+./venv/Scripts/python -m pytest                  # 841 offline tests
 ./venv/Scripts/python scripts/upload_sweep.py    # every sample file's verdict
 ./venv/Scripts/python -m pytest -m integration   # 5 tests: real KB/embeddings, Postgres
 cd ../frontend && npx tsc -b && npm run lint && npm run build

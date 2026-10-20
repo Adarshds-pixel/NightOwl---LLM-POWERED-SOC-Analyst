@@ -326,7 +326,7 @@ From `ML.md` and `backend/scripts/ml_eval_results.json`:
 Conclusion for the paper: with two baseline machines the layer detects "unfamiliar machine", not "attack".
 
 ### 5.8 Software quality
-836 backend tests (offline) and 5 integration tests pass on Windows and in the Linux container; frontend
+841 backend tests (offline) and 5 integration tests pass on Windows and in the Linux container; frontend
 type-check, lint (warnings only) and production build pass; GitHub Actions runs both on every push.
 
 ---
