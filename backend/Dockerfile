@@ -5,7 +5,7 @@
 # this image mirrors the same backend/app/... nesting rather than flattening it.
 
 # ---- builder: install deps into a venv, kept out of the runtime stage's history ----
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
 WORKDIR /app
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir ${PIP_EXTRA_ARGS} torch --index-url https://downl
 RUN pip install --no-cache-dir ${PIP_EXTRA_ARGS} -r backend/requirements.txt
 
 # ---- runtime ----
-FROM python:3.13-slim AS runtime
+FROM python:3.14-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_ENV=production
