@@ -26,7 +26,7 @@ python-multipart==0.0.32
 
 # Detection engine -- pySigma validates rule YAML structure; NightOwl's own
 # detection/engine.py does the per-event matching.
-pysigma==1.5.0
+pysigma==2.0.1
 PyYAML==6.0.3
 
 # Admin authentication (signed-cookie session + bcrypt password hash)
