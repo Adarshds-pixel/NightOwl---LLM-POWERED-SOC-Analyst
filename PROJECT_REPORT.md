@@ -2,7 +2,7 @@
 
 Everything about the project in one file: what it is, what you decided, what was built and why, what was measured, where it stands today, and what is left for you to do.
 
-> **Snapshot:** 19 October 2026 · branch `main` on GitHub · 820 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
+> **Snapshot:** 20 October 2026 · branch `main` on GitHub · 836 backend tests passing · detection **59/61** with the correct ATT&CK technique and **0** false alarms on the benign corpus · all **27** benign sample files read **Normal**.
 >
 > This file is the story and the status. For deep technical reference (API tables, data model, environment variables, troubleshooting) see `docs/DOCUMENTATION.md`; for the machine-learning layer see `ML.md`; for the quick start see `README.md`.
 
@@ -193,7 +193,7 @@ Decisions that were made along the way and still stand (technical):
 | Attack captures raising any alert | 60 / 61 | same |
 | False alarms on 25 benign captures (252,594 events) | **0** (was 5) | same |
 | Verdict for each of the 88 sample files | 27 benign → **Normal**; 60 attack → Suspicious; 1 → Review recommended | `upload_sweep.py` |
-| Backend tests | 820 offline + 5 integration | `pytest` |
+| Backend tests | 836 offline + 5 integration | `pytest` |
 | ML false windows per machine per day (held-out benign) | 1.3 – 4.5 | `eval_ml_model.py` |
 
 **Caveats:** every attack capture informed rule development, so these are development-set figures. The everyday-event lists were measured on the same benign corpus: a new machine can still read "Review recommended" until its everyday events are added. Your new benign logs are the real held-out test.
@@ -210,6 +210,11 @@ Decisions that were made along the way and still stand (technical):
 
 **Paper.** The target is an IEEE-format paper. The 61 attack captures come from two public GitHub collections, Samir Bousseaden's EVTX-ATTACK-SAMPLES and Michel de Crevoisier's EVTX-to-MITRE-Attack (confirmed by you). The source material, the IEEE section plan and the references are in `docs/PAPER_MATERIAL.md` §9-§10.
 
+**Verified on 20 October 2026 (after the production-readiness audit, §7d)**
+
+- 836 backend tests pass on Windows (820 before, plus 16 for the audit fixes).
+- The rebuilt Docker stack is healthy and runs in production mode: `/docs` and `/openapi.json` answer 404, every port is bound to `127.0.0.1`, the API does not answer on the LAN address, and all 114,303 stored events survived the database password change.
+
 **Verified on 19 October 2026**
 
 - 820 backend tests and 5 integration tests pass, on Windows and inside the Linux backend image; frontend type-check and build pass, lint shows warnings only.
@@ -219,6 +224,26 @@ Decisions that were made along the way and still stand (technical):
 - Detection benchmark 59/61 correct technique, 60/61 any alert, 0 false alarms on 25 benign captures; upload sweep 88/88 as expected.
 - No API keys or private `.env` files in the repository.
 - RAG audit with real AI calls (§7c).
+
+---
+
+## 7d. The 19-20 October 2026 production-readiness audit
+
+A full audit (security, architecture, reliability, testing, quality) read the code, configuration, containers and CI, ran the tools, and probed the live stack.
+
+**Verdict:** ready with fixes for a single analyst on a trusted machine. The application code was sound: server-side sessions, bcrypt, CSRF and CORS protection, parameterised queries, no secrets in git history, bandit clean. The problems were in deployment configuration. No Critical findings.
+
+**Fixed (the must-fix set):**
+
+| ID | Finding | Fix |
+|---|---|---|
+| F-01 (High) | The Docker stack ran in development mode: `.env` had `APP_ENV=local`, which overrode the compose default, so `/docs` was open without login, the cookie was not `Secure`, and the startup checks were skipped | `APP_ENV: production` is hard-coded for the container |
+| F-02 (High) | API and console listened on every network interface over plain HTTP | Bound to `127.0.0.1` by default (`API_BIND` / `UI_BIND`); a TLS proxy recipe is in DOCUMENTATION.md "Network access" |
+| F-03 | The live database password was the example `nightowl` | Startup refuses weak or example database passwords outside local; the live password was rotated to a random 32-character one |
+| F-04 | Logins and logouts left no record | Success, failure, throttling and logout are audited and logged with the client IP |
+| F-05 | Uploads had no concurrency limit (two large files ran the machine out of memory) | One upload at a time (`MAX_CONCURRENT_INGESTS`); another gets 409 |
+
+**Still open (planned, not done):** database backups, a readiness endpoint and request IDs, security scans in CI with Dependabot, a privacy notice and retention for log data sent to the AI provider, a React error boundary and frontend tests, and Demo Mode off by default in production. The dependency scanners' ChromaDB CVEs need Chroma's network server, which NightOwl does not run (it uses the in-process client).
 
 ---
 
@@ -351,7 +376,7 @@ Copy each machine's `C:\NightOwl\export` folder to `backend\sample_logs\benign_c
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                         # 820 offline tests
+./venv/Scripts/python -m pytest                         # 836 offline tests
 ./venv/Scripts/python scripts/upload_sweep.py           # verdict for every sample file
 ./venv/Scripts/python scripts/run_detection_benchmark.py
 ./venv/Scripts/python scripts/build_failure_matrix.py

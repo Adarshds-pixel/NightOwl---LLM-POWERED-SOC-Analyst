@@ -348,7 +348,9 @@ NightOwl has **one admin account**: no registration, no roles, no password reset
 - **Session:** a signed, HttpOnly, `SameSite=Lax` cookie (`Secure` outside local) that references a row in `admin_sessions`. Logout sets `revoked_at`, so a copied cookie stops working immediately. The default lifetime is 12 h.
 - **Startup checks:** outside `APP_ENV=local` the backend refuses to start when:
   - `SESSION_SECRET_KEY` is missing or shorter than 32 characters;
-  - `ADMIN_PASSWORD_HASH` is missing.
+  - `ADMIN_PASSWORD_HASH` is missing or not a bcrypt hash;
+  - the database password (in `DATABASE_URL`) is shorter than 12 characters or an example value such as `nightowl`.
+- **Audit trail:** every successful, failed and throttled login and every logout is written to `audit_log` (`entity_type="auth"`) and to the log with the client IP. A failed attempt records the actor as the admin name only when that was the name typed, otherwise `unknown`, so a password typed into the username box is never stored. `POST /demo/reset` clears `audit_log` along with the other operational tables.
 
   In local mode a random secret is generated per process.
 
@@ -360,6 +362,7 @@ NightOwl has **one admin account**: no registration, no roles, no password reset
 
 **Other safeguards**
 - **Upload guard:** a pure-ASGI middleware rejects an oversized body by `Content-Length` and by a running byte count, before any route reads it.
+- **One upload at a time:** `MAX_CONCURRENT_INGESTS` (default 1) uploads are processed at once; another `POST /ingest` or `/ingest/async` meanwhile gets **409** "Another upload is still being processed". Each upload holds its records in memory and can start up to 16 reader processes, and two large ones at once ran a 16 GB machine out of memory.
 - **Rate limiting:** a per-IP token bucket (300 per minute) with `/health` exempt. Client IPs are taken from proxy headers only from `TRUSTED_PROXIES`.
 - **Exports:** CSV cells starting with `= + - @` are neutralised against formula injection.
 
@@ -389,16 +392,30 @@ The Docker image includes the fixtures and `failure_matrix.json`, so Demo Mode w
 
 ```bash
 cp .env.example .env
-# set APP_ENV=production, ADMIN_PASSWORD_HASH, SESSION_SECRET_KEY (32+ chars),
-# POSTGRES_PASSWORD, GROQ_API_KEY, CORS_ALLOW_ORIGINS
+# set ADMIN_PASSWORD_HASH, SESSION_SECRET_KEY (32+ chars), a strong
+# POSTGRES_PASSWORD (12+ chars, also in DATABASE_URL), GROQ_API_KEY
 docker compose up --build -d
 ```
 
-- **db:** PostgreSQL 16, bound to `127.0.0.1:5433` only, with a named volume. Compose refuses to start without `POSTGRES_PASSWORD`.
+The backend container always runs with `APP_ENV=production` (hard-coded in `docker-compose.yml`, never taken from `.env`), so `/docs` is hidden, the session cookie is `Secure`, and the startup checks in §10 apply. Browsers accept a `Secure` cookie on `http://localhost` and `http://127.0.0.1`, so local use works without TLS.
+
+- **db:** PostgreSQL 16, bound to `127.0.0.1:5433` only, with a named volume. Compose refuses to start without `POSTGRES_PASSWORD`. Changing `POSTGRES_PASSWORD` later does not change an existing database's password: run `ALTER USER nightowl PASSWORD '...'` in the db container as well.
 - **backend:** the entrypoint runs `alembic upgrade head` and builds the knowledge base on first start (this needs network access once; set `NIGHTOWL_BUILD_KB=0` to skip). It then starts uvicorn. The knowledge base and the model cache live in named volumes, and a healthcheck polls `/health`.
 - **frontend:** a production build served by nginx with security headers, on http://localhost:5173.
 
-For a public deployment, put a TLS-terminating reverse proxy in front, set `CORS_ALLOW_ORIGINS` to its origin and `TRUSTED_PROXIES` to its address.
+### Network access
+
+The API (8000) and console (5173) are bound to `127.0.0.1` by default (`API_BIND` / `UI_BIND`), because both speak plain HTTP: on a network they would carry the admin password and session cookie in clear text, and the `Secure` cookie would not be sent at all. To use NightOwl from another machine, put a TLS-terminating reverse proxy in front instead of binding to `0.0.0.0`. For example, a Caddy service serving one origin:
+
+```
+nightowl.example.lan {
+  header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  handle_path /api/* { reverse_proxy backend:8000 }
+  reverse_proxy frontend:80
+}
+```
+
+Then build the frontend with `VITE_API_BASE_URL=https://nightowl.example.lan/api`, set `CORS_ALLOW_ORIGINS` to that origin, and set `TRUSTED_PROXIES` / `FORWARDED_ALLOW_IPS` to the proxy's address.
 
 ### Local development
 
@@ -430,9 +447,11 @@ API docs are at http://127.0.0.1:8000/docs (local only). The backend runs withou
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `APP_ENV` | `local` | `local` relaxes the startup checks, enables `/docs`, non-Secure cookie |
+| `APP_ENV` | `local` | Bare-metal runs only (Docker is always `production`). `local` relaxes the startup checks, enables `/docs`, non-Secure cookie |
 | `DATABASE_URL` | postgres on 5433 | SQLAlchemy URL (Compose sets it for the container) |
-| `POSTGRES_PASSWORD` | — (required by Compose) | Database password |
+| `POSTGRES_PASSWORD` | — (required by Compose) | Database password; 12+ characters and not an example value outside local |
+| `API_BIND` / `UI_BIND` | `127.0.0.1` | Docker port bindings for the API and console; see "Network access" |
+| `MAX_CONCURRENT_INGESTS` | 1 | Uploads processed at once; others get 409 |
 | `GROQ_API_KEY` | empty | Missing key → explain/chat return 503; the rest works |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Model override |
 | `LLM_TIMEOUT_SECONDS` | 30 | Per-call timeout |
@@ -458,7 +477,7 @@ The frontend has one build-time variable, `VITE_API_BASE_URL`. No secret is ever
 
 ```bash
 cd backend
-./venv/Scripts/python -m pytest                  # 820 offline tests
+./venv/Scripts/python -m pytest                  # 836 offline tests
 ./venv/Scripts/python scripts/upload_sweep.py    # every sample file's verdict
 ./venv/Scripts/python -m pytest -m integration   # 5 tests: real KB/embeddings, Postgres
 cd ../frontend && npx tsc -b && npm run lint && npm run build
@@ -539,7 +558,8 @@ A Postman collection is in `docs/postman/`.
 | Symptom | Cause | Fix |
 |---|---|---|
 | Login always fails in Docker but works locally | Unquoted bcrypt hash in `.env`; Compose expanded its `$` parts | `ADMIN_PASSWORD_HASH='$2b$12$...'` (single quotes) |
-| Backend exits at start with a settings error | Outside local mode without a valid `SESSION_SECRET_KEY`/`ADMIN_PASSWORD_HASH` | Set both, or `APP_ENV=local` for development |
+| Backend exits at start with a settings error | Outside local mode without a valid `SESSION_SECRET_KEY`/`ADMIN_PASSWORD_HASH`, or with a weak database password | Set them (see §10), or `APP_ENV=local` for a bare-metal development run |
+| Upload answers "Another upload is still being processed" (409) | One upload is already running (`MAX_CONCURRENT_INGESTS=1`) | Wait for it to finish; the header shows its progress |
 | `docker compose up` complains about `POSTGRES_PASSWORD` | Not set in `.env` | Set it |
 | `failed to connect to the docker API` | Docker Desktop is not running | Start it and retry |
 | A code change does not show up in the browser, or a large upload is as slow as before | The Docker stack is still running the old images | `docker compose up -d --build` (the database volume is kept) |
