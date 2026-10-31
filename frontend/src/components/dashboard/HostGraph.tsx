@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import type { HostEdge, HostNode } from '../../lib/aggregations'
 import { SEVERITY_HEX } from '../../lib/severity'
-import { ACCENT, LINE } from '../../lib/tokens'
+import { ACCENT } from '../../lib/tokens'
 import { EmptyState, Tooltip } from '../ui'
 
 const WIDTH = 380
@@ -68,7 +68,7 @@ export function HostGraph({ nodes, edges }: { nodes: HostNode[]; edges: HostEdge
         </radialGradient>
       </defs>
       <circle cx={CENTER_X} cy={CENTER_Y} r={LAYOUT_RADIUS + 40} fill={`url(#${glowId})`} />
-      <circle cx={CENTER_X} cy={CENTER_Y} r={LAYOUT_RADIUS} fill="none" stroke={LINE.base} strokeDasharray="3 5" />
+      <circle cx={CENTER_X} cy={CENTER_Y} r={LAYOUT_RADIUS} fill="none" stroke="var(--color-line)" strokeDasharray="3 5" />
 
       {edges.map((edge) => {
         const a = positions.get(edge.a)
@@ -99,7 +99,7 @@ export function HostGraph({ nodes, edges }: { nodes: HostNode[]; edges: HostEdge
             <title>{`${node.host}: ${node.incidentCount} incident(s), worst severity ${node.severity}`}</title>
             <circle cx={pos.x} cy={pos.y} r={r + 5} fill={color} fillOpacity={0.12} />
             <circle cx={pos.x} cy={pos.y} r={r} fill={color} fillOpacity={0.9} stroke={color} strokeWidth={1.5} />
-            <text x={pos.x} y={pos.y + 3.5} textAnchor="middle" className="fill-bg-deep text-[10px] font-bold">
+            <text x={pos.x} y={pos.y + 3.5} textAnchor="middle" className="fill-white text-[10px] font-bold">
               {node.incidentCount}
             </text>
             <text x={pos.x} y={pos.y + r + 13} textAnchor="middle" className="fill-current text-[9px] tracking-wide text-text-muted uppercase">

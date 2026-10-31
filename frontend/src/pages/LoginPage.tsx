@@ -1,9 +1,10 @@
-import { ArrowRight, BrainCircuit, Crosshair, Eye, EyeOff, FileText, Lock, ShieldCheck, User } from 'lucide-react'
+import { ArrowRight, BrainCircuit, Crosshair, Eye, EyeOff, FileText, Lock, Moon, ShieldCheck, Sun, User } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { NightOwlMark } from '../components/brand/NightOwlMark'
-import { Button, CursorGlow, Reflection, TextInput } from '../components/ui'
+import { Button, CursorGlow, Reflection, TextInput, Tooltip } from '../components/ui'
 import { useAuth } from '../context/auth/useAuth'
+import { usePreferences } from '../context/preferences/usePreferences'
 
 /**
  * The NightOwl sign-in screen -- built to the `frontend design images/`
@@ -66,6 +67,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { login, error } = useAuth()
+  const { prefs, setPref } = usePreferences()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -118,14 +120,30 @@ export function LoginPage() {
               </p>
             </div>
           </div>
-          <div className="hidden items-center gap-2.5 sm:flex">
-            <nav className="flex items-center gap-5 text-micro font-semibold tracking-[0.2em] text-text-muted uppercase">
-              <span>Detect</span>
-              <span>Analyze</span>
-              <span>Reason</span>
-              <span>Respond</span>
-            </nav>
-            <span aria-hidden className="h-px w-10 bg-gradient-to-r from-accent-violet to-transparent" />
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-2.5 sm:flex">
+              <nav className="flex items-center gap-5 text-micro font-semibold tracking-[0.2em] text-text-muted uppercase">
+                <span>Detect</span>
+                <span>Analyze</span>
+                <span>Reason</span>
+                <span>Respond</span>
+              </nav>
+              <span aria-hidden className="h-px w-10 bg-gradient-to-r from-accent-violet to-transparent" />
+            </div>
+            <Tooltip label={prefs.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+              <button
+                type="button"
+                onClick={() => setPref('theme', prefs.theme === 'dark' ? 'light' : 'dark')}
+                aria-label={prefs.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                className="flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface-2/60 text-text-dim backdrop-blur-md transition-all hover:border-accent-primary/40 hover:text-text hover:shadow-glow-primary active:scale-95"
+              >
+                {prefs.theme === 'dark' ? (
+                  <Sun className="h-4 w-4 text-accent-amber transition-transform duration-300 hover:rotate-45" />
+                ) : (
+                  <Moon className="h-4 w-4 text-accent-violet transition-transform duration-300 hover:-rotate-12" />
+                )}
+              </button>
+            </Tooltip>
           </div>
         </header>
 

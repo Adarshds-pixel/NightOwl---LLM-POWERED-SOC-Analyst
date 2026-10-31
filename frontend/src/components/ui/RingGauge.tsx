@@ -104,7 +104,7 @@ export function MeterBar({
 }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0
   return (
-    <div className={clsx('h-1.5 w-full overflow-hidden rounded-full bg-white/6', className)}>
+    <div className={clsx('h-1.5 w-full overflow-hidden rounded-full bg-line', className)}>
       <div
         className="h-full rounded-full transition-[width] duration-500"
         style={{ width: `${pct}%`, background: color, boxShadow: `0 0 8px ${color}66` }}

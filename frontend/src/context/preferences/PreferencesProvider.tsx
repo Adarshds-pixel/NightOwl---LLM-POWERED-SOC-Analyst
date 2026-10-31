@@ -23,15 +23,19 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     savePreferences(DEFAULT_PREFERENCES)
   }, [])
 
-  // Preferences that affect global chrome are applied as data-attributes on
-  // <html>, so plain CSS in index.css can react to them without every
+  // Preferences that affect global chrome are applied as data-attributes and
+  // classes on <html>, so plain CSS in index.css can react to them without every
   // component subscribing to this context.
   useEffect(() => {
     const root = document.documentElement
+    root.dataset.theme = prefs.theme
     root.dataset.density = prefs.density
     root.dataset.ambient = prefs.ambientBackground ? 'on' : 'off'
     root.dataset.motion = prefs.reduceMotion ? 'reduced' : 'full'
-  }, [prefs.density, prefs.ambientBackground, prefs.reduceMotion])
+    root.classList.remove('dark', 'light')
+    root.classList.add(prefs.theme)
+    root.style.colorScheme = prefs.theme
+  }, [prefs.theme, prefs.density, prefs.ambientBackground, prefs.reduceMotion])
 
   const value = useMemo(() => ({ prefs, setPref, reset }), [prefs, setPref, reset])
 

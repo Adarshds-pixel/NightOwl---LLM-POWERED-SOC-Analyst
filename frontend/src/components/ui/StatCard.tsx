@@ -156,6 +156,6 @@ function glowClass(accent: Accent): string {
     case 'red':
       return 'bg-accent-red/20'
     default:
-      return 'bg-white/5'
+      return 'bg-line-soft'
   }
 }

@@ -68,7 +68,7 @@ export function Tabs<T extends string>({
             {item.icon}
             {item.label}
             {item.count !== undefined && (
-              <span className="rounded bg-white/6 px-1.5 py-0.5 font-mono text-micro text-text-dim tabular-nums">
+              <span className="rounded bg-line-soft px-1.5 py-0.5 font-mono text-micro text-text-dim tabular-nums">
                 {item.count}
               </span>
             )}

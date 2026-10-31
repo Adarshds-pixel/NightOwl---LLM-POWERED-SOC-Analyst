@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Bell, Bot, Clock, LogOut, Menu, Search, Settings, Sparkles, Upload } from 'lucide-react'
+import { Bell, Bot, Clock, LogOut, Menu, Moon, Search, Settings, Sparkles, Sun, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AnalystAvatar } from '../components/brand/NightOwlMark'
@@ -24,7 +24,7 @@ import { matchNavEntry } from '../lib/navigation'
 export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => void; onOpenSidebar: () => void }) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { prefs } = usePreferences()
+  const { prefs, setPref } = usePreferences()
   const { status } = useHealth()
   const { incidents } = useIncidentsSnapshot()
   const { unseen, unseenCount, markAllSeen, markSeen } = useUnseenIncidents(incidents)
@@ -136,6 +136,21 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
           </button>
         </Tooltip>
 
+        <Tooltip label={prefs.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+          <button
+            type="button"
+            onClick={() => setPref('theme', prefs.theme === 'dark' ? 'light' : 'dark')}
+            aria-label={prefs.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            className="flex h-10 w-10 items-center justify-center rounded-control border border-line bg-surface-2/50 text-text-dim transition-all hover:border-accent-primary/40 hover:text-text hover:shadow-glow-primary active:scale-95"
+          >
+            {prefs.theme === 'dark' ? (
+              <Sun className="h-4 w-4 text-accent-amber transition-transform duration-300 hover:rotate-45" />
+            ) : (
+              <Moon className="h-4 w-4 text-accent-violet transition-transform duration-300 hover:-rotate-12" />
+            )}
+          </button>
+        </Tooltip>
+
         <div className="relative">
           <button
             type="button"
@@ -194,7 +209,7 @@ export function Topbar({ onOpenSearch, onOpenSidebar }: { onOpenSearch: () => vo
             <Link
               to="/settings"
               onClick={() => setProfileOpen(false)}
-              className="flex items-center gap-2 border-t border-line px-3.5 py-2.5 text-meta text-text-dim transition-colors hover:bg-white/4 hover:text-text"
+              className="flex items-center gap-2 border-t border-line px-3.5 py-2.5 text-meta text-text-dim transition-colors hover:bg-line-soft hover:text-text"
             >
               <Settings className="h-3.5 w-3.5" />
               Settings and preferences

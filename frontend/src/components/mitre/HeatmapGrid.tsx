@@ -1,8 +1,9 @@
 import clsx from 'clsx'
 import type { IncidentSummary, MitreTechnique } from '../../api'
 import { tacticTechniqueMatrix } from '../../lib/aggregations'
+import { usePreferences } from '../../context/preferences/usePreferences'
 import { TACTIC_IDS, TACTIC_LABELS, TACTIC_ORDER, type Tactic } from '../../lib/tactics'
-import { heatColor, HEAT_LEGEND } from '../../lib/tokens'
+import { heatColor, getHeatLegend } from '../../lib/tokens'
 import { EmptyState, FloatingTooltip } from '../ui'
 
 /**
@@ -37,6 +38,9 @@ export function HeatmapGrid({
   onSelectTactic?: (tactic: Tactic) => void
   selectedTactic?: Tactic | null
 }) {
+  const { prefs } = usePreferences()
+  const isLight = prefs.theme === 'light'
+  const heatLegend = getHeatLegend(prefs.theme)
   const { cells, tacticsPresent } = tacticTechniqueMatrix(incidents, techniqueById)
 
   if (cells.length === 0 && !showAllTactics) {
@@ -120,11 +124,11 @@ export function HeatmapGrid({
                         <div
                           key={index}
                           className={clsx('rounded-[5px] border border-line-soft', compact ? 'h-4' : 'h-6')}
-                          style={{ background: heatColor(0) }}
+                          style={{ background: heatColor(0, prefs.theme) }}
                         />
                       )
                     }
-                    const color = heatColor(cell.count)
+                    const color = heatColor(cell.count, prefs.theme)
                     return (
                       <FloatingTooltip
                         key={cell.techniqueId}
@@ -133,9 +137,9 @@ export function HeatmapGrid({
                       >
                         <div
                           className={clsx(
-                            'w-full origin-center rounded-[5px] border border-white/5 will-change-transform',
+                            'w-full origin-center rounded-[5px] border border-line-soft will-change-transform',
                             'transition-[transform,box-shadow,border-color] duration-150 ease-out',
-                            'hover:z-10 hover:scale-[1.18] hover:border-white/20',
+                            'hover:z-10 hover:scale-[1.18] hover:border-border-active',
                             // Only intense cells earn a glow on hover -- a
                             // near-black "0" cell brightening would read as a
                             // bug, not a feature. `--cell-glow` is this cell's
@@ -154,7 +158,12 @@ export function HeatmapGrid({
                           } as React.CSSProperties}
                         >
                           {!compact && (
-                            <span className="flex h-full items-center justify-center font-mono text-[9px] text-white/85 tabular-nums">
+                            <span
+                              className={clsx(
+                                'flex h-full items-center justify-center font-mono text-[9px] tabular-nums',
+                                isLight && cell.count <= 2 ? 'font-semibold text-text' : 'text-white/90',
+                              )}
+                            >
                               {cell.techniqueId}
                             </span>
                           )}
@@ -171,9 +180,9 @@ export function HeatmapGrid({
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-micro tracking-wide text-text-faint uppercase">Detections</span>
-        {HEAT_LEGEND.map((entry) => (
+        {heatLegend.map((entry) => (
           <span key={entry.label} className="flex items-center gap-1 text-micro text-text-muted">
-            <span className="h-2.5 w-4 rounded-[3px] border border-white/5" style={{ background: entry.color }} />
+            <span className="h-2.5 w-4 rounded-[3px] border border-line-soft" style={{ background: entry.color }} />
             {entry.label}
           </span>
         ))}

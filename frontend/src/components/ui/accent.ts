@@ -39,7 +39,7 @@ export const ACCENT_BG_SOFT: Record<Accent, string> = {
   amber: 'bg-accent-amber/12',
   orange: 'bg-accent-orange/12',
   red: 'bg-accent-red/12',
-  neutral: 'bg-white/5',
+  neutral: 'bg-line-soft',
 }
 
 export const ACCENT_BG_SOLID: Record<Accent, string> = {
@@ -72,7 +72,7 @@ export const ACCENT_RING: Record<Accent, string> = {
   amber: 'ring-accent-amber/25',
   orange: 'ring-accent-orange/25',
   red: 'ring-accent-red/25',
-  neutral: 'ring-white/10',
+  neutral: 'ring-line',
 }
 
 export const ACCENT_GLOW: Record<Accent, string> = {
@@ -110,7 +110,7 @@ export const ACCENT_GRADIENT: Record<Accent, string> = {
   amber: 'from-accent-amber/[0.08]',
   orange: 'from-accent-orange/[0.08]',
   red: 'from-accent-red/[0.10]',
-  neutral: 'from-white/[0.035]',
+  neutral: 'from-line-soft',
 }
 
 /** Re-exported from lib/tokens.ts rather than copied, so a palette change

@@ -18,7 +18,7 @@ import {
   YAxis,
 } from 'recharts'
 import { usePreferences } from '../../context/preferences/usePreferences'
-import { CHART, TEXT } from '../../lib/tokens'
+import { getChartTokens } from '../../lib/tokens'
 
 /**
  * Recharts wrappers carrying all the NightOwl chart chrome: hairline grid,
@@ -32,8 +32,16 @@ import { CHART, TEXT } from '../../lib/tokens'
  * OS nor the in-app "Reduce motion" preference asks for stillness.
  */
 
-const AXIS_TICK = { fill: TEXT.muted, fontSize: 10 }
 const DRAW_MS = 700
+
+function useChartChrome() {
+  const { prefs } = usePreferences()
+  const tokens = getChartTokens(prefs.theme)
+  return {
+    tokens,
+    axisTick: { fill: tokens.axis, fontSize: 10 },
+  }
+}
 
 /** True when series may animate their entrance. */
 function useChartMotion(): boolean {
@@ -194,6 +202,7 @@ export function TrendChart({
 }) {
   const Chart = area ? AreaChart : LineChart
   const animate = useChartMotion()
+  const { tokens, axisTick } = useChartChrome()
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -209,10 +218,10 @@ export function TrendChart({
             </linearGradient>
           ))}
         </defs>
-        <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey={xKey} tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: CHART.axisLine }} minTickGap={24} />
-        <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} width={yWidth} allowDecimals={false} />
-        <Tooltip content={<ChartTooltipContent />} cursor={{ stroke: CHART.axisLine }} />
+        <CartesianGrid stroke={tokens.grid} strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey={xKey} tick={axisTick} tickLine={false} axisLine={{ stroke: tokens.axisLine }} minTickGap={24} />
+        <YAxis tick={axisTick} tickLine={false} axisLine={false} width={yWidth} allowDecimals={false} />
+        <Tooltip content={<ChartTooltipContent />} cursor={{ stroke: tokens.axisLine }} />
         {series.map((s) =>
           area ? (
             <Area
@@ -261,6 +270,7 @@ export function RankedBars({
   height?: number
 }) {
   const animate = useChartMotion()
+  const { tokens, axisTick } = useChartChrome()
   // One gradient id per colour, so two RankedBars on a page cannot collide.
   const gradientId = `bar-${color.replace('#', '')}`
 
@@ -273,10 +283,10 @@ export function RankedBars({
             <stop offset="100%" stopColor={color} stopOpacity={1} />
           </linearGradient>
         </defs>
-        <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" horizontal={false} />
-        <XAxis type="number" tick={AXIS_TICK} tickLine={false} axisLine={false} allowDecimals={false} />
-        <YAxis type="category" dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} width={116} />
-        <Tooltip content={<ChartTooltipContent />} cursor={{ fill: CHART.cursor }} />
+        <CartesianGrid stroke={tokens.grid} strokeDasharray="3 3" horizontal={false} />
+        <XAxis type="number" tick={axisTick} tickLine={false} axisLine={false} allowDecimals={false} />
+        <YAxis type="category" dataKey="label" tick={axisTick} tickLine={false} axisLine={false} width={116} />
+        <Tooltip content={<ChartTooltipContent />} cursor={{ fill: tokens.cursor }} />
         <Bar
           dataKey="value"
           name="Count"

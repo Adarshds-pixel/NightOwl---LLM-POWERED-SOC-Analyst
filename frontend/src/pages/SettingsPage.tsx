@@ -96,7 +96,7 @@ function SettingsPage() {
                 className={`flex shrink-0 items-center gap-2.5 rounded-control border px-3 py-2.5 text-left text-meta transition-colors ${
                   active
                     ? 'border-accent-primary/35 bg-accent-primary/12 text-text'
-                    : 'border-transparent text-text-muted hover:bg-white/5 hover:text-text-dim'
+                    : 'border-transparent text-text-muted hover:bg-line-soft hover:text-text-dim'
                 }`}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -110,6 +110,16 @@ function SettingsPage() {
           {section === 'appearance' && (
             <Card title="Appearance" accent="primary">
               <div className="flex flex-col divide-y divide-line-soft">
+                <Row label="Theme" hint="Switch between NightOwl's deep nocturne SOC mode and luminous ambient workspace mode.">
+                  <SegmentedControl
+                    value={prefs.theme}
+                    onChange={(theme) => setPref('theme', theme)}
+                    options={[
+                      { label: 'Dark', value: 'dark' as const },
+                      { label: 'Light', value: 'light' as const },
+                    ]}
+                  />
+                </Row>
                 <Row label="Density" hint="Row height across every table and list.">
                   <SegmentedControl
                     value={prefs.density}

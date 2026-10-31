@@ -82,19 +82,49 @@ export const CHART = {
   cursor: 'rgba(139, 92, 246, 0.14)',
 } as const
 
-/** Heatmap ramp, cold (unobserved) -> hot (heavily observed): charcoal into
- *  deep violet, through electric purple and magenta, ending at severity red.
+export const LIGHT_CHART = {
+  axis: '#685c85',
+  axisLine: 'rgba(124, 58, 237, 0.22)',
+  grid: 'rgba(124, 58, 237, 0.10)',
+  tooltipBg: 'rgba(255, 255, 255, 0.96)',
+  tooltipBorder: 'rgba(124, 58, 237, 0.28)',
+  cursor: 'rgba(124, 58, 237, 0.12)',
+} as const
+
+export function getChartTokens(theme: 'dark' | 'light' = 'dark') {
+  return theme === 'light' ? LIGHT_CHART : CHART
+}
+
+/** Heatmap ramp, cold (unobserved) -> hot (heavily observed):
+ *  Dark: charcoal into deep violet, through electric purple and magenta, ending at severity red.
+ *  Light: soft lavender slate into vibrant violet, through purple and magenta, ending at severity red.
  *  Cell colour is picked by bucket rather than a continuous gradient so the
  *  legend can state exactly what each shade means. */
-export const HEAT_RAMP = ['#171226', '#4c1d95', '#6d28d9', '#9333ea', '#ec4899', '#ef4444'] as const
+export const HEAT_RAMP_DARK = ['#171226', '#4c1d95', '#6d28d9', '#9333ea', '#ec4899', '#ef4444'] as const
+export const HEAT_RAMP_LIGHT = ['#ece7f6', '#c4b5fd', '#a855f7', '#7c3aed', '#db2777', '#dc2626'] as const
 
-export function heatColor(count: number): string {
-  if (count <= 0) return HEAT_RAMP[0]
-  if (count <= 2) return HEAT_RAMP[1]
-  if (count <= 4) return HEAT_RAMP[2]
-  if (count <= 6) return HEAT_RAMP[3]
-  if (count <= 10) return HEAT_RAMP[4]
-  return HEAT_RAMP[5]
+export const HEAT_RAMP = HEAT_RAMP_DARK
+
+export function heatColor(count: number, theme: 'dark' | 'light' = 'dark'): string {
+  const ramp = theme === 'light' ? HEAT_RAMP_LIGHT : HEAT_RAMP_DARK
+  if (count <= 0) return ramp[0]
+  if (count <= 2) return ramp[1]
+  if (count <= 4) return ramp[2]
+  if (count <= 6) return ramp[3]
+  if (count <= 10) return ramp[4]
+  return ramp[5]
+}
+
+export function getHeatLegend(theme: 'dark' | 'light' = 'dark') {
+  const ramp = theme === 'light' ? HEAT_RAMP_LIGHT : HEAT_RAMP_DARK
+  return [
+    { label: '0', color: ramp[0] },
+    { label: '1-2', color: ramp[1] },
+    { label: '3-4', color: ramp[2] },
+    { label: '5-6', color: ramp[3] },
+    { label: '7-10', color: ramp[4] },
+    { label: '11+', color: ramp[5] },
+  ]
 }
 
 export const HEAT_LEGEND = [

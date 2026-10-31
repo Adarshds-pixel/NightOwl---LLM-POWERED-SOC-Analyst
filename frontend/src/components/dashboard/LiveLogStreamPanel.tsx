@@ -71,7 +71,7 @@ export function LiveLogStreamPanel() {
                   <tr
                     key={event.id}
                     className={clsx(
-                      'border-b border-line-soft transition-colors last:border-b-0 hover:bg-white/4',
+                      'border-b border-line-soft transition-colors last:border-b-0 hover:bg-line-soft',
                       level === 'critical' && 'bg-severity-critical/6',
                     )}
                   >

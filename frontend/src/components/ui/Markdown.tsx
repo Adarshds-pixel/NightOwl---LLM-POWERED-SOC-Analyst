@@ -206,7 +206,7 @@ function inline(text: string): ReactNode[] {
       }
       if (part.startsWith('`') && part.endsWith('`')) {
         return (
-          <code key={index} className="rounded bg-white/6 px-1 py-0.5 font-mono text-micro text-accent-magenta">
+          <code key={index} className="rounded border border-line-soft bg-surface-2 px-1 py-0.5 font-mono text-micro text-accent-magenta">
             {part.slice(1, -1)}
           </code>
         )

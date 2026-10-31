@@ -115,7 +115,7 @@ export function Sidebar({
           type="button"
           onClick={onToggleCollapsed}
           className={clsx(
-            'flex h-9 items-center gap-2 rounded-control px-3 text-meta text-text-muted transition-colors hover:bg-white/5 hover:text-text',
+            'flex h-9 items-center gap-2 rounded-control px-3 text-meta text-text-muted transition-colors hover:bg-line-soft hover:text-text',
             collapsed && 'justify-center px-0',
           )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}

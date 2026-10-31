@@ -181,6 +181,6 @@ function accentRing(accent: Accent): string {
     case 'red':
       return 'ring-accent-red/30'
     default:
-      return 'ring-white/10'
+      return 'ring-line'
   }
 }

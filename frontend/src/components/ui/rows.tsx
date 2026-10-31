@@ -43,7 +43,7 @@ export function ListRow({
   )
 
   const classes = clsx(
-    'group/row flex w-full items-start gap-2.5 rounded-control px-2.5 py-2 text-left transition-colors duration-150 hover:bg-white/4',
+    'group/row flex w-full items-start gap-2.5 rounded-control px-2.5 py-2 text-left transition-colors duration-150 hover:bg-line-soft',
     className,
   )
 
@@ -105,7 +105,7 @@ export function TimelineItem({
         <button
           type="button"
           onClick={onClick}
-          className="-ml-2 flex w-[calc(100%+0.5rem)] flex-col rounded-control px-2 py-1 text-left transition-colors hover:bg-white/4 focus-visible:bg-white/4"
+          className="-ml-2 flex w-[calc(100%+0.5rem)] flex-col rounded-control px-2 py-1 text-left transition-colors hover:bg-line-soft focus-visible:bg-line-soft"
         >
           <TimelineItemBody title={title} timestamp={timestamp} detail={detail} />
         </button>

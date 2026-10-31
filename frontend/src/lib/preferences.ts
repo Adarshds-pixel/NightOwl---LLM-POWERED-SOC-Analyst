@@ -9,6 +9,8 @@
  */
 
 export interface Preferences {
+  /** Active interface theme. */
+  theme: 'dark' | 'light'
   /** Row height / padding across tables and cards. */
   density: 'comfortable' | 'compact'
   /** Background refresh of the incidents snapshot, ms. 0 = off. */
@@ -28,6 +30,7 @@ export interface Preferences {
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
+  theme: 'dark',
   density: 'comfortable',
   refreshIntervalMs: 30_000,
   logStreamIntervalMs: 10_000,
